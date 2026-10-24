@@ -1,5 +1,7 @@
 # pen15
 
+**Find the holes before they do.**
+
 Self-hosted attack-surface monitoring for networks you own. Scheduled internal and external scans, history and diffs over time, threat-intel matching, and AI triage that hands remediation and testing playbooks to a human.
 
 > **Status:** design phase. See [SPEC.md](SPEC.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
