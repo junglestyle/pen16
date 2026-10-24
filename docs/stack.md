@@ -19,6 +19,7 @@ Short architecture decision records (ADRs) for pen15's major choices. Each one g
 | LLM interface | OpenAI-compatible; Ollama locally, Claude hosted |
 | Dashboards | Grafana |
 | Secrets | sops + age |
+| Deployment | Ansible (`pen15.deploy` collection) |
 | License | Apache-2.0 |
 
 ---
@@ -150,3 +151,11 @@ Short architecture decision records (ADRs) for pen15's major choices. Each one g
 **Alternatives:** Testing against a live network; unit tests on synthetic data only.
 
 **Tradeoff:** The lab images need maintenance and CI gets slower. In return the system is testable end to end without touching a real network, and the lab is a public demo that exposes nothing about any deployment.
+
+## ADR-017: Deploy with Ansible, roles in the core
+
+**Decision:** The core ships an Ansible collection (`pen15.deploy`) with `server`, `probe` and `oscap_agent` roles. Each deployment repo has `site.yml`, inventory and group vars, pins the collection version, and reads secrets through `community.sops`.
+
+**Alternatives:** Shell scripts; compose-only with manual host setup; ansible-vault for secrets; NixOS.
+
+**Tradeoff:** Ansible is another tool to learn. But pen15 touches three kinds of machines (scanner, probe, every host that pushes OpenSCAP results), and the scanned hosts are where manual setup rots fastest. Keeping roles in the core keeps them reusable, and using the sops lookup avoids a second secrets system. Ansible doesn't create the VM itself; that stays a one-time manual step.

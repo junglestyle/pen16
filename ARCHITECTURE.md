@@ -150,11 +150,14 @@ Plugins are Python packages discovered via entry points, so a deployment can add
 
 The core repo (this one) contains the engine, built-in plugins, container images, the test lab and an example deployment. Each real deployment lives in its own repo, usually private, and pins a released core image. `pen15 validate` checks a deployment repo against the schema of the pinned version (FR-41).
 
+Deployment is done with Ansible. The core ships a `pen15.deploy` collection with three roles: `server` (Docker, compose stack, systemd, age key placement), `probe` (Tailscale with a probe tag, probe container, heartbeat) and `oscap_agent` (OpenSCAP push timer and ingest token on scanned hosts). The deployment repo holds `site.yml`, the inventory and group vars, and reads secrets from the same sops file through the `community.sops` lookup. The VM or VPS itself is created by hand or with the provider's tooling; Ansible starts at the OS.
+
 ```
 pen15/                      # public core
   src/pen15/                # orchestrator, API, models, diff engine, agent, health
   plugins/                  # built-in runners, ingesters, notifiers, intel sources
   images/                   # runner and probe Dockerfiles
+  ansible/                  # pen15.deploy collection: server, probe, oscap_agent roles
   migrations/               # Alembic
   lab/                      # isolated vulnerable targets for tests and demos
   tests/fixtures/           # real tool output for parser and diff tests
@@ -169,6 +172,10 @@ pen15/                      # public core
   labels.yaml               # asset labels and notes
   secrets.enc.yaml          # sops + age encrypted
   compose.override.yaml     # host-specific networking (macvlan, VLAN interfaces)
+  site.yml                  # Ansible entry point
+  inventory/                # scanner VM, probe, OpenSCAP push hosts
+  group_vars/
+  requirements.yml          # pins pen15.deploy to the deployment's version
   plugins/                  # optional deployment-only plugins
 ```
 

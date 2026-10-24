@@ -100,6 +100,7 @@ This document says **what** pen15 does and doesn't do. [ARCHITECTURE.md](ARCHITE
 - **FR-41** All deployment-specific state (scope, expected exposure, schedules, labels, secrets, custom plugins) lives outside the core repo. The core ships an example deployment showing the required layout, and `pen15 validate` checks a deployment against the schema.
 - **FR-42** Database schema changes ship as versioned migrations. Upgrade notes accompany each release.
 - **FR-43** Documented backup and restore for the database and raw output, with a restore test.
+- **FR-44** The core ships Ansible roles to deploy the server, probes and OpenSCAP push agents. A deployment repo deploys everything with one playbook.
 
 ## Non-functional requirements
 
