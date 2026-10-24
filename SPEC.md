@@ -69,17 +69,19 @@ This document says **what** pen15 does and doesn't do. [ARCHITECTURE.md](ARCHITE
 - **FR-23** Real-time alerts for diff events above a configurable severity, via pluggable notifiers (ntfy, Pushover, email, webhook).
 - **FR-24** A daily threat-intel digest and a weekly attack-surface digest.
 - **FR-25** Dashboards showing findings by severity over time, exposure changes and compliance drift.
+- **FR-26** Remediation metrics tracked over time: open findings by severity, mean time to remediate per severity, share of findings fixed within a target window, regressions, compliance pass rate, and a composite risk score that weights severity by exploitability (KEV, EPSS) and exposure (internal vs public).
+- **FR-27** A scheduled remediation report (weekly or monthly, by email) with trend charts for the FR-26 metrics, what got fixed, what's overdue and what regressed. The same metrics are on the dashboard.
 
 ### API
 
-- **FR-26** An HTTP API for starting scans, ingesting results (nmap XML, nuclei JSONL, OpenSCAP ARF/XCCDF and SARIF to start), and reading assets, findings, diffs, compliance results and playbooks.
-- **FR-27** Per-client API tokens with scopes (`admin`, `agent`, `probe`, `ingest`, `read`).
-- **FR-28** Manual playbook results can be submitted through the API to close or reopen a finding with evidence.
+- **FR-28** An HTTP API for starting scans, ingesting results (nmap XML, nuclei JSONL, OpenSCAP ARF/XCCDF and SARIF to start), and reading assets, findings, diffs, compliance results and playbooks.
+- **FR-29** Per-client API tokens with scopes (`admin`, `agent`, `probe`, `ingest`, `read`).
+- **FR-30** Manual playbook results can be submitted through the API to close or reopen a finding with evidence.
 
 ### Extensibility
 
-- **FR-29** Scanners, ingesters, notifiers, intel sources and LLM backends are plugins behind documented interfaces.
-- **FR-30** All deployment-specific state (scope, schedules, labels, secrets, custom plugins) lives outside the core repo. The core ships an example deployment showing the required layout.
+- **FR-31** Scanners, ingesters, notifiers, intel sources and LLM backends are plugins behind documented interfaces.
+- **FR-32** All deployment-specific state (scope, schedules, labels, secrets, custom plugins) lives outside the core repo. The core ships an example deployment showing the required layout.
 
 ## Non-functional requirements
 
@@ -105,7 +107,7 @@ Any closed finding that is detected again becomes **regressed**.
 | 1. Inside baseline | Orchestrator, Postgres, discovery/port/nuclei runners, scope enforcement, asset and service diff, alerts, dashboards |
 | 2. Outside view | Remote probe, tunnel transport, external scans (IPv4 and IPv6), TLS, DNS/cert monitoring, DDNS check |
 | 3. Depth | Greenbone, ZAP baseline, OpenSCAP and compliance model, findings lifecycle, more vantages |
-| 4. AI triage | Diff triage, playbooks, triage decisions, threat-intel digest and intel-driven checks |
+| 4. AI triage | Diff triage, playbooks, triage decisions, threat-intel digest and intel-driven checks, remediation metrics dashboard and email report |
 | 5. AI planning and memory | Agent follow-up scan requests, feedback retrieval, local/hosted LLM fallback, pseudonymizer |
 | Later | Code security review: a GitHub App that runs SAST, dependency and secret scanning on PRs and comments with findings |
 

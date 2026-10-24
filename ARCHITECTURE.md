@@ -39,7 +39,7 @@ flowchart LR
 
 One Python service and the only component with authority to start scans. It:
 
-- Exposes the HTTP API (FR-26 to FR-28), authenticated with scoped tokens.
+- Exposes the HTTP API (FR-28 to FR-30), authenticated with scoped tokens.
 - Loads the deployment's scope, schedules and labels.
 - Resolves every job's targets and rejects anything outside scope (FR-1), including requests from the agent.
 - Runs the DDNS self-check before external jobs (FR-2).
@@ -80,7 +80,7 @@ It talks to an LLM through an OpenAI-compatible interface, so local and hosted b
 
 ### Dashboards and alerts
 
-Grafana reads Postgres directly for timelines and severity trends. Notifier plugins send diff events above the alert threshold, plus the daily and weekly digests.
+Grafana reads Postgres directly for timelines and severity trends. Notifier plugins send diff events above the alert threshold, plus the daily and weekly digests. Remediation metrics (FR-26) are computed as SQL views over `finding` and `observation` history, so the Grafana dashboard and the emailed remediation report (FR-27) read the same numbers. The report renders HTML with static chart images and is sent through the email notifier.
 
 ## Data model
 
