@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/pen15-lockup-dark.svg">
+    <img src="docs/assets/pen15-lockup-light.svg" alt="pen15" width="200">
+  </picture>
+</p>
+
 # pen15
 
 Self-hosted attack-surface monitoring for networks you own. Scheduled internal and external scans, history and diffs over time, threat-intel matching, and AI triage that hands remediation and testing playbooks to a human.
