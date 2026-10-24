@@ -8,11 +8,11 @@ Short architecture decision records (ADRs) for pen15's major choices. Each one g
 | --- | --- |
 | Language | Python 3.12+ |
 | API | FastAPI |
-| Store | PostgreSQL 16 + pgvector |
+| Store | PostgreSQL 16, Alembic migrations |
 | Job queue | Postgres (`SKIP LOCKED`) |
 | Packaging | Docker images, docker compose |
-| Discovery / ports | nmap, masscan |
-| Vuln checks | nuclei, Greenbone Community Edition |
+| Discovery / ports | nmap |
+| Vuln checks | nuclei; Greenbone Community Edition as an optional plugin |
 | TLS / web | testssl.sh, OWASP ZAP baseline |
 | Compliance | OpenSCAP + SCAP Security Guide |
 | Probe transport | Tailscale (WireGuard) in the reference deployment |
@@ -41,9 +41,9 @@ Short architecture decision records (ADRs) for pen15's major choices. Each one g
 
 ## ADR-003: PostgreSQL for everything stateful
 
-**Decision:** Postgres holds the model, the job queue and embeddings (pgvector).
+**Decision:** Postgres holds the model and the job queue.
 
-**Alternatives:** SQLite (simpler, but no pgvector and weak concurrent writes); Redis + Celery for queueing; a separate vector DB.
+**Alternatives:** SQLite (simpler, but weak concurrent writes and a harder upgrade path); Redis + Celery for queueing.
 
 **Tradeoff:** One more container than SQLite, but one database to back up, and queue throughput is far beyond what scan scheduling needs.
 
@@ -85,15 +85,15 @@ Short architecture decision records (ADRs) for pen15's major choices. Each one g
 
 **Alternatives:** Hard-coding one provider; running the model on the NAS CPU.
 
-**Tradeoff:** You lose some provider-specific features, but deployers can choose local-only for privacy or hosted for quality. Agent runs are nightly batches, so a fallback when the GPU box is off is enough. An optional pseudonymizer covers hosted use.
+**Tradeoff:** You lose some provider-specific features, but deployers can choose local-only for privacy or hosted for quality. Agent runs are nightly batches, so a fallback when the GPU box is off is enough. A strict-privacy mode waits for the local backend instead of falling back; a pseudonymizer for hosted calls is deferred to phase 5.
 
 ## ADR-009: Threat intel from structured feeds first, news second
 
-**Decision:** CISA KEV, NVD, EPSS and GHSA drive matching; news RSS is supplementary and only matched through flagged fuzzy LLM matching.
+**Decision:** CISA KEV, NVD and EPSS drive matching. News RSS goes to the human digest only and never triggers a scan. GitHub Security Advisories wait for the code-review product, where they matter.
 
-**Alternatives:** News-driven scanning.
+**Alternatives:** News-driven scanning; LLM fuzzy matching of headlines to assets as a scan trigger.
 
-**Tradeoff:** Zero-days without a CVE show up as "potentially affected" rather than being checked, but scans are only triggered by data precise enough to act on, and checks use signed nuclei templates, never PoC code.
+**Tradeoff:** Zero-days without a CVE reach you as digest items rather than checks, but scans are only triggered by data precise enough to act on, and checks use signed nuclei templates, never PoC code.
 
 ## ADR-010: Separate core and deployment repos; sops + age for secrets
 
@@ -110,3 +110,43 @@ Short architecture decision records (ADRs) for pen15's major choices. Each one g
 **Alternatives:** MIT (shorter, similar permissions); GPL/AGPL (copyleft).
 
 **Tradeoff:** No copyleft protection, but for a project this size copyleft mainly causes rewrites instead of adoption. Apache-2.0 adds an explicit patent grant, and NOTICE carries attribution into derivatives.
+
+## ADR-012: Diff against declared intent, not only the last scan
+
+**Decision:** The deployment declares expected exposure per host and per vantage. Any observed service not declared becomes an "unexpected exposure" finding, and accepting it means adding it to the declaration.
+
+**Alternatives:** Diffing only against the previous scan; relying on vulnerability scanners to flag exposure.
+
+**Tradeoff:** The operator has to write and maintain the declaration. Without it, a service exposed since the first scan never alerts, and a fully patched service reachable from the internet isn't a vulnerability to any scanner.
+
+## ADR-013: A lean core: no masscan, OpenVAS optional, no vector store
+
+**Decision:** nmap is the only port scanner. Greenbone/OpenVAS is an optional plugin. Operator decisions are applied by deterministic suppression rules plus recent decisions in the prompt, with no vector database.
+
+**Alternatives:** masscan for speed; OpenVAS as a core dependency; pgvector retrieval of past decisions.
+
+**Tradeoff:** At home-network scale, nmap is fast enough, and masscan's dropped packets cause false negatives. OpenVAS is the heaviest component (multi-GB feeds, 4–8 GB RAM) and overlaps nuclei heavily; it earns its place for authenticated scanning, not as a baseline. One operator produces dozens of decisions, not millions, so retrieval infrastructure is premature. Each can be added back as a plugin.
+
+## ADR-014: Silence is a failure
+
+**Decision:** Every schedule has a dead-man switch, probes send heartbeats, and a missing run or heartbeat alerts at its own severity.
+
+**Alternatives:** Treating an empty diff as "no change".
+
+**Tradeoff:** More alerts to tune. But a monitoring system that goes quiet when it breaks is worse than none, because quiet reads as safe.
+
+## ADR-015: Scan output is untrusted input to the LLM
+
+**Decision:** Scan-derived text reaches the model only as quoted data with provenance. The agent's outputs are recommendations; it can't close, suppress or accept findings, or lower severity below a deterministic floor.
+
+**Alternatives:** Feeding raw tool output to the model; letting the agent auto-close low-risk findings.
+
+**Tradeoff:** The agent can't save the operator clicks by closing things itself. Banners, titles and certificate fields are attacker-controlled, so letting them steer triage outcomes would turn every scanned device into a way to hide findings.
+
+## ADR-016: Ship a lab and fixtures with the core
+
+**Decision:** The repo includes recorded tool output for parser tests and an isolated compose lab of intentionally vulnerable targets. CI runs a full cycle against the lab.
+
+**Alternatives:** Testing against a live network; unit tests on synthetic data only.
+
+**Tradeoff:** The lab images need maintenance and CI gets slower. In return the system is testable end to end without touching a real network, and the lab is a public demo that exposes nothing about any deployment.
