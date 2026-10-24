@@ -134,6 +134,14 @@ Any closed finding that is detected again becomes **regressed**. Accepting an un
 
 - **Code security review:** a GitHub App that runs SAST, dependency and secret scanning on PRs and comments with findings. It will get its own spec and share the finding model and ingest API.
 - **Wireless:** AP configuration audit (WPA mode, WPS, guest isolation) and rogue AP detection as plugins.
+- **Device coverage by class.** Each asset gets a device class (from labels or fingerprinting) that selects which checks apply:
+    - **Linux:** network scans plus the OpenSCAP push agent (already in v1).
+    - **macOS:** a push agent using the macOS Security Compliance Project baselines (FileVault, firewall, SIP, Gatekeeper, automatic updates), and OS version matched against Apple security releases.
+    - **iOS and other locked-down devices:** no agent is possible. Network exposure checks, plus an operator-recorded OS version matched against Apple security releases.
+    - **IoT and TVs (smart TVs, Alexa and similar):** network-only checks for UPnP/SSDP and mDNS exposure, debug interfaces left open (for example ADB on 5555), default credentials and firmware versions revealed by banners.
+- **UPnP port-mapping audit.** Read the router's UPnP IGD mappings and flag any a device opened on its own. They become unexpected-exposure findings (FR-5, FR-6). IoT devices punching holes in the router is the most common way a home network gets exposed without anyone noticing.
+- **Segmentation tests.** A probe placed inside an isolated VLAN (for example IoT) verifies it can't reach the main LAN, the NAS or management interfaces. A path that should be blocked and isn't becomes a finding.
+- **Device destinations.** Optionally ingest DNS query logs (for example Pi-hole or AdGuard Home) to show which external domains each device talks to and flag new ones. This is posture data, not intrusion detection.
 
 ## Open questions
 

@@ -68,7 +68,7 @@ v1 uses one untrusted probe. More vantages are the same component with a differe
 
 ### Asset identity
 
-An asset is resolved from a composite of MAC, hostname, DHCP fingerprint and mDNS name (FR-8). MACs with the locally administered bit set are treated as randomized and weighted down, so a phone rotating its MAC matches its existing asset instead of creating a new one. IPv4 and IPv6 addresses are attributes of an asset with first and last seen times.
+An asset is resolved from a composite of MAC, hostname, DHCP fingerprint and mDNS name (FR-8). MACs with the locally administered bit set are treated as randomized and weighted down, so a phone rotating its MAC matches its existing asset instead of creating a new one. IPv4 and IPv6 addresses are attributes of an asset with first and last seen times. Each asset has a device class (for example `linux`, `macos`, `ios`, `iot`), set from labels or inferred from fingerprinting, which decides which checks apply to it.
 
 ### Store
 
@@ -107,7 +107,7 @@ Grafana reads Postgres directly for timelines and severity trends. Notifier plug
 
 | Table | Holds | Key |
 | --- | --- | --- |
-| `asset` | Composite identity, labels, network, first/last seen | stable id |
+| `asset` | Composite identity, device class, labels, network, first/last seen | stable id |
 | `asset_address` | IPv4/IPv6 and MAC addresses per asset, randomized flag | (asset, address) |
 | `service` | Asset + protocol + port, banner, product, version, CPE | (asset, proto, port) |
 | `expected_exposure` | Declared services per host and per vantage, loaded from the deployment | (asset or label, proto, port, vantage) |
