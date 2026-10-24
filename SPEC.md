@@ -138,6 +138,7 @@ Any closed finding that is detected again becomes **regressed**. Accepting an un
     - **Linux:** network scans plus the OpenSCAP push agent (already in v1).
     - **macOS:** a push agent using the macOS Security Compliance Project baselines (FileVault, firewall, SIP, Gatekeeper, automatic updates), and OS version matched against Apple security releases.
     - **iOS and other locked-down devices:** no agent is possible. Network exposure checks, plus an operator-recorded OS version matched against Apple security releases.
+    - **Routers:** the router is both a target (admin UI or SSH reachable from WAN, cloud features enabled, firmware against vendor advisories) and a data source (port forwards and UPnP mappings, read-only over SSH, as an `exposure_source` plugin; Asuswrt-Merlin first).
     - **IoT and TVs (smart TVs, Alexa and similar):** network-only checks for UPnP/SSDP and mDNS exposure, debug interfaces left open (for example ADB on 5555), default credentials and firmware versions revealed by banners.
 - **UPnP port-mapping audit.** Read the router's UPnP IGD mappings and flag any a device opened on its own. They become unexpected-exposure findings (FR-5, FR-6). IoT devices punching holes in the router is the most common way a home network gets exposed without anyone noticing.
 - **Segmentation tests.** A probe placed inside an isolated VLAN (for example IoT) verifies it can't reach the main LAN, the NAS or management interfaces. A path that should be blocked and isn't becomes a finding.
