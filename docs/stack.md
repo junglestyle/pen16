@@ -33,7 +33,7 @@ Keep scope, ceilings, networking, and encrypted secrets in a private deployment 
 
 ## ADR-004: Enforce scan scope on the host
 
-Raw-packet scanning needs an egress boundary outside the runner process. Ansible installs policy before execution and keeps firewall authority away from the runner. Prove containment with raw-packet tests in the isolated lab.
+Raw-packet scanning needs an egress boundary outside the runner process. The host installs policy before execution and keeps firewall authority away from the runner. Prove containment with raw-packet tests in the isolated lab.
 
 ## ADR-005: Tailscale identity instead of passwords
 

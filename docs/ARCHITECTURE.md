@@ -16,7 +16,7 @@ flowchart LR
   probe --> wan[Approved public targets]
 ```
 
-A pinned nmap container pulls assignments from a dedicated runner listener. Host deployment installs egress policy before execution. The external probe uses the same protocol with its own identity and vantage.
+A pinned nmap container pulls assignments from a dedicated runner listener. Host deployment installs egress policy before execution: the runner waits until the host has stamped its current network namespace. The external probe uses the same protocol with its own identity and vantage.
 
 ## API permissions
 
@@ -79,4 +79,6 @@ Use Compose and Ansible server/probe roles on existing Debian 13 hosts.
 | Assets, intent, settings, decisions, observations, enrollment, history | Database; dashboard edits routine settings |
 | Raw evidence | Immutable files included with database backups |
 
-Ansible owns startup, interfaces, egress rules, private TLS, runtime secrets, and backup timers. Scope/ceiling changes stop affected work until policy readiness passes. Deployment preserves dashboard settings. Restore uses database state. The owner provisions hosts separately.
+Ansible owns startup, interfaces, egress rules, private TLS, runtime secrets, and backup timers.
+
+On the server, [deploy/compose.yaml](../deploy/compose.yaml) runs Postgres, the worker, the dashboard, the listener, and the internal runner. The runner sits alone on a bridge with the listener and reaches targets through the host's NAT, so this release scans routed address lists without L2 discovery. The host's `pen15-egress` service loads [runner-egress.nft](../deploy/runner-egress.nft) into the runner's namespace on every start. Scope/ceiling changes stop affected work until policy readiness passes. Deployment preserves dashboard settings. Restore uses database state. The owner provisions hosts separately.

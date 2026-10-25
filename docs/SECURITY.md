@@ -13,7 +13,7 @@
 
 Canonicalize targets, bound expansion, resolve at dispatch, and pin approved addresses. Use fixed executables and argument arrays without a shell, scripts, redirects, or arbitrary options. Bound runtime, memory, and output.
 
-The runner has only NET_RAW, without database credentials or a runtime socket. Other containers drop capabilities. Before dispatch, Ansible installs default-deny nftables netdev egress on every runner interface, including after recreation. Permit authorized targets and named API/DNS dependencies; deny exclusions, database, owner API, metadata, and unsupported traffic. Test raw-packet enforcement and startup without policy.
+The runner has only NET_RAW, without database credentials or a runtime socket. Other containers drop capabilities. Before the runner takes a job, the host loads default-deny nftables netdev egress on its only interface, again after every restart, and the runner waits for the host's stamp on its current namespace. Permit authorized targets and named API/DNS dependencies; deny exclusions, database, owner API, metadata, and unsupported traffic. Test raw-packet enforcement and startup without policy.
 
 Exclude prohibits directed probes, including ARP requests. Fragile permits only an explicit light port set without version probing or full sweeps. Initial ceilings are 500 probe packets/s internally and 50 for fragile/external targets. Bound fingerprinting connections separately.
 
