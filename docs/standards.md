@@ -59,5 +59,5 @@ examples. Where it differs from an org rule, it says so, and it wins.
 
 ## Prose
 
-- Name roles, such as the NAS, the scanner VM, and the probe.
-- Hermes appears only as an example client. The API assumes nothing about who calls it.
+- Name roles, such as the server, the scanner, and the probe.
+- Name a specific assistant only as the README's example. The API assumes nothing about who calls it.

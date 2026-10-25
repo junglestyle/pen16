@@ -28,7 +28,7 @@ Counts link to assets and findings. Show observation time, vantage, coverage, an
 - **FR-7** Store settings and intent in the database; edit them in the dashboard within deployment ceilings. Support scan/verify/cancel, manual resolution/reopen, scoped accepted-risk/false-positive decisions, and history. Decisions require reasons; material evidence changes bring them back for attention.
 - **FR-8** Run one job per runner with a deadline and one automatic retry. Record requester and reason. Keep immutable observations, provenance, bounded raw evidence, and job outcomes.
 - **FR-9** Alert on new unexpected exposure and operational exceptions. Group related events, suppress unchanged detections, retry delivery, and show failures on the dashboard. Recover transient faults automatically and send one recovery notice.
-- **FR-10** Provide a versioned API with revocable read, scan, and runner tokens and a per-token rate limit. Hermes uses restricted read/scan access. The owner's Tailscale identity controls settings and decisions.
+- **FR-10** Provide a versioned API with revocable read, scan, and runner tokens and a per-token rate limit. An assistant client uses restricted read/scan access. The owner's Tailscale identity controls settings and decisions.
 - **FR-11** Provide Compose, Ansible, migrations, fictional configuration, and offline validation. Automate backups, host security updates, TLS renewal, and retention. Application and tool upgrades are a deliberate pin bump and playbook run. Demonstrate restore and measure resource use and owner interventions.
 - **FR-12** M2 fetches KEV and selected advisories daily, with optional NVD enrichment. Match explicit product identifiers/aliases and versions; show potentially affected assets, unmatched services, source freshness, and non-CVE watchlist items. Alert on relevant high/critical or known-exploited issues. Feeds never start scans or resolve findings; advisory resolution is an owner decision.
 - **FR-13** M3 adds one external IPv4/TCP probe with independent internet egress, restricted transport, DDNS checks, and heartbeat alerts. Keep internal and external evidence separate.
@@ -70,6 +70,6 @@ Also demonstrate scope containment, filtered/unavailable results staying open, c
 - UPnP port-mapping read from the router.
 - IPv6 and broader UDP.
 - TLS checks.
-- Remediation loop: Hermes drafts mitigations and manual tests from the read API; pen15 verifies with scan requests.
+- Remediation loop: an assistant client drafts mitigations and manual tests from the read API; pen15 verifies with scan requests.
 - Advisory digest and news/RSS feeds.
 - Approved remediation actions.

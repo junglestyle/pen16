@@ -5,7 +5,7 @@ One Python service contains the FastAPI API, server-rendered dashboard, schedule
 ```mermaid
 flowchart LR
   owner[Owner dashboard] --> api[API + scheduler + parser + notifier]
-  hermes[Hermes] -->|read / scan| api
+  assistant[Assistant client] -->|read / scan| api
   runner[Internal nmap runner] -->|pull / upload| api
   probe[External probe: M3] -->|restricted runner listener| api
   api --> db[(Postgres + raw files)]
@@ -29,7 +29,7 @@ The dashboard and versioned API share application services. The dashboard is rea
 | scan | Request approved scans/verification for bound assets/profiles; inspect/cancel own requests |
 | runner | Pull assigned jobs, upload their results, and report own heartbeat |
 
-Hermes receives read and scan. Each request selects one registered asset, an approved profile, and a reason. Tokens cannot change intent, findings, scope, or deployment policy. Apply a simple per-token rate limit, initially six scan requests/hour. Return the API schema with permissions documented.
+An assistant client receives read and scan. Each request selects one registered asset, an approved profile, and a reason. Tokens cannot change intent, findings, scope, or deployment policy. Apply a simple per-token rate limit, initially six scan requests/hour. Return the API schema with permissions documented.
 
 ## Evidence flow
 
@@ -71,7 +71,7 @@ Alert after two missed/failed scheduled windows; gateway failure alerts immediat
 
 ## Deployment and state ownership
 
-Use Compose and Ansible server/probe roles on existing Debian 13 hosts. Start measurements on a 4 vCPU / 16 GB VM with 50 GiB data storage.
+Use Compose and Ansible server/probe roles on existing Debian 13 hosts.
 
 | State | Owner |
 | --- | --- |

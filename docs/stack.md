@@ -37,4 +37,4 @@ Raw-packet scanning needs an egress boundary outside the runner process. Ansible
 
 ## ADR-005: Tailscale identity instead of passwords
 
-The dashboard is only reachable over Tailscale, so it uses Tailscale identity for the owner instead of its own login system. That means no passwords, sessions or recovery flow to build or maintain. API tokens still cover Hermes and runners.
+The dashboard is only reachable over Tailscale, so it uses Tailscale identity for the owner instead of its own login system. That means no passwords, sessions or recovery flow to build or maintain. API tokens still cover assistant clients and runners.

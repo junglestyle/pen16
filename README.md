@@ -19,10 +19,10 @@ A security dashboard for your homelab and home network. See what’s exposed, wh
 - **Catch unexpected exposure.** Compare reachable services with what you intended, inside the network and from an external probe.
 - **Surface relevant threats.** Connect new advisories and known exploitation to your software, with source links.
 - **Check your fixes.** Request a bounded verification and see what the scanner actually observed.
-- **Work with your assistant.** Give Hermes or another client restricted API access to read status and request approved scans.
+- **Work with your assistant.** Give an assistant such as Hermes restricted API access to read status and request approved scans.
 - **Stay out of your way.** Run scheduled checks, handle routine housekeeping, and alert on useful changes or monitoring failures.
 
-For example: a new NAS container exposes an admin port. pen15 shows it on the dashboard and alerts you. You restrict access, ask for verification, and review the result. A later advisory for that software can warn you even without an active vulnerability check.
+For example: a new container on your server exposes an admin port. pen15 shows it on the dashboard and alerts you. You restrict access, ask for verification, and review the result. A later advisory for that software can warn you even without an active vulnerability check.
 
 ## Built for a homelab
 
