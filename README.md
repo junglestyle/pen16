@@ -32,7 +32,7 @@ The first release delivers the dashboard and internal monitoring loop. Lightweig
 
 ## Contributing
 
-Start with [AGENTS.md](AGENTS.md) for engineering standards, [architecture](docs/ARCHITECTURE.md), [security](docs/SECURITY.md), and [stack choices](docs/stack.md).
+Start with [AGENTS.md](AGENTS.md) and the [coding standards](docs/standards.md).
 
 Use pen15 only on networks you own or are explicitly authorized to assess.
 
