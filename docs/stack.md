@@ -20,6 +20,7 @@ Short architecture decision records (ADRs) for pen15's major choices. Each one g
 | Dashboards | Grafana |
 | Secrets | sops + age |
 | Deployment | Ansible (`pen15.deploy` collection) |
+| Host OS | Debian 13 "trixie" for the scanner VM and probes |
 | License | Apache-2.0 |
 
 ---
@@ -159,3 +160,12 @@ Short architecture decision records (ADRs) for pen15's major choices. Each one g
 **Alternatives:** Shell scripts; compose-only with manual host setup; ansible-vault for secrets; NixOS.
 
 **Tradeoff:** Ansible is another tool to learn. But pen15 touches three kinds of machines (scanner, probe, every host that pushes OpenSCAP results), and the scanned hosts are where manual setup rots fastest. Keeping roles in the core keeps them reusable, and using the sops lookup avoids a second secrets system. Ansible doesn't create the VM itself; that stays a one-time manual step.
+
+## ADR-018: Debian stable for the scanner and probes
+
+**Decision:** The scanner VM and remote probes run Debian 13 ("trixie"). The `server` and `probe` roles target Debian only.
+
+**Alternatives:** Debian 12 ("bookworm"); Ubuntu LTS; running directly on the NAS OS; an immutable container OS (Fedora CoreOS, Flatcar).
+
+**Tradeoff:** Everything pen15 runs is in containers, so the host only needs to be a stable, boring Docker host, and one OS for scanner and probes means one thing to patch and one set of roles to test. Debian 13 is current stable; Debian 12 is oldstable on LTS, so new deployments shouldn't start there. An immutable OS would shrink the host's attack surface further, but it's a less familiar target for Ansible and for people adopting the project.
+

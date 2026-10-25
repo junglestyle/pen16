@@ -104,7 +104,7 @@ This document says **what** pen15 does and doesn't do. [ARCHITECTURE.md](ARCHITE
 
 ## Non-functional requirements
 
-- **NFR-1 Self-hosted:** runs on a single Docker-capable host (reference: a TrueNAS SCALE VM with 4 vCPU and 16 GB) with no required cloud services.
+- **NFR-1 Self-hosted:** runs on a single Docker-capable host (reference: a Debian 13 VM on TrueNAS SCALE with 4 vCPU and 16 GB) with no required cloud services.
 - **NFR-2 Low disruption:** default scan timing is polite, heavy scans run in configurable quiet windows, and fragile hosts are respected.
 - **NFR-3 Secure by default:** no internet-facing UI or API; secrets are never stored in plaintext in git; probes hold no LAN credentials; jobs sent to probes are authenticated.
 - **NFR-4 Reproducible:** the full deployment can be rebuilt from the deployment repo, the secrets key and a database backup.

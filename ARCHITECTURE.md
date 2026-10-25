@@ -150,7 +150,7 @@ Plugins are Python packages discovered via entry points, so a deployment can add
 
 The core repo (this one) contains the engine, built-in plugins, container images, the test lab and an example deployment. Each real deployment lives in its own repo, usually private, and pins a released core image. `pen15 validate` checks a deployment repo against the schema of the pinned version (FR-41).
 
-Deployment is done with Ansible. The core ships a `pen15.deploy` collection with three roles: `server` (Docker, compose stack, systemd, age key placement), `probe` (Tailscale with a probe tag, probe container, heartbeat) and `oscap_agent` (OpenSCAP push timer and ingest token on scanned hosts). The deployment repo holds `site.yml`, the inventory and group vars, and reads secrets from the same sops file through the `community.sops` lookup. The VM or VPS itself is created by hand or with the provider's tooling; Ansible starts at the OS.
+Deployment is done with Ansible. The core ships a `pen15.deploy` collection with three roles: `server` (Docker, compose stack, systemd, age key placement), `probe` (Tailscale with a probe tag, probe container, heartbeat) and `oscap_agent` (OpenSCAP push timer and ingest token on scanned hosts). The deployment repo holds `site.yml`, the inventory and group vars, and reads secrets from the same sops file through the `community.sops` lookup. The VM or VPS itself is created by hand or with the provider's tooling; Ansible starts at the OS. The `server` and `probe` roles target Debian stable (13 "trixie"); scanned hosts running `oscap_agent` can be any distribution with SCAP Security Guide content.
 
 ```
 pen15/                      # public core
