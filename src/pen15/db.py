@@ -17,7 +17,7 @@ from sqlalchemy import (
     create_engine,
     func,
 )
-from sqlalchemy.dialects.postgresql import INET
+from sqlalchemy.dialects.postgresql import ARRAY, INET
 
 metadata = MetaData()
 
@@ -81,9 +81,73 @@ findings = Table(
     Column("status", Text, nullable=False),
     Column("opened_at", DateTime(timezone=True), nullable=False),
     Column("resolved_at", DateTime(timezone=True)),
+    Column("resolution", Text),
     Column("last_observation_id", BigInteger, ForeignKey("observations.id"), nullable=False),
     CheckConstraint("status IN ('open', 'resolved')", name="finding_status"),
     UniqueConstraint("kind", "asset_id", "protocol", "port", "vantage"),
+)
+
+schedules = Table(
+    "schedules",
+    metadata,
+    Column("name", Text, primary_key=True),
+    Column("profile", Text, nullable=False),
+    Column("every_hours", Integer, nullable=False),
+    Column("next_run_at", DateTime(timezone=True), nullable=False),
+    Column("enabled", Boolean, nullable=False),
+)
+
+jobs = Table(
+    "jobs",
+    metadata,
+    Column("id", BigInteger, primary_key=True),
+    Column("schedule", Text, ForeignKey("schedules.name")),
+    Column("requester", Text, nullable=False),
+    Column("reason", Text, nullable=False),
+    Column("profile", Text, nullable=False),
+    Column("targets", ARRAY(Text), nullable=False),
+    Column("exclude", ARRAY(Text), nullable=False),
+    Column("extra_tcp", ARRAY(Integer), nullable=False),
+    Column("status", Text, nullable=False),
+    Column("attempts", Integer, nullable=False, server_default="0"),
+    Column("runner", Text),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("started_at", DateTime(timezone=True)),
+    Column("deadline_at", DateTime(timezone=True)),
+    Column("finished_at", DateTime(timezone=True)),
+    Column("error", Text),
+    Column("evidence_digest", Text),
+    CheckConstraint("status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')", name="job_status"),
+)
+
+tokens = Table(
+    "tokens",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column("kind", Text, nullable=False),
+    Column("name", Text, nullable=False),
+    Column("secret_hash", Text, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("last_used_at", DateTime(timezone=True)),
+    Column("revoked_at", DateTime(timezone=True)),
+    CheckConstraint("kind IN ('runner')", name="token_kind"),
+)
+
+notifications = Table(
+    "notifications",
+    metadata,
+    Column("id", BigInteger, primary_key=True),
+    Column("kind", Text, nullable=False),
+    Column("title", Text, nullable=False),
+    Column("body", Text, nullable=False),
+    Column("status", Text, nullable=False, server_default="pending"),
+    Column("attempts", Integer, nullable=False, server_default="0"),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("next_attempt_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("delivered_at", DateTime(timezone=True)),
+    Column("last_error", Text),
+    CheckConstraint("kind IN ('finding', 'health')", name="notification_kind"),
+    CheckConstraint("status IN ('pending', 'delivered', 'failed')", name="notification_status"),
 )
 
 

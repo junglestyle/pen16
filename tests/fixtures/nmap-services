@@ -1,0 +1,4 @@
+# Minimal nmap-services for tests.
+http	80/tcp	0.48
+ssh	22/tcp	0.18
+https	443/tcp	0.20

@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="300">
+<title>pen15</title>
+<style>
+:root { --bg: #fff; --fg: #1b1b1b; --muted: #666; --line: #ddd; --bad: #b3261e; --ok: #1e6b35; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #141414; --fg: #e8e8e8; --muted: #9a9a9a; --line: #333; --bad: #f28b82; --ok: #81c995; }
+}
+body { background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, sans-serif; margin: 0 auto; max-width: 62rem; padding: 1rem; }
+h1 { font-size: 1.3rem; margin: 0 0 1rem; }
+h2 { font-size: 1.05rem; margin: 1.6rem 0 .5rem; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border-bottom: 1px solid var(--line); padding: .35rem .5rem .35rem 0; text-align: left; vertical-align: top; }
+th { color: var(--muted); font-weight: 500; }
+.muted { color: var(--muted); }
+.bad { color: var(--bad); }
+.ok { color: var(--ok); }
+.scroll { overflow-x: auto; }
+dl { display: grid; gap: .2rem 1rem; grid-template-columns: max-content 1fr; margin: 0; }
+dt { color: var(--muted); }
+dd { margin: 0; }
+input[type=text] { font: inherit; max-width: 100%; padding: .25rem .4rem; }
+button { font: inherit; padding: .3rem .8rem; }
+:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+form.inline { display: inline; }
+</style>
+</head>
+<body>
+<h1>pen15</h1>
+
+<h2>Monitoring health</h2>
+<dl>
+  <dt>Last good scan</dt>
+  <dd class="{{ 'bad' if stale else 'ok' }}">
+    {% if last_success %}{{ last_success.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}never{% endif %}
+    {% if stale %}(stale){% endif %}
+  </dd>
+  <dt>Latest job</dt>
+  <dd>
+    {% if latest %}#{{ latest.id }} {{ latest.status }}{% if latest.error %} <span class="{{ 'bad' if latest.status == 'failed' else 'muted' }}">({{ latest.error }})</span>{% endif %}
+    {% else %}none yet{% endif %}
+  </dd>
+  <dt>Next scheduled</dt>
+  <dd>{% if next_run %}{{ next_run.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}no schedule enabled{% endif %}</dd>
+  <dt>Runner last seen</dt>
+  <dd>{% if runner_seen %}{{ runner_seen.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}<span class="bad">never</span>{% endif %}</dd>
+  <dt>Alerts</dt>
+  <dd>{{ pending }} queued{% if failed %}, <span class="bad">{{ failed }} failed to send</span>{% endif %}</dd>
+</dl>
+<form method="post" action="/scan"><p><button>Scan now</button></p></form>
+
+<h2>Needs attention ({{ findings|length }})</h2>
+{% if findings %}
+<form method="post" action="/findings/expect">
+<div class="scroll"><table>
+  <tr><th></th><th>Asset</th><th>Port</th><th>Service</th><th>Since</th></tr>
+  {% for f in findings %}
+  <tr>
+    <td><input type="checkbox" name="finding" value="{{ f.id }}" id="f{{ f.id }}" aria-label="select {{ f.asset_id }} {{ f.port }}/{{ f.protocol }}"></td>
+    <td><label for="f{{ f.id }}">{{ f.asset_id }}</label><br><span class="muted">{{ f.address }}</span></td>
+    <td>{{ f.port }}/{{ f.protocol }}</td>
+    <td>{{ f.service or '' }} <span class="muted">{{ f.product or '' }} {{ f.version or '' }}</span></td>
+    <td>{{ f.opened_at.strftime('%Y-%m-%d') }}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+<p>
+  <label for="reason">Reason</label>
+  <input type="text" id="reason" name="reason" required placeholder="why these are meant to be open">
+  <button>Mark selected expected</button>
+</p>
+</form>
+{% else %}
+<p class="muted">Nothing unexpected is open.</p>
+{% endif %}
+
+<h2>Exposure</h2>
+{% if exposed %}
+<div class="scroll"><table>
+  <tr><th>Asset</th><th>Port</th><th>Service</th><th>Seen</th><th>Expected</th></tr>
+  {% for o in exposed %}
+  <tr>
+    <td>{{ o.asset_id }}<br><span class="muted">{{ o.address }}</span></td>
+    <td>{{ o.port }}/{{ o.protocol }}</td>
+    <td>{{ o.service or '' }} <span class="muted">{{ o.product or '' }} {{ o.version or '' }}</span></td>
+    <td>{{ o.observed_at.strftime('%Y-%m-%d %H:%M') }}</td>
+    <td>{% if o.reason %}<span class="ok">yes</span> <span class="muted">{{ o.reason }}</span>{% else %}<span class="bad">no</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% else %}
+<p class="muted">No open services observed yet.</p>
+{% endif %}
+
+<h2>Expected services</h2>
+{% if expected %}
+<div class="scroll"><table>
+  <tr><th>Asset</th><th>Port</th><th>Reason</th><th></th></tr>
+  {% for e in expected %}
+  <tr>
+    <td>{{ e.asset_id }}</td>
+    <td>{{ e.port }}/{{ e.protocol }}</td>
+    <td>{{ e.reason }}</td>
+    <td>
+      <form class="inline" method="post" action="/expected/remove">
+        <input type="hidden" name="asset_id" value="{{ e.asset_id }}">
+        <input type="hidden" name="protocol" value="{{ e.protocol }}">
+        <input type="hidden" name="port" value="{{ e.port }}">
+        <input type="hidden" name="vantage" value="{{ e.vantage }}">
+        <button>Stop expecting</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% else %}
+<p class="muted">None declared. Mark findings expected above.</p>
+{% endif %}
+
+<h2>Unnamed devices ({{ provisional|length }})</h2>
+{% if provisional %}
+<div class="scroll"><table>
+  <tr><th>Address</th><th>Name it</th></tr>
+  {% for a in provisional %}
+  <tr>
+    <td>{{ a.addresses }}</td>
+    <td>
+      <form class="inline" method="post" action="/assets/name">
+        <input type="hidden" name="provisional_id" value="{{ a.id }}">
+        <input type="text" name="asset_id" required pattern="[a-z0-9][a-z0-9\-]*" aria-label="name for {{ a.addresses }}" placeholder="e.g. nas">
+        <button>Save</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% else %}
+<p class="muted">Every device has a name.</p>
+{% endif %}
+
+<p class="muted">Signed in as {{ owner }} · {{ now.strftime('%Y-%m-%d %H:%M UTC') }}</p>
+</body>
+</html>
