@@ -11,7 +11,7 @@
 
 A security dashboard for your homelab and home network. See what’s exposed, what changed, and which new vulnerabilities may affect what you run. Set it up, let it monitor, tune it when you want.
 
-> **In development:** this repository contains design and documentation. There is no runnable release yet.
+> **In development:** M0 records an nmap XML scan and reports unexpected exposure. There is no scanner, dashboard, or release yet.
 
 ## What it will do
 
@@ -29,6 +29,18 @@ For example: a new container on your server exposes an admin port. pen15 shows i
 One owner, self-hosted infrastructure, and almost no routine work. Core operation needs no LLM or paid cloud service.
 
 The first release delivers the dashboard and internal monitoring loop. Lightweight vulnerability awareness and the outside view complete v1. See the [specification and milestones](docs/SPEC.md).
+
+## Running it
+
+You need [uv](https://docs.astral.sh/uv/) and Docker.
+
+```sh
+make db      # throwaway Postgres for the checks
+make check   # everything CI runs
+```
+
+Against your own database, `PEN15_DATABASE_URL=... uv run alembic upgrade head`, then
+`uv run pen15 ingest scan.xml` records an internal nmap XML scan and prints each unexpected open port.
 
 ## Contributing
 
