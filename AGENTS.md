@@ -12,3 +12,5 @@ Read before changing behavior:
 
 Docs live in `docs/` and change with behavior. Never scan anything outside the isolated test lab. Never commit
 hostnames, tokens, deployment config, or real network evidence (see [Privacy](docs/standards.md#privacy)).
+
+`make check` runs everything CI runs.
