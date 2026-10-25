@@ -1,6 +1,6 @@
 # pen15 specification
 
-pen15 is a homegrown project for monitoring my personal tech infrastructure. It provides security awareness and remediation channels while staying low touch, and runs mostly unattended after setup. It's deliberately straightforward, not overbuilt. Working deployment, scope controls, and recovery demonstrate useful infrastructure engineering. Core operation needs no LLM or paid service.
+pen15 is a homegrown monitor for small, self-run infrastructure: homelabs, home networks, and the devices on them. It provides security awareness and remediation channels while staying low touch, and runs mostly unattended after setup. It's deliberately straightforward, not overbuilt. Working deployment, scope controls, and recovery demonstrate useful infrastructure engineering. Core operation needs no LLM or paid service.
 
 The threats are accidental exposure, vulnerable or forgotten services, opportunistic exploitation, and monitoring that silently stops. [SECURITY.md](SECURITY.md) maps these to controls and demonstrations.
 
