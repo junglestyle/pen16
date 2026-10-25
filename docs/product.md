@@ -1,44 +1,39 @@
 # Product purpose
 
-## Who this is for
+## A useful homelab project
 
-pen15 is built for the maintainer's homelab and made available for anyone who wants to use it. The primary user is one technically comfortable owner who can administer a Linux VM, Docker, and a private configuration repository.
+pen15 helps one owner see what is exposed, what changed, and which emerging vulnerabilities may affect the systems they run. It should be enjoyable to build, useful from a dashboard, and require almost no routine attention after setup. The owner can tune it as the network and their preferences change.
 
-The owner wants to know what changed, whether it was intended, and whether a fix worked. After setup, pen15 should need a short weekly review and occasional maintenance rather than daily attention. Remediating actual problems can take longer; operating the monitor should not.
+The project also demonstrates security-aware infrastructure engineering: an explicit threat model, proportionate controls, reproducible deployment, and evidence that failure handling and recovery work. Another engineer should be able to trace a threat to a control, inspect its implementation, and reproduce the demonstration. The scope and accepted risks remain those of a homelab; compliance certification is not a project goal.
 
-## Problem and value
+## What earns its place
 
-The starting workflow is occasional scanner runs, manually comparing output, and remembering which services were intentionally exposed. This leaves uncertainty about stale results, forgotten exposure, and whether a change actually fixed a finding.
+- A dashboard for current exposure, changes, relevant advisories, and monitoring health.
+- Scheduled, bounded observations from inside the network and eventually one external vantage.
+- Early warning about newly disclosed vulnerabilities and known exploitation, matched to observed or owner-declared software.
+- A small API used by both the dashboard and a restricted assistant integration such as Hermes.
+- Safe defaults, automatic housekeeping, and tuning without recurring configuration deployments.
 
-pen15 connects those activities into a repeatable loop: declared scope and intent, scheduled observations, evidence-backed changes, useful notifications, and verification. Scanner integration is a means to that outcome. AI is optional assistance; useful monitoring must work without it.
+Example: a container unexpectedly exposes an admin port. The dashboard shows the change and sends one alert. The owner restricts access, asks Hermes or the dashboard to verify it, and sees the new evidence. Separately, an advisory for software on the NAS produces a source-linked warning even if there is no scanner check for it.
 
-Example: the owner adds a container to the NAS and accidentally exposes a management port. pen15 reports the new service and its mismatch with declared intent. The owner restricts the listener and requests a verification scan. pen15 resolves the exposure only when the relevant check completes with sufficient evidence, retaining the earlier observation.
+## Threat model and accepted limits
 
-## Product boundaries
+The main concerns are accidental exposure, vulnerable or forgotten services, opportunistic exploitation, and a monitor that silently stops working. Faster exploit development makes timely awareness valuable; pen15 does not promise to discover unknown vulnerabilities or prevent compromise. Feed coverage, inventory quality, scan intervals, and vantage all limit what it can know.
 
-- One owner and one deployment, initially covering one homelab. Integrations have separate restricted identities.
-- Reference acceptance envelope: up to 100 assets across up to 4 configured networks, one internal scanner, and later one external probe. This is a design/test target, not a demonstrated capacity limit.
-- First useful release: internal IPv4 discovery and bounded TCP service checks, expected exposure, history, basic triage, one notifier, verification, and health visibility.
-- Broader protocol coverage, vulnerability templates, external scanning, compliance, and AI follow as separately accepted milestones in [the delivery plan](PLAN.md).
-- No requirement for billing, organizational tenancy, team assignment, enterprise SSO, or hosted infrastructure. Keep extension points without building those products.
+The deployment host and owner are trusted. Runners are constrained to approved networks; remote observations are trusted within their recorded vantage. One probe and pragmatic reachability checks are acceptable for this deployment. A compromise of the host or a lying probe requires investigation and recovery, not a claim that pen15 can independently defeat it.
 
-## Success criteria
+Detailed controls and accepted risks live in [SECURITY.md](SECURITY.md). A control should address a plausible failure and be cheap enough to sustain. Extra platforms, compliance scanners, scoring systems, and autonomous agents need a demonstrated personal use case before they become project work.
 
-These are proposed acceptance targets to validate during implementation and the maintainer's pilot. Record actual measurements in milestone evidence; revise targets explicitly when evidence warrants it.
+## Success evidence
 
-| Outcome | Target | Measurement |
-| --- | --- | --- |
-| First useful result | Within 60 minutes after prerequisites are ready, for a documented 10-asset setup | Time from copying the deployment example to reviewing the first exposure finding; list any manual interventions |
-| Low routine effort | At most 15 minutes of review/configuration per week over a 4-week stable-network pilot | Operator diary; report incident remediation and initial setup separately |
-| Useful notifications | At least 80% of finding alert groups warrant investigation or an intentional configuration decision | Operator labels over the pilot; fewer than 10 groups is insufficient evidence |
-| Predictable health | Stale/failed coverage never renders as a clean scan; whole-server loss is externally detectable | Fault scenarios in the lab plus independent watchdog demonstration |
-| Honest verification | No false resolution in the required partial-scan, retry, vantage, and unavailable-host fixtures | Contract tests from [data and execution contracts](contracts.md) |
-| Affordable operation | Core fits the reference 4 vCPU / 16 GB VM; no paid services required | Record peak resources and disk growth for the reference workload; optional probe/provider costs reported separately |
+There is no required weekly review ritual. A stable deployment should run unattended, send useful exceptions, and remain understandable when the owner opens it after time away.
 
-Time and cost controls include quiet windows, grouped alerts, bounded scan work, optional heavy scanners, and disabled hosted-model fallback by default. There is no assumed dollar budget: paid providers require an operator-configured cap before use.
+| Outcome | Evidence to collect |
+| --- | --- |
+| Useful quickly | Set up a fictional 10-asset lab, find an unexpected service, and explain every manual step |
+| Low maintenance | Run unattended for four weeks; record interventions and remove recurring chores before adding integrations |
+| Useful dashboard and alerts | Seed exposure and advisory changes; show evidence, grouping, and available actions; record nuisance alerts |
+| Proportionate security | Demonstrate scope containment, restricted API access, honest incomplete results, and recovery |
+| Affordable operation | Measure runtime, memory, and storage on the reference VM; use no required paid service or model |
 
-## Scope decisions
-
-Prefer changes that reduce operator uncertainty or recurring work. A feature must explain its place in the scan-to-verification loop, its maintenance cost, and how its result is tested. Broad integration coverage does not take priority over reliable core behavior.
-
-The public project documents supported configurations and limitations. The maintainer's private network layout, evidence, and credentials stay in the deployment repository. Reusable defaults and sanitized examples belong here.
+The reference sizing exercise is up to 100 assets across four networks on a 4 vCPU / 16 GB VM. These are test targets, not capacity guarantees. Publish sanitized configuration, a short demonstration, measurements, and known limitations so another engineer can assess the choices. Keep real infrastructure details and evidence private.

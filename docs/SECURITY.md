@@ -1,66 +1,64 @@
-# Security and scan-safety design
+# Threat model and controls
 
-This document specifies controls to implement and test. It is not a claim that the design-stage repository already enforces them. Responsible use covers only the operator's explicitly authorized networks. Automated exploitation and autonomous remediation remain out of scope.
+This is a design to implement and demonstrate. The deployment protects a personal homelab and shows proportionate infrastructure engineering. It is not a compliance baseline or a guarantee against every adversary.
 
-## Assets and trust boundaries
+## Threats worth addressing
 
-Protect the owner's network, scan credentials, network inventory, retained evidence, signing keys, and integrity of findings. Assume a scanned service can return malicious data, an uploaded result can be malformed, an API credential can be stolen, and a remote probe can be compromised. LAN/tunnel reachability is not authentication. The deployment host administrator is trusted; full host compromise is outside the containment guarantee and requires credential rotation and rebuild.
-
-| Boundary | Threat | Required control and verification |
+| Threat or failure | Control | Evidence |
 | --- | --- | --- |
-| Request/configuration → job | Out-of-scope or unbounded scan | Typed profiles, target manifest, exclusions, limits, dispatch-time scope checks; rejection fixtures |
-| Runner → network | DNS change, redirect, generated URL, or plugin expands scope | Pinned target addresses and enforced per-job egress policy; lab attempts to contact a forbidden address must fail |
-| Probe → API | Stolen probe credential reads inventory or submits another probe's work | Object-bound capabilities and endpoint ACLs; cross-probe negative authorization tests |
-| Raw output → parser/store/UI | Resource exhaustion, external entity resolution, path traversal, or injected markup | Bounded streaming parsers, disabled external resolution, generated paths, escaped display; malicious fixtures |
-| Evidence → model/provider | Prompt injection or inventory disclosure | Bounded structured context, explicit egress policy, output validation, no finding-mutation authority; adversarial evaluations |
-| Application → container runtime | API/plugin input becomes host execution authority | Restricted launcher interface and approved image/capability policy; rejection tests |
+| An accidental service or public forward exposes something private | Compare observations with explicit intent; alert on new unexpected exposure | Seed an unexpected listener and inspect its evidence |
+| An emerging disclosure affects software the owner runs | Daily advisories, product/watchlist matches, freshness and uncertainty | Seed relevant, unrelated, and incomplete advisories |
+| A scan damages a fragile device or escapes authorized scope | Fixed light profiles, exclusions, deadlines, host-owned egress policy | Raw-packet scope test, fragile-profile test, cancellation |
+| A stolen assistant/probe token gains owner authority | Resource-scoped API tokens, dedicated runner listener, tunnel ACLs | Negative authorization and cross-runner tests |
+| Hostile evidence or feed content exploits parsing or steers an assistant | Bounded local parsing with external resource loading disabled, escaped UI, no arbitrary commands or decision authority for scan clients | Malformed-output and denied-action fixtures |
+| Monitoring stops, notifications fail, or state is lost | Separate health status, outbox retries, optional external monitor, automated backups | Failure notification and isolated restore demo |
 
-## Scope and network enforcement
+The host administrator and deployment repository are trusted. Full host compromise is outside containment. A remote probe can falsify its own observations; one trusted vantage is an accepted cost/complexity tradeoff. Network observations cannot establish universal reachability, a patched host, or absence of unknown vulnerabilities. Document blind spots rather than adding machinery to imply certainty.
 
-Canonicalize IPv4/IPv6 addresses and hostnames; reject malformed, ambiguous, or overly large expansions. Resolve all relevant address records during planning and revalidate at dispatch. Preserve intended DNS name/SNI while pinning connections to approved addresses. If any target resolution is outside the approved policy, reject the target and show why; do not silently broaden scope. DDNS external jobs additionally compare against the deployment-observed public addresses for each enabled family.
+## Safe scanning and egress
 
-Disable redirects and automatic target expansion by default. An adapter enabling them must validate every destination and enforce the same address policy at connection time. Templates, browser resources, callbacks, and discovered links are not implicitly authorized. Disable out-of-band callback services unless separately designed and approved in a future milestone.
+Canonicalize targets, bound expansions, resolve addresses at planning/dispatch, and pin the job to the approved addresses. Keep the intended DNS name when needed. Disable redirects, scripts, discovered-link crawling, arbitrary scanner arguments, and external callbacks. New active checks need their own bounded profile before use.
 
-Use a per-job network policy that allows only the resolved target set and the minimum explicitly named infrastructure dependencies. Scanner egress must not include the orchestrator, database, container runtime, host metadata endpoints, or other networks by default. Profiles needing layer-2 discovery receive an explicit interface/network boundary. Scope changes cancel affected queued jobs and revoke/restrict running jobs; probes enforce signed expiry and local limits even while disconnected.
+The internal runner has only `NET_RAW`; all other added/default capabilities are dropped. It has no database credentials or runtime socket. Other application containers drop all capabilities. Fixed executables receive argument arrays with no shell. Each tool subprocess gets bounded time, memory, and output. Long-lived runner compromise can persist across jobs within its allowed network; this is accepted, and recovery replaces the container and revokes its token.
 
-## Approved checks and disruption limits
+Ansible-managed host startup installs default-deny nftables netdev egress policy on every runner interface in the runner's network namespace before enabling job execution, including after recreation. It allows declared target networks minus exclusions, plus named infrastructure dependencies such as the runner API and DNS. Explicit denies for the database, owner API, and host metadata take precedence over broad target-network allows. Dependencies and reachability witnesses must be explicitly authorized; conflicting exclusions fail validation. IPv4, IPv6, and ARP require explicit treatment; unsupported traffic is denied. The runner cannot administer its firewall.
 
-A signature verifies provenance, not appropriateness for the network. Enable only explicitly reviewed check IDs and pinned revisions, with declared protocols, privileges, expected traffic, timeouts, and negative-evidence semantics. Signature verification and an approved-check manifest are both required for nuclei. Tool updates cannot silently enable new templates or expand behavior.
+Scope or ceiling changes stop affected work, apply policy through the host deployment role, and reopen dispatch only after readiness checks pass. Failure leaves scanning stopped and visible. Do not build a new privileged runtime daemon for this. The lab must test raw packet senders, including queue bypass, and restart with policy absent. [nftables documents the netdev hook](https://wiki.nftables.org/wiki-nftables/index.php/Netfilter_hooks); [Linux 6.12's packet path](https://raw.githubusercontent.com/torvalds/linux/v6.12/net/packet/af_packet.c) includes the direct-egress check. Actual deployment behavior still needs the lab proof.
 
-Initial scanning is bounded discovery and TCP service observation. Default-credential/login attempts, brute force, fuzzing, exploit payloads, state-changing requests, denial-of-service checks, and intrusive scanner scripts are disabled. Later authenticated read-only assessments need an explicit profile and credential policy. A fragile-host policy permits only reviewed discovery/light port checks; the owner may instead exclude a host entirely.
+`exclude` means no probes directed at the host, including ARP target requests. Shared-segment broadcasts for other destinations can still reach it. `fragile` means only the explicit light port set, with no service-version probing or full sweep by default. Ordinary service detection also excludes intrusive scripts and unsafe tool defaults; validate chosen options against the pinned tool.
 
-Proposed default traffic ceilings are 50 probes per second per runner and 5 HTTP requests per second per target, at most two active runners, one active job per asset/vantage, and 30 minutes per job. Tool adapters must map and enforce applicable limits or refuse the profile. These are ceilings to test, not guarantees that all devices tolerate them; exclusions and lower overrides remain available. Heavy profiles run only in configured quiet windows. Pause and cancel must stop active network work within 10 seconds on a reachable runner; loss of control connectivity is bounded by local job expiry.
+Initial scan ceilings to tune in the lab are 500 probe packets/s for the serial internal runner and 50 for fragile targets. These are maxima, not expected speeds or guarantees of device tolerance. Bound service-fingerprinting connections separately in the profile; scanner port-scan rate flags alone are not a total-traffic limiter. Prefer one job at a time to rate sharing. Full sweeps are chunked and their actual freshness is shown. Lower rates, smaller port sets, and longer sweep intervals are supported.
 
-## Identities, authorization, and job signatures
+## Owner and integration access
 
-The owner uses a password stored as a salted adaptive hash and a short-lived server-side session over TLS, with secure HTTP-only cookies, CSRF protection, login throttling, and idle expiry. Bootstrap uses a one-time secret accessible only from the deployment host/private path and is disabled after enrollment. Credential recovery is a local administrator operation that revokes existing sessions and is audited. No external identity service is required.
+The dashboard/API is private, served over TLS. The owner uses a salted adaptive password hash and an expiring server-side session with secure cookies, CSRF protection, and login throttling. Bootstrap has a one-time local/private secret. Local administrator recovery revokes sessions. No external identity platform is required.
 
-API tokens are random, stored as hashes, shown once, individually revocable, and carry an identity, scope, and expiry. Default maximum lifetime is 90 days, with advance expiry notices and documented overlap rotation. A token scope is supplemented by resource bindings:
+API credentials are random, stored as hashes server-side, individually revocable, and shown once. Tokens have optional expiry; there is no mandatory calendar rotation or self-rotation protocol in v1. Store runner tokens in restricted persistent files, not images. Replace them on suspicion of compromise or re-enrollment. Restore may require re-enrollment if credentials changed after the backup; show that mismatch instead of silently broadening access.
 
-- `read`: permitted inventory and evidence reads; never secret material.
-- `ingest`: submit supported results only for its enrolled assets/formats; cannot enqueue jobs or claim arbitrary identities.
-- `probe`: pull only its assigned jobs, upload only their results, and send its own heartbeat.
-- `agent`: read approved context and write its own recommendation artifacts; no decisions, configuration edits, or job execution in v1.
-- `admin`: owner-authorized configuration/decision operations, subject to the same scope and scan-safety policy.
+| Permission | Authority |
+| --- | --- |
+| `read` | Read permitted inventory, findings, jobs, and sanitized evidence; no secrets |
+| `scan` | Request approved scans/verification for bound assets and profiles; inspect/cancel its own requests |
+| `runner` | Pull only assigned jobs, upload their results, and report its own heartbeat |
 
-Probe jobs are signed envelopes containing job/attempt IDs, probe identity, nonce, targets, allowed profile/image, configuration hash, issued time, and expiry. Reject wrong recipients, stale envelopes, replay, or unknown signing keys. Rotate signing keys with an explicit overlap and revocation process. Tunnel ACLs permit only required probe endpoints, not general LAN access. A compromised probe may falsify its own evidence; label the source and support revocation/quarantine rather than claiming signatures prove truthful observations.
+An assistant receives only the required read/scan bindings. It cannot edit intent, acknowledge/accept/resolve findings, change safety ceilings, or run remediation. Owner session authorization remains distinct. Shared budgets, coalescing, and per-client request limits apply to API work. Scan output and advisory prose are untrusted data even when returned to Hermes; the API does not accept instructions embedded in them.
 
-## Isolation and hostile inputs
+## External probe
 
-The internet-facing probe and runners hold no LAN credentials or database credentials. The browser-facing API has no raw container-runtime socket. A small local launcher accepts only approved images, validated job manifests, bounded resources, and an allowlist of capabilities/mounts. It rejects arbitrary commands, privileged containers, and host filesystem mounts. Plugins installed in the core process are trusted administrator-installed code; entry points are not a sandbox.
+Serve runner routes on a dedicated listener with no owner routes. The deployment's tailnet policy permits the probe only that host/port; it is an explicit prerequisite, not something two failed connection attempts can prove. Configure no exit node and no accepted subnet routes. Demonstrate restrictive policy before enrollment.
 
-Default result limits: 50 MiB compressed upload, 250 MiB expanded, bounded nesting/record counts, and a parsing deadline. Reject oversized, truncated, and unsupported results explicitly; stream large inputs and reject archive paths outside the job directory. XML parsing disables DTD/external entity retrieval. Parsers run with no network access and bounded resources. Evidence downloads use safe content types/disposition; inline text is escaped. Limits are configurable through validated deployment settings, with a ceiling enforced before allocation.
+Before each job, check enabled families' public egress addresses against the home WAN, validate the actual target path avoids the tunnel, and compare DDNS. Tests run in the actual scan path; container routes alone may not describe host forwarding. If the supported topology cannot establish that path, skip the job and show why. Heartbeats report these results. Optional forbidden-canary tests are diagnostics, with unreachable and indeterminate distinguished; they do not replace ACL enforcement.
 
-## Data handling and AI
+A failed self-test stops external work, not the internal runner. Loss of control connectivity is bounded by the assignment deadline. A compromised probe's results can be quarantined and its token revoked; authenticated transport does not prove truthful evidence.
 
-Secrets are encrypted in the deployment repository and supplied through restricted files at runtime; no plaintext secrets enter Git, process arguments, logs, or evidence exports. Protect database/raw-output storage with host access controls and encrypted backup storage. Sanitized logs have a shorter retention than finding history. Document host disk-encryption expectations during setup.
+## Evidence and secrets
 
-Local inference is the default. Hosted use and fallback each require explicit configuration, permitted fields, provider destination, and a spending cap. By default omit raw banners, credentials, private addresses/hostnames, and complete evidence attachments; send only the owner-approved structured context. Strict-privacy mode prohibits hosted fallback. A future pseudonymizer supplements this policy rather than being a prerequisite for basic data minimization. Notifications likewise send minimal summaries with authenticated links, not raw evidence.
+Parse locally with external resource loading disabled, disable XML DTD/external entities, escape displayed text, generate storage paths, and reject oversized/truncated inputs explicitly. Initial limits are 50 MiB compressed and 250 MiB expanded per upload; smaller profile limits are allowed. Feed downloads have size/time limits and only use owner-configured sources; reject redirects outside the configured source policy. The core's feed/notifier egress is separate from scanner target scope.
 
-Untrusted text remains data with provenance. Validate model output against a schema, cite observations in recommendations, and bound input/output sizes and cost. Quoting alone is not the security boundary: restricted permissions and deterministic decisions remain authoritative. Prompt/model changes require evaluation before release; a failed model does not block detection or manual triage.
+Secrets stay encrypted with sops/age in the deployment repository and are decrypted on the Ansible controller. Send only the runtime files each service needs, with restricted permissions and secret-safe Ansible logging. The age key stays off the scanner host. Backups encrypt to an independently recoverable recipient. [Ansible's SOPS lookup](https://docs.ansible.com/projects/ansible/latest/collections/community/sops/sops_lookup.html) runs on the controller.
 
-## Release and vulnerability handling
+Logs, notifications, and settings exports omit credentials and unnecessary raw evidence. Assistant reads are an intentional disclosure to the configured assistant: scope them accordingly. A future hosted-model integration would need explicit destination/data policy; no hosted inference is built into v1.
 
-Before each scanning milestone ships, demonstrate its scope containment, allowed-check policy, authorization, cancellation, parser limits, and relevant malicious-input fixtures. Pin images/checks, record dependency provenance, review licenses, and document the update process. Keep vulnerable lab targets isolated with no published host ports or LAN/internet route.
+## Release discipline
 
-For repository vulnerabilities, use GitHub private vulnerability reporting if enabled. Until a private reporting channel is configured, do not post credentials, private network evidence, or exploit details in public issues; report a minimal request for a private contact. Enabling and documenting a private reporting channel is a pre-release task. No response-time commitment is implied for this volunteer project.
+Pin images and tool versions, test relevant parser fixtures on upgrades, and keep lab targets isolated from the real LAN and internet. Publish supported configurations and the small set of boundary/recovery demonstrations. Document a private vulnerability-reporting channel before a public release. Controls should be supported by evidence; residual risks should be explicit and appropriate to this deployment.

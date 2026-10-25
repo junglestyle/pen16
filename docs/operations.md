@@ -1,52 +1,49 @@
-# Operating a low-maintenance deployment
+# Unattended operation
 
-These are planned defaults and release requirements. Executable deployment and recovery commands will be added with the implementation; no working installer is currently shipped.
+These are planned defaults, to be tuned with actual use. Commands and executable roles arrive with implementation. The goal is automatic operation with useful exceptions, not a recurring maintenance checklist.
 
-## Reference deployment and resource envelope
+## Deployment
 
-Use one Debian 13 Docker-capable VM with 4 vCPU and 16 GB RAM, PostgreSQL, the core API/UI, and ephemeral runners. Start with a 50 GiB dedicated data allocation and measure actual growth during the pilot. This is a planning baseline, not a measured minimum. Optional local models and Greenbone need separate capacity planning. A remote probe arrives only with external scanning.
+Start with an existing Debian 13 VM, Docker Compose, 4 vCPU / 16 GB RAM, and a 50 GiB data allocation. This is a test baseline, not a minimum specification. One API/dashboard service, Postgres, and one serial nmap runner are the core. M3 adds a separate external probe; no local model or vulnerability-scanner fleet is needed.
 
-Package one core Compose file with opt-in profiles for optional components. Host-specific interfaces and mounts belong in the deployment override. Ansible starts at an existing OS; VM/VPS provisioning remains an operator prerequisite. The first working release documents private TLS access, firewall rules, persistent data paths, and how to reach every configured network. Do not claim coverage for a VLAN without a verified route/interface.
+Ansible owns service startup, host egress rules, runtime secret files, and backup timers. In the reference Tailscale deployment, use Caddy's Tailscale certificate integration for private TLS with automatic renewal; do not rely on manually copied `tailscale cert` files. Keep owner and runner listeners distinct, and health-check certificate expiry. A deployment choosing another private TLS mechanism must supply its own tested renewal/reload path. See [Tailscale's certificate guidance](https://tailscale.com/docs/how-to/set-up-https-certificates).
 
-Core operation has no required paid/cloud service. Use an independent self-hosted watchdog on another failure domain if desired. Optional VPS, notification, and hosted-model costs are shown separately; hosted model requests require a configured spend limit and are disabled when the budget is exhausted.
+The owner manages OS security updates through the host's normal update mechanism. Application/tool releases remain pinned and are upgraded deliberately with Ansible; update availability appears on the dashboard. No automatic new checks or privilege expansions accompany an upgrade.
 
-## Schedules, workload, and quiet operation
+## Default schedule and workload
 
-Initial default is a nightly bounded discovery/TCP profile and a weekly summary. Enable UDP, IPv6, vulnerability templates, compliance, and heavy profiles only when supported and deliberately configured. Record the configured timezone; skip duplicate wall-clock schedule occurrences and record missed occurrences across clock changes. Never start an unbounded catch-up queue after downtime.
+Run internal discovery and top-1000/declared/observed TCP ports nightly. Aim to complete a rolling full-range sweep every seven days, with bounded chunks and a configurable quiet-window budget. Fragile hosts use their light set only. Sleeping clients can defer work; actual sweep age and unscanned ports remain visible. Routed address ranges consume work even when addresses are unresponsive; do not size them only by discovered assets.
 
-Apply the concurrency, traffic, and deadline limits in [contracts.md](contracts.md) and [SECURITY.md](SECURITY.md). Coalesce overlapping jobs for the same asset/vantage. Jobs that cannot run inside their permitted window are recorded as skipped and visible to health monitoring. Pausing scans does not pause health visibility, retention, or credential-expiry reminders.
+Use one job per runner, a 30-minute job deadline, and the ceilings in [SECURITY.md](SECURITY.md). The initial external profile uses at most 50 probe packets/s and the same chunking/deadlines. Skip work that cannot fit its permitted window and show it as deferred coverage. Prioritize targeted verification and routine scans over background full sweeps, without bypassing quiet windows. Coalesce overlaps and never replay an unlimited backlog after downtime.
 
-## Notifications and independent health
+At 500 probe packets/s, 65,535 probes alone take at least 131 seconds. Sweeping 100 assets over seven nights therefore needs at least 31 minutes/night, plus routine scans, retransmissions, response waits, and fingerprinting. At 50 packets/s the same single-asset first pass needs about 22 minutes. These lower bounds justify chunking; they are not capacity promises. Measure the configured workload before choosing the sweep interval.
 
-- Default finding alerts: high/critical new or escalated findings immediately, grouped by asset/vantage over 5 minutes; lower-severity changes in the weekly digest. Send an immediate event only once per meaningful change; unchanged detections update history.
-- Use a durable outbox with event/destination idempotency keys. Retry transient delivery failures with exponential backoff and jitter, starting at 1 minute, capped at 1 hour, for up to 24 hours. Delivery is at least once; destinations without idempotency support can show duplicates. Retain failed deliveries for review and manual replay.
-- Show pending/failed deliveries and last successful send. Setup includes a test notification. Daily provider/account credential problems become one continuing health incident rather than a new incident on every retry.
-- Default scan health alert: two consecutive missed/failed schedule windows; each schedule declares a deadline and grace period. Default probe heartbeat: every 60 seconds, alert after 5 minutes without one. Show degraded coverage immediately even before the alert threshold.
-- The core emits an outbound heartbeat every minute only after checking database access, scheduler progress, and outbox health. An independent watchdog alerts after 5 minutes of missing/unhealthy heartbeats through a channel independent of pen15's notifier path. Its host must survive loss of the pen15 VM; avoiding the same physical host is preferred.
-- If the owner declines the independent watchdog, prominently show that whole-server outages cannot be detected by pen15 itself. A green local health screen does not substitute for this check.
+M2 fetches advisories daily with cached results and bounded backoff. The owner can tune cadence and quiet windows in the dashboard within deployment ceilings. Store times in UTC and display the chosen timezone; daylight-saving changes do not trigger duplicate work.
 
-Keep schedule failures, stale threat-intelligence feeds, expired credentials, low storage, and provider failures separate from security findings. Maintenance windows can silence external notifications for a bounded duration while retaining the visible condition and audit history. Recovery emits one summary when the condition clears.
+## Notifications and health
 
-## Retention and storage pressure
+Notify on new unexpected exposure, new relevant high/critical or known-exploited advisories, and meaningful escalation. Group related events by asset/vantage over five minutes. Other changes remain on the dashboard or in an optional weekly digest. Accepted-risk/false-positive decisions suppress only their exact scope. No announcement token changes routing.
 
-Proposed defaults: raw output 30 days, normalized observations/diff events and decision history 365 days, operational logs 14 days, successful delivery records 30 days. Keep unresolved findings, current decisions, and minimal supporting evidence/provenance beyond those windows until resolved and the history period elapses. Explain that expired raw output cannot be re-parsed.
+Start with a short plain-text HTTP POST compatible with ntfy, containing a summary and authenticated dashboard link. The outbox retries transient failures with backoff capped at one hour for up to 24 hours. Preserve failed delivery for review/replay; repeated provider errors become one health incident. At-least-once delivery can produce duplicates.
 
-Default soft warning is 80% utilization of the data allocation; pause new scans at 90% or less than 5 GiB free, whichever is reached first. Reserve capacity for status/health updates and cleanup. Resume only after storage falls below the warning threshold and the owner acknowledges the pause. Never delete unexpired evidence or unresolved findings merely to make a run succeed. Apply a configurable raw-output budget (20 GiB initially); exhausting it pauses affected collection and alerts rather than reporting an empty result.
+Show degraded coverage immediately. Default schedule alert is two consecutive missed/failed/partial execution windows; expected sleeping clients are handled separately under [contracts.md](contracts.md). A failed network witness creates one incident immediately. Probe heartbeats are every minute with a five-minute missing threshold. Alert on stale always-on assets, feeds after two missed daily fetches, backups older than two days, credential failures, and expiring certificates. These thresholds are owner-tunable.
 
-Retention jobs run incrementally, record deletion counts, and avoid deleting evidence referenced by active findings or a backup snapshot. The UI exposes retained size, recent growth, oldest available raw evidence, and cleanup failures. Forecast capacity from measured scan sizes; revise defaults if the 100-asset reference workload cannot fit.
+Send an optional external-monitor ping every minute while database access, scheduler progress, and notification delivery health pass. An unrecovered permanent delivery error, or pending due deliveries with no progress for five minutes, makes notification health fail. The owner-provided monitor uses its own alert path and should survive scanner-host loss. pen15 ships no watchdog. Local coverage incidents remain distinguishable from total host failure; acknowledge or temporarily mute them without hiding their status. Emit one recovery notice when a condition clears.
+
+## Housekeeping
+
+Default retention: raw evidence 30 days, observations and audit history one year, operational logs 14 days. Preserve unresolved findings, current decisions/settings, and minimal supporting evidence until they are no longer needed. Raw expiry means reparsing is unavailable, not that the observation disappears.
+
+Warn at 80% data-allocation use; pause new collection at 90% or less than 5 GiB free. Cleanup runs automatically and never deletes required evidence to make a scan succeed. Resume resource-paused collection below the warning threshold with at least 5 GiB free. Owner pauses stay paused. Keep the incident history; no acknowledgement is needed for automatic recovery. Show storage growth and backup age on the dashboard.
+
+Optional client housekeeping hides old undeclared entries only when no unresolved findings depend on them. It is inventory cleanup, not remediation. No routine identity-review queue is required.
 
 ## Backup, restore, and upgrades
 
-Target recovery point is 24 hours and target restore time is 2 hours for the reference workload; neither is demonstrated until the release restore exercise passes. Make nightly encrypted backups to storage outside the scanner VM and retain 7 daily and 4 weekly snapshots. The age/decryption key must be recoverable independently of the lost host.
+Make nightly encrypted backups to storage outside the scanner VM, retaining seven daily and four weekly copies initially. Pause evidence retention from the start of a PostgreSQL dump until referenced immutable raw files are copied. Include the deployment revision, image versions, and checksummed file list. Raw evidence must be durable before database finalization, so ingestion may continue during the copy. Mark the backup successful only after validating the resulting set. Keep the decryption key independently recoverable and off the scanner host.
 
-A consistent backup set includes PostgreSQL, all raw files referenced by its snapshot, the active configuration revision, release/image metadata, and a checksummed manifest. Pause ingestion finalization and retention while establishing the database snapshot and raw-file manifest; copy immutable files and keep them pinned until the backup completes. Record success only after validation, and alert on stale/missing backups.
+The database snapshot contains authoritative settings, intent, decisions, and enrollment records. A settings export is optional; if included, generate it from the same snapshot and label its revision. Do not overwrite restored state with a newer repository export. Re-enroll runners if their credentials changed after the backup. Schedules, notifications, and dispatch stay disabled on a replacement until the owner activates it, preventing duplicate deployments.
 
-Restore into an isolated replacement: install the pinned release, recover keys/configuration, restore database and evidence, validate references/hashes, and run a read-only health check. Reconcile abandoned leases and disable schedules, notifications, and probe dispatch until the owner explicitly activates the replacement, preventing duplicate scans/alerts. Verify that evidence and decisions survive before reconnecting live targets.
+Demonstrate an isolated restore with evidence and decisions intact. Record the achieved recovery point/time rather than promising an untested SLA. Before upgrades, take a validated backup, stop new work, drain/cancel active jobs, migrate once, and run health/smoke checks. Test upgrades from a previous supported release when one exists. If schema rollback is unsupported, restore the matching pre-upgrade backup and disclose the lost interval.
 
-Before an upgrade: review release notes, validate configuration against the new schema, take a verified backup, stop new jobs, drain/cancel running work, and apply migrations once. Then check API/UI, runner readiness, and one lab or explicitly requested bounded verification. Rollback uses the previous image only if schema compatibility is declared; otherwise restore the matching pre-upgrade backup and disclose the resulting data-loss window. Test this recovery path for migrations before release.
-
-## Routine maintenance and failure drills
-
-The weekly digest includes actionable findings, coverage gaps, pending decisions, backup freshness, credential expiry, and available approved updates. Avoid a daily login requirement. Update tool/check images through reviewed release changes; do not automatically enable new scan capabilities.
-
-Before calling a milestone ready, demonstrate server loss, probe loss (when supported), notifier failure, parser failure, disk pressure, failed migration, and restore. Publish expected symptoms, diagnostic locations, and exact recovery commands with the implementation. Track operator effort using [the product targets](product.md), with maintenance and incident remediation reported separately.
+A short release record should show the scope, auth, failure, and restore demonstrations plus actual operator interventions. Keep it useful for explaining the engineering, not a compliance paperwork exercise.

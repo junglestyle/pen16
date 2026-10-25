@@ -1,75 +1,71 @@
 # Data and execution contracts
 
-These are implementation requirements. [SPEC.md](SPEC.md) owns feature scope; this document defines the rules that prevent incorrect state and misleading results. Persist the versions of these rules so historical results remain interpretable.
+These rules protect the small monitoring loop. [SPEC.md](SPEC.md) defines scope; implementation details that do not change these guarantees can be chosen with the code.
 
-## Evidence, coverage, and time
+## Evidence and coverage
 
-A run records its configuration hash, target manifest, vantage, tool image digest, profile/check-set revision, parser version, requester, request reason, and start/end times. Each attempt has its own identity. An observation is immutable and records the subject, observed time, received time, source attempt, and evidence reference/hash. Corrected parsing creates a new interpretation with provenance rather than rewriting raw evidence.
+Each observation records its asset/address binding, protocol/port, vantage, observation time, attempt, tool/profile/parser versions, and evidence digest. Evidence is immutable; corrected parsing adds provenance. Store explicit outcomes: detected, closed, filtered, unavailable, unsupported, failed, or cancelled. Missing output is never a negative result.
 
-Coverage is recorded per target/service/check/vantage, including address family. Use explicit outcomes: `detected`, `not_detected`, `unreachable`, `filtered`, `timed_out`, `unsupported`, `parse_failed`, and `cancelled`. Missing output is not `not_detected`. Discovery non-response is not proof that an asset is gone. Keep last-seen history and mark current state unknown/stale after the configured observation window.
+Coverage is the scheduled target/address/port manifest, not just the set of responders. L2 discovery requires an interface on the segment. Routed networks use an explicit host list or a bounded address range scanned without ping discovery. A host list deliberately cannot discover devices outside that list. With a routed range, rolling full-range work includes addresses that have never responded; top-1000 non-response alone must not remove an address from discovery.
 
-A finding can be automatically verified only when the relevant coverage item completed successfully, used a compatible detection method, observed the current asset/service binding from the same vantage, and supplies a supported negative result newer than the last positive result. Each check declares what constitutes negative evidence; an explicitly closed port may resolve a reachability/exposure finding but does not prove that installed software was patched. A successful process exit alone is insufficient.
+Nightly scans use TCP top-1000 plus declared and previously observed ports. A rolling full-range sweep targets seven-day freshness for ordinary assets, split into bounded port chunks. This is a tunable goal, not a guarantee: show actual coverage age and outstanding chunks. Fragile hosts use only their explicitly allowed light set. Unavailable targets and disabled families remain visible gaps.
 
-Partial runs retain useful positive observations. Negative outcomes from an individually complete, validated coverage item may resolve that item only; never extrapolate them to failed or omitted coverage. Changing a profile or removing a check cannot resolve its old findings. Such findings show "Not covered by current profile" until rechecked or explicitly resolved by the owner.
+Each network has a configured always-on reachability witness, preferably a host beyond the route being checked. A gateway is allowed but demonstrates only gateway reachability. Check it before negative results from that network are finalized. A failed witness makes the network unverified: retain positives, block automatic resolution and absence-based housekeeping, and raise one health incident. Even a successful witness is not proof that every host is reachable.
 
-Late data is retained in history but cannot roll current state backward. Compare trustworthy observation ordering, not arrival ordering; reject implausible probe timestamps and flag clock drift. Overlapping contradictory observations remain unresolved until a newer verification establishes order. Re-parsing historical output does not pretend to be a fresh scan or emit current-change alerts automatically.
+A schedule succeeds when its own planned work completes without execution/parser failures and its network witnesses pass. A completed discovery with sleeping clients is successful execution with availability gaps. Failed or omitted required work is partial and counts toward schedule-health thresholds. Keep unavailable always-on assets as separate health incidents; ordinary clients do not create recurring health alarms. Do not use a population-median heuristic in v1.
 
-## Asset and finding identity
+## Identity and retirement
 
-An asset has a stable internal ID; addresses are bindings with network/vantage context and first/last observed times. IP reuse alone must not transfer findings or decisions to another device. Explicit operator bindings and authenticated host identities take precedence over inference.
+Declared assets have stable owner-chosen IDs and explicit static-address, MAC, or authenticated-identity bindings. A static address is an owner assertion of continuity; show conflicting evidence instead of silently inheriting another device's decisions. Hostnames and locally administered MACs alone do not establish continuity. Unknown devices remain separate when evidence is ambiguous. Corrections preserve history and invalidate affected decisions.
 
-Locally administered MACs are weak identity evidence, not proof of rotation or continuity. A shared hostname or device type is also insufficient. The initial resolver automatically associates only an unambiguous stable identifier with no conflicting evidence; otherwise it proposes a possible match and retains separate assets. Any later heuristic requires documented evidence weights, thresholds, ambiguity fixtures, and recorded confidence. DHCP/mDNS evidence is optional when available, not assumed to be observable from every network.
+Mark an unseen asset stale after three completed scheduled discovery runs with a successful network witness. Staleness does not end a binding or resolve a finding. Excluding a target creates a coverage gap, not a fix.
 
-The owner can merge or split associations with a reason. Preserve original observations and an audit trail, recompute affected views transactionally, and require review of decisions affected by the identity change. Do not silently broaden suppression. Address expiry and asset retirement never delete retained finding history.
+The owner may retire an asset with a reason, resolving its findings as `asset_retired`. Optional client housekeeping hides undeclared assets after 30 days unseen with completed discovery and a working witness, only if they have no unresolved findings. It does not resolve findings. Reappearance restores visibility; a new positive observation reopens a retired finding when still applicable. Thirty days is a configurable clutter-control default, not evidence that a device was decommissioned.
 
-A finding fingerprint is `(asset_id, service_key, canonical_check_id, vantage_id)`. `service_key` is protocol/port or an explicit host-level sentinel. Track individual IPv4/IPv6 and address bindings as coverage members; resolve the finding only when every still-applicable member has qualifying negative evidence or an explicitly audited scope/identity decision. Removing an address from scope is not evidence of a fix. Group equivalent findings across vantages for display only; internal results cannot close external findings. Check aliases and changed detection semantics require versioned mapping rules.
+## Findings and decisions
 
-## Lifecycle and operator decisions
+A finding is `open` or `resolved`, keyed by asset, service (or explicit host-level subject), check/advisory identity, and vantage where applicable. Review acknowledgement, notes, decisions, evidence freshness, and confidence are separate fields. No remediation-planning state machine is required.
 
-Store workflow state separately from decision state and resolution reason. A positive observation remains evidence even when accepted or suppressed. The initial workflow supports the following transitions; unsupported transitions return a conflict with no side effect.
-
-| From | To | Actor and required evidence |
+| Resolution reason | Evidence / authority | Display |
 | --- | --- | --- |
-| No finding | `detected` | Ingester with positive observation and coverage provenance |
-| `detected` | `validated` | Approved confirming check or owner with supporting evidence |
-| `detected`, `validated` | `triaged` | Owner acknowledgment with recorded actor/time; validation status retained separately |
-| Any open state | `remediation_planned` | Owner records intended fix or linked playbook |
-| Any open state | `remediated` | Owner records action taken; verification is still pending |
-| Any open state | `verified` | Deterministic verifier with qualifying negative coverage and reason `check_passed` |
-| Any open state | `verified` | Owner with manual evidence, affected coverage, and reason `manual_verification`; displayed as manually verified |
-| Any open exposure finding | `verified` | Activated intent revision covers it; reason `intent_changed`, excluded from fixed-vulnerability metrics |
-| `verified` | `detected` | New qualifying positive observation after resolution; emit `regressed`, except an exposure still covered by current intent |
-| `verified` | `detected` | Owner reopens with reason, or intent change again makes observed exposure unexpected |
+| `port_closed` | New compatible closed-port observation for each applicable binding from the same vantage | Port observed closed |
+| `exposure_filtered` | Repeated filtering under the rule below | Exposure appears filtered |
+| `manual` | Owner reason and optional evidence reference | Resolved by owner |
+| `intent_changed` | Explicit matching expected-exposure declaration | Declared expected |
+| `asset_retired` | Owner retirement | Asset retired |
 
-"Any open state" means `detected`, `validated`, `triaged`, `remediation_planned`, or `remediated`. A new compatible positive result refreshes evidence without discarding an ongoing remediation plan. `regressed` is an event, not a second lifecycle system. The AI has no authority for these transitions.
+For exposure only, a filtered result on a responsive host queues one targeted repeat no sooner than 60 seconds later. Both attempts must show actual host response on the same address/family and vantage (ARP or another port), complete the relevant port check with compatible semantics, and pass the network witness. An assumed-up result from disabled discovery is not host-up evidence. Both results must be newer than the last positive, with no intervening detection or binding/profile change. Two qualifying filtered results may resolve as `exposure_filtered`; a failed or inconclusive repeat leaves it open. Routine schedules may provide the repeat if an immediate one cannot fit the budget.
 
-Decisions are `active`, `accepted_risk`, or `false_positive`. Acceptance and false-positive decisions require an owner, reason, exact finding scope, start time, and expiry. Defaults: 30 days for accepted risk, 90 for false positive. They hide repeat notifications only within the recorded scope, never erase evidence, claim a fix, or stop health checks. Expiry restores active review; severity increase, changed check semantics, identity change, or new vantage invalidates the affected suppression and prompts review. Repeated unchanged detections within a valid decision do not repeatedly alert.
+This is an accepted heuristic for this threat model. Packet loss or selective filtering can still mislead it; it does not prove a firewall rule or patched software. The owner can disable automatic filtered resolution and use manual review. Nmap documents that [filtered results can follow missing responses](https://nmap.org/book/synscan.html). The repeat interval is a tunable operational default, not a statistical confidence guarantee.
 
-Ignoring a host requires a versioned configuration change and records the resulting coverage gap; it cannot silently close findings. Declaring expected exposure follows [the Git workflow](UX.md), with no application-side commits. Every transition/decision includes an actor, timestamp, reason, and evidence/configuration reference in append-only history. Use optimistic revisions for concurrent operator actions.
+Automatic exposure resolution needs qualifying evidence for every still-applicable address/family member. Partial runs can resolve individually complete members but cannot extrapolate to omitted coverage. Internal results cannot close external findings. Later positive evidence reopens the relevant episode unless current intent covers it. Late data cannot reverse newer state; contradictory unordered evidence stays unresolved.
 
-## Job execution and ingestion
+Advisory matches are potentially affected warnings. A closed/filtered port does not resolve them. An owner can resolve with a reason, such as an evidenced upgrade or non-applicability. New material applicability evidence reopens review. Feed disappearance or staleness never resolves a warning.
 
-Job states are `queued → leased → running → succeeded | partial | failed | cancelled | skipped`. Every attempt is distinct from the logical job. Scope/profile rejection is recorded before execution; it cannot be reported as a successful empty scan.
+Severity is deterministic: unexpected internal exposure defaults to medium, public exposure to high, and a small versioned sensitive-service list raises management-service exposure to high internally or critical externally. The owner can override labels. Advisory warnings retain publisher severity and a separate known-exploited flag; unknown severity stays unknown. Product matching uses exact identifiers or explicit aliases, not substring guesses. Known version ranges narrow applicability; missing or ambiguous versions remain potentially affected. Deduplicate by advisory/CVE and affected asset; changed source records update evidence rather than produce a new alert each fetch. Non-CVE watchlist items retain publisher/item identity and are labeled advisory leads rather than confirmed matches.
 
-- Workers claim with a short transaction and lease, then release database locks before network work. Default lease: 120 seconds, renewed every 30 seconds. An expired lease is eligible for recovery; maximum 3 attempts, bounded by the job deadline.
-- Each lease has a monotonically increasing fencing token. Only its current holder can publish authoritative completion. Late results from an old lease are quarantined as historical evidence and cannot change current findings.
-- Before replacement, terminate or confirm the old runner stopped. For a disconnected probe, wait for its signed execution deadline and bounded shutdown grace to expire before redispatch. Runner-local deadlines apply even without the server. Never blindly duplicate a potentially active scan.
-- Defaults: one active scan per asset/vantage, two runner jobs globally, 30-minute job deadline unless an approved profile declares another bounded limit. Scheduler overlap is coalesced; expired schedules are recorded as missed, not replayed without limit after downtime.
-- Cancellation stops new dispatch and terminates the runner with a bounded grace period (10 seconds). Record partial evidence without declaring omitted coverage clean. Global pause uses the same mechanism and needs explicit resume.
-- Ingestion identity is `(run_id, attempt_id, output_digest, parser_version)`. A repeated identical submission is a no-op; a conflicting output for the same finalized attempt is rejected and audited. Bind uploads to an authenticated producer and its assigned target manifest.
-- Store raw evidence durably before finalizing derived state. Commit normalized observations, coverage, state transitions, diff events, and notification-outbox entries in one transaction. Failed parsing or rollback cannot leave a completed clean run.
-- API mutation keys are scoped to identity and operation; reusing a key with different input is a conflict. Retain keys for at least 7 days and expose the resulting resource/status on replay. Browser mutations use equivalent action identifiers.
+Accepted risk and false positive suppress repeat notifications only for the recorded finding/evidence scope. Require a reason; an optional review date restores active review when due. Material product/version changes, stronger severity/exploitation evidence, changed identity, or new vantage invalidate the affected decision. A false positive needs no timer. Accepted risks remain visible on the dashboard; no mandatory 180-day renewal cycle is imposed.
 
-Reprocessing has a separate explicit operation ID and dry-run summary; it must not accidentally duplicate notifications or reset decision expiry. Deleting expired raw output leaves its hash and provenance and marks re-parsing unavailable.
+## Intent and settings
 
-## Measurement rules
+Expected exposure is keyed by asset/protocol/port/vantage. Bulk declaration applies only to the selected services, never future ports. Record owner, time, reason, and prior/new values. Product-label edits, bindings, decisions, and routine settings have equivalent history and optimistic revisions.
 
-Severity is deterministic with a versioned policy; AI ranking cannot lower it. Initial exposure defaults: internal unexpected service is medium, external unexpected service is high; explicitly labeled sensitive management services are high internally and critical externally. Labels and overrides are versioned and owner-controlled. Scanner-native severity mappings must be documented before enabling each integration. Version-only vulnerability matches remain "potentially affected" until validated; confidence is separate from severity.
+Export one schema-versioned, revisioned bundle containing `assets.yaml`, `exposure.yaml`, and `settings.yaml`, excluding secrets and enrollment credentials. All files come from one database snapshot. Import previews additions, changes, and removals against a current revision, validates references and deployment ceilings, and applies atomically after owner confirmation. Missing files or conflicting revisions fail; removal is never silently inferred from a partial upload. Removed bindings/declarations show their affected findings in the preview.
 
-Keep per-vantage counts and provide a grouped issue count labeled as such. Display accepted risk, false positives, unsupported/stale coverage, and manual versus automatic resolutions separately. Mean time to remediate runs from first detection to verified resolution, excludes `intent_changed` and false-positive decisions, and reports manual-verification counts. A regression starts a new episode without erasing earlier duration. Suppression does not stop the clock for unresolved issues.
+The database is authoritative after bootstrap. Deployment does not implicitly import exports. Restore uses the database snapshot's settings; newer repository exports require a separate explicit import. Regular Git export is optional and is not the backup mechanism.
 
-The composite score is deferred to the reporting milestone. Proposed formula: sum active finding weights (critical 10, high 5, medium 2, low 1, informational 0) per finding fingerprint, with separate accepted-risk subtotal. It is an unbounded prioritization index, not a probability or a claim of overall safety. Show raw counts, duplication by vantage, policy version, and freshness next to it. Confirm its usefulness in the pilot before release.
+## Jobs and notifications
 
-## Required contract fixtures
+Jobs are queued, running, succeeded, partial, failed, cancelled, or skipped. A run groups bounded discovery/service jobs; large address/port ranges are chunked. Each assignment names its enrolled runner, attempt, targets, profile, configuration revision, and local deadline. Authenticated TLS protects delivery; a runner rejects expired, repeated, wrong-recipient, or locally out-of-scope assignments.
 
-Exercise a closed port, filtered port, sleeping host, missing check, truncated output, partial parse, IPv4 success with IPv6 failure, internal success with external detection, reused IP, shared hostname, ambiguous MAC change, duplicated upload, expired worker lease, out-of-order result, concurrent operator decision, intent revision change, suppression expiry, and recurrence after verification. Assert final finding state and emitted events, not just parser output.
+Run one job per runner and at most one per asset/vantage. Use a database transaction to claim work and an attempt generation to reject stale completion. On lost contact, wait for the old attempt's deadline plus shutdown grace before replacing it. Restart discards expired assignments; it never replays a backlog blindly. Retries are bounded to one automatic replacement per job; further failures wait for the next schedule or owner action.
+
+Default job deadline is 30 minutes; split work to fit instead of increasing the deadline silently. Cancel stops dispatch and terminates tool work within 10 seconds on a reachable runner. Local expiry bounds disconnected execution. Manual pause needs explicit resume; transient resource pauses can recover automatically as described in [operations.md](operations.md).
+
+Coalesce equivalent active requests. A `scan` client selects one allowed asset and profile per request, can cancel its own jobs, and cannot bypass quiet windows or global budgets. Default per-client allowance is one outstanding request and six accepted requests per hour, tunable downward or upward by the owner within the deployment budget. These are starting limits for occasional assistant use, not performance targets. API work shares a runner-time budget with schedules so repeated requests cannot monopolize the runner. Request keys make retries idempotent; the API returns the original job or a conflict for changed input.
+
+Store raw files durably before committing observations, state, and outbox events together. Identical attempt/digest uploads are no-ops; conflicting or obsolete attempts cannot finalize state. Notification delivery is at least once with bounded retries, so a receiver may display duplicates. Failed delivery stays visible.
+
+## Demonstrations that matter
+
+Test ordinary closure, repeat filtering, one lost-response attempt, sleeping hosts, broken witnesses, excluded addresses, an uncommon port, ambiguous identity, stale/duplicate uploads, cancellation, restricted API requests, conflicting imports, and restore. M2 adds uncertain and stale advisory fixtures; M3 adds vantage separation and disconnected-probe expiry. Tests should assert dashboard/finding outcomes and emitted alerts, not only parser fields.

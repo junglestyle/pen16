@@ -1,6 +1,6 @@
 # Working on pen15
 
-Optimize for low ongoing operator effort. Keep deployment-specific details out of the core.
+Build a useful, tunable homelab dashboard with almost no routine operator work. Match controls to the documented threat model and demonstrate them with evidence. Keep deployment-specific details out of the core.
 
 Read the relevant documentation before changing behavior:
 

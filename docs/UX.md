@@ -1,66 +1,58 @@
-# Operator experience
+# Dashboard and operator experience
 
-## Interface and priorities
+The dashboard is the main way to use pen15. It should be useful when opened out of curiosity, after an alert, or after weeks away. No weekly review, inbox-zero workflow, or Grafana installation is required.
 
-Use a small server-rendered application served with the API for setup status, findings, decisions, and verification. Keep the initial frontend to HTML, CSS, and progressive enhancement; a separate SPA is not required. Grafana is optional for later analytical dashboards. Core operator actions must not require Grafana or hand-written API calls.
+## Home dashboard
 
-The home screen answers: is monitoring working, what needs my attention, and what changed? Show coverage freshness before trends or a composite score. Every scan-derived claim links to its evidence and identifies its vantage and observation time.
-
-## Setup to first result
-
-1. The owner copies the example deployment, sets scope, excludes fragile devices, selects a bounded scan profile, and configures one notification destination.
-2. `pen15 validate` checks schema, scope conflicts, profile availability, and secret references without scanning. A separate explicit preflight checks database access, runner readiness, routes, and notifier delivery. Failures include a specific corrective action.
-3. The owner opens a localhost or private-network bootstrap flow with a one-time secret, creates the owner credential, and invalidates the bootstrap secret. No reusable default password is shipped.
-4. Before the first scan, show the target count, addresses, vantage, ports, checks, timing limits, exclusions, and any unsupported coverage. Starting the scan requires an explicit action; installation alone does not scan.
-5. Show queued/running/partial/failed/completed status and allow cancellation. An empty inventory before the first successful scan says "No successful scan yet."
-6. The first result groups discovered services by asset. The owner reviews a proposed expected-exposure declaration; nothing is implicitly trusted because it appeared in the baseline.
-
-## Declaring intent with Git as the source of truth
-
-The application does not hold Git write credentials. "Declare expected" generates a downloadable patch against the active configuration revision, scoped to the selected asset, protocol, port, and vantage. The owner reviews, commits, and deploys it from the private deployment repository.
-
-Activation validates the entire candidate configuration and atomically records its content hash and optional Git revision. If validation fails, the last valid configuration remains active and the error is visible. A patch based on an old revision must be regenerated or reconciled by the owner; the UI never silently overwrites changes.
-
-The finding remains open with "Configuration change pending" until the matching declaration is activated. Activation resolves the policy violation with reason `intent_changed`; it does not claim the service closed or the vulnerability was fixed. The next scan still measures exposure. The initial release supports stable asset IDs; label selectors and precedence rules can be added after they have a schema and conflict tests.
-
-## Weekly review and finding detail
-
-The default inbox shows new or changed actionable findings, with accepted-risk and false-positive decisions available through filters. Show critical/high changes promptly; group lower-severity changes into the weekly digest by default. Keep monitoring failures in a separate visible group. See [notification behavior](operations.md).
-
-Each finding detail contains:
-
-- A plain-language title and why it needs attention.
-- Asset, service, vantage, first/last observation, severity and its deterministic inputs.
-- Current workflow status, decision state, detection confidence, and coverage freshness as separate fields.
-- Expected versus observed exposure, a bounded escaped evidence excerpt, and the related scan/profile revision.
-- Timeline of observations, decisions, configuration changes, remediation claims, and verification.
-- Applicable actions: acknowledge, plan remediation, mark remediated, verify now, declare expected, accept risk, or mark false positive.
-
-Example: "NAS management port is unexpectedly reachable from the internal scanner." Show `TCP 8443`, the matched asset, no corresponding declaration, scan time, and a service observation. A failed verification says "Verification incomplete; finding remains open" with the failed coverage item. It does not display a reassuring green state.
-
-Acknowledging records review without changing evidence. Accept-risk and false-positive actions require a reason, precise scope, and expiry; defaults are 30 and 90 days respectively. Renewal is explicit. A changed check, severity increase, or new vantage prompts review. Declaring exposure expected is distinct from accepting a vulnerability risk.
-
-## Remediation and verification
-
-Marking remediated records an operator claim and queues an optional targeted verification; it does not mark the finding verified. Before running, show the same scope/profile summary used for other scans. Verification reports supported resolution, continued detection, or inconclusive coverage. Manual evidence has its own labeled resolution path in [the lifecycle contract](contracts.md).
-
-AI playbooks, when available, are labeled recommendations with source observations and generation time. Detection, decisions, and manual verification work when the model is unavailable. A provider failure shows "AI analysis pending" rather than blocking the inbox.
-
-## Recovery and uncertainty
-
-| Situation | What the operator sees and can do |
+| View | What it answers |
 | --- | --- |
-| No findings, successful coverage | "No findings in the completed coverage" plus coverage details and limitations |
-| Offline or sleeping asset | Last seen and unknown current state; no automatic claim that its findings are fixed |
-| Partially failed scan | Successful evidence retained, failed coverage highlighted, retry limited to eligible work |
-| Offline probe | Last heartbeat, affected schedules, and route/connection diagnostics; other vantages remain usable |
-| Ambiguous identity | Proposed match and supporting evidence; confirm association or keep assets separate |
-| Alert destination failure | Pending delivery, next retry, last error, and a send-test action |
-| Paused scanning | Persistent banner, who paused it, reason, and explicit resume action |
-| Old accepted risk | Expiry/review reminder with the current evidence; no silently renewed decision |
+| Monitoring health | Are scans, feeds, notifications, backups, and the external probe working? When did they last succeed? |
+| Exposure | What is reachable internally and externally, and which services are unexpected? |
+| Recent changes | What appeared, disappeared, changed version, or changed reachability? |
+| Relevant advisories | What newly disclosed or known-exploited issues may affect my software, and why? |
+| Needs attention | Which open findings need a decision? Accepted risks and false positives remain available separately. |
 
-## Accessibility and acceptance
+Keep the first screen compact. Link each count to its underlying assets or findings. Show observation time, vantage, and coverage next to conclusions. Health is independent of finding counts: zero findings with stale scans never gets a reassuring all-clear. Advisories arrive in M2 and the external view in M3; unfinished features are not empty successful panels.
 
-Support keyboard-only operation, visible focus, associated labels and errors, readable contrast, and status text in addition to color. Escape untrusted evidence and offer copy/download actions without rendering scanner-provided HTML. Use responsive layouts for desktop and phone; confirmations summarize the actual target and effect.
+Asset detail shows declared/observed services, address bindings, product/version labels and provenance, last-seen time, port coverage, full-sweep age, and history. Finding detail shows why it exists, its evidence, any decision, and the resolution reason. Avoid a composite score.
 
-Milestone demonstrations must walk through setup, baseline review, configuration activation, an unexpected change, a decision, successful verification, and failed verification. Include keyboard navigation, an empty state, and an ambiguous identity. The owner should complete these without editing SQL or composing API requests.
+## Setup once
+
+1. Copy the fictional deployment, declare authorized networks and discovery methods, a reachability witness per network, exclusions/fragile hosts, and safety ceilings. Configure a notifier, backup destination, and optional external-monitor URL.
+2. Validate offline, then run explicit preflight for interfaces/routes, firewall readiness, database, private TLS, and test notification.
+3. Use the one-time bootstrap flow to create the owner login. Review target/port counts and start the first scan explicitly; installation alone does not scan.
+4. Inspect discovered services and bulk-declare only the selected ones expected. Give important assets stable IDs. Start the default schedule.
+5. Optionally create a restricted read/scan token for Hermes, selecting assets, profiles, and request limits. The token preview states what it can and cannot change.
+
+An unscanned installation says “No successful scan yet.” First-run findings need no individual ceremony: bulk actions operate on the displayed selection, with a preview and one confirmation.
+
+## Tune as needed
+
+The owner can adjust scan cadence, quiet windows, rolling sweep interval, notification thresholds/grouping, optional digest, expected exposure, product labels/watchlist, and precise accepted-risk or false-positive decisions. Show the effective setting and its coverage/noise consequence before applying. Changes take effect without a restart and remain inside deployment safety ceilings. Network scope, credentials, and host policy remain deployment operations.
+
+No decision expires merely to generate routine work. An optional review date is available; material evidence changes bring a decision back for attention. Unchanged detections update history without repeated alerts. Operational faults form one continuing incident with recovery notice.
+
+The database holds current intent/settings. Export is an optional complete revisioned bundle for portability or Git; import shows a diff and requires explicit confirmation. The owner does not have to keep the repository synchronized for monitoring or backup to work.
+
+## Investigate and verify
+
+From a finding, inspect evidence, declare selected exposure expected, accept risk, mark false positive, request verification, or resolve manually with a reason. Retirement is an asset action. Acknowledgement records review without pretending to fix anything. Do not require tickets, remediation plans, or evidence uploads.
+
+Verification shows “Port observed closed,” “Exposure appears filtered,” “Still detected,” or “Inconclusive.” Filtered resolution uses the repeat-check rule in [contracts.md](contracts.md) and is labeled as a heuristic. Unavailable hosts and failed scans leave findings unresolved. The owner can disable that heuristic. Advisory resolution remains an owner decision in v1; port closure does not claim a software patch.
+
+Hermes can answer questions from permitted API data, request an approved scan/verification, and report the job outcome. It cannot acknowledge, suppress, resolve, or declare intent. The API returns the same evidence and uncertainty shown in the dashboard. Future remediation will need a separate owner-approved action flow.
+
+## Quiet failure handling
+
+| Situation | Dashboard and behavior |
+| --- | --- |
+| Sleeping client | Last seen and unavailable coverage; no repeated health alarm or inferred fix |
+| Failed network witness | Network unverified, affected resolutions paused, one health incident |
+| Failed job/parser | Successful evidence retained, failed coverage visible, bounded retry |
+| Stale advisory feed | Last good fetch remains visible; no “unaffected” conclusion |
+| Notifier failure | Pending/failed delivery, retry status, and send-test control |
+| Disk pressure | Collection paused; automatic recovery after cleanup reaches the safe threshold |
+| Owner pause | Visible reason and explicit resume control |
+| No external monitor | Whole-host loss cannot be detected locally; the blind spot stays visible |
+
+Use readable text, keyboard navigation, visible focus, labeled inputs, escaped evidence, and layouts that work on a phone. Core demonstrations should be possible through the dashboard or documented restricted API without SQL or hand-built HTTP requests.

@@ -9,27 +9,26 @@
 
 **Find the holes before they do.**
 
-Your homelab changes. Containers come and go, devices join the network, and a service you meant to keep private ends up exposed. pen15 is self-hosted attack-surface monitoring designed to tell you what changed, whether it was intended, and whether your fix worked.
+A security-aware dashboard for your homelab. See what's exposed, what changed, and which emerging vulnerabilities may affect what you run. Set it up, let it monitor, and tune it when you want to.
 
-The goal is a short, useful review each week, with timely alerts when something needs attention and little maintenance once it's running.
+> **In development:** this repository contains design and documentation. There is no runnable release yet.
 
-> **In development:** this repository currently contains the design and documentation. There is no runnable release yet. The capabilities below describe what we're building.
+## What it will do
 
-## What pen15 will do
+- **Show your attack surface.** Browse assets, services, changes, and evidence in one dashboard.
+- **Catch unexpected exposure.** Compare reachable services with what you intended, inside the network and from an external probe.
+- **Surface relevant threats.** Connect new advisories and known exploitation to your software, with source links and honest uncertainty.
+- **Check your fixes.** Request a bounded verification and see what the scanner actually observed.
+- **Work with your assistant.** Give Hermes or another client restricted API access to read status and request approved scans.
+- **Stay out of your way.** Run scheduled checks, handle routine housekeeping, and alert on useful changes or monitoring failures.
 
-- **Catch unexpected exposure.** Compare discovered services with what you intended to make reachable, including services exposed before your first scan.
-- **Show what changed.** Keep a history of assets, ports, services, and findings, with evidence behind each change.
-- **Check the outside view.** Use a remote probe to see which public services are actually reachable from the internet.
-- **Connect new threats to your inventory.** Match vulnerability intelligence to the services you run and perform approved, targeted checks.
-- **Verify the fix.** Recheck the relevant service after remediation. Incomplete scans leave the result unresolved, and monitoring failures get their own alerts.
-
-For example: a new NAS container exposes a management port. pen15 flags the unexpected service, shows where it was reachable, and helps you verify that restricting it removed the exposure.
+For example: a new NAS container exposes an admin port. pen15 shows it on the dashboard and alerts you. You restrict access, ask for verification, and review the result. A later advisory for that software can warn you even without an active vulnerability check.
 
 ## Built for a homelab
 
-Run it on your own infrastructure and keep your network configuration in a private deployment repo. Core monitoring will work without an LLM or paid cloud service. AI triage and remediation playbooks are optional later additions; you stay in control of decisions and changes to your systems.
+One owner, self-hosted infrastructure, and controls matched to a practical threat model. The project demonstrates reproducible deployment, clear trust boundaries, secret handling, and tested recovery while keeping ongoing work small. Core operation needs no LLM or paid cloud service.
 
-The first release focuses on a complete internal monitoring loop: scan, review, declare intent, alert, and verify. External scanning and threat intelligence follow. See the [delivery plan](docs/PLAN.md) for milestones and the [documentation](docs/README.md) for setup assumptions, architecture, and design details.
+The first release delivers the dashboard and internal monitoring loop. Lightweight vulnerability awareness and the outside view complete v1. API-triggered remediation is a later extension with named actions and explicit owner approval. See the [delivery plan](docs/PLAN.md) and [documentation](docs/README.md).
 
 ## Contributing
 
