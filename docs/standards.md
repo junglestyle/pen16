@@ -1,0 +1,63 @@
+# Coding standards
+
+pen15 follows the [org standards](org-standards.md), an unchanged copy of
+[junglestyle's](https://github.com/junglestyle/.github/blob/main/STANDARDS.md). This file adds pen15's own rules and
+examples. Where it differs from an org rule, it says so, and it wins.
+
+## Jungle Style
+
+- Lean on Postgres transactions, Compose restarts, nftables, Tailscale identity, and unattended-upgrades before
+  writing your own.
+
+## DRY
+
+- Scope checks and finding closure are critical invariants: one implementation each.
+
+## YAGNI
+
+- A deferred requirement gets a line in [After the pilot](SPEC.md#after-the-pilot).
+
+## Zen
+
+- Routes call application services that the dashboard and API share. Background jobs enforce the same permissions.
+
+## Wu wei
+
+- Converging state here: closed ports resolve findings, transient faults recover, storage pauses clear.
+
+## Pragmatic Programmer
+
+- Orthogonality: identity, coverage, findings, intent, and authorization don't know about HTTP or the scanner
+  process. The scanner, parser, notifier, and feeds sit behind small typed interfaces.
+
+## Scanning and evidence
+
+- Run fixed executables with argument arrays and `shell=False`. Bound runtime and output, and support cancellation.
+- Change observations, findings, and notifications in one transaction. Store UTC timestamps. Migrations preserve
+  evidence.
+- Escape untrusted tool and feed output everywhere it's shown.
+- Log requester, operation, job, outcome, and safe errors. Never log tokens, full request bodies, or raw evidence.
+- Pin runtime and tool images by digest, and record tool and parser versions with their fixtures.
+
+## Testing
+
+- The behaviors worth a test: scope enforcement, closed/filtered/unavailable results, identity conflicts,
+  permissions, duplicate and late uploads, cancellation, notifications, and restore. Advisory and vantage cases
+  come with their milestones.
+- Tests use sanitized tool fixtures and an isolated listener lab. The lab never touches a real LAN or the internet.
+
+## Running it
+
+- `make check` runs everything CI runs, including a diff of [org-standards.md](org-standards.md) against the org's
+  current file. `make sync-standards` refreshes the copy.
+- Doc changes also check links, FR/ADR numbering, and `git diff --check`.
+
+## Privacy
+
+- Overrides the org rule's `.env.example`: deployment config, addresses, and real network evidence live in the
+  private deployment repository. Examples and fixtures are fictional.
+
+## Prose
+
+- Name roles, such as the server, the scanner, and the probe.
+- Name a specific assistant only as the README's example. The API assumes nothing about who calls it.

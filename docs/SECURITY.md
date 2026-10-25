@@ -25,7 +25,7 @@ Serve the dashboard only over Tailscale, with automatic certificate renewal. The
 
 API tokens are random, hashed, shown once, and individually revocable. Store runner tokens in restricted files. Replace compromised credentials and re-enroll affected runners.
 
-Disable parser external resources and XML entities; escape output and generate storage paths. Limit uploads to 50 MiB compressed/250 MiB expanded; bound feed downloads. Treat scan/feed prose as data, including in Hermes.
+Disable parser external resources and XML entities; escape output and generate storage paths. Limit uploads to 50 MiB compressed/250 MiB expanded; bound feed downloads. Treat scan/feed prose as data, including in assistant clients.
 
 Keep sops/age secrets in the private deployment repository. Decrypt on the Ansible controller; keep the age key off the scanner host. Restrict runtime files and omit credentials/raw evidence from logs and alerts.
 
