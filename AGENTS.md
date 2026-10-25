@@ -1,6 +1,6 @@
 # Working on pen15
 
-Build a useful, tunable homelab dashboard with almost no routine operator work. Keep deployment-specific details out of the core. This repository contains designs and branding; implementation has yet to start.
+pen15 is a low-touch security dashboard for a homelab and home network. Prefer the simplest thing that works, and don’t add anything that creates recurring work for the owner. Keep deployment-specific details out of this repo.
 
 Read the relevant docs before changing behavior:
 

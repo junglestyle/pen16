@@ -9,7 +9,7 @@
 
 **Find the holes before they do.**
 
-A security-aware dashboard for your homelab. See what's exposed, what changed, and which emerging vulnerabilities may affect what you run. Set it up, let it monitor, and tune it when you want to.
+A security dashboard for your homelab and home network. See what’s exposed, what changed, and which new vulnerabilities may affect what you run. Set it up, let it monitor, tune it when you want.
 
 > **In development:** this repository contains design and documentation. There is no runnable release yet.
 

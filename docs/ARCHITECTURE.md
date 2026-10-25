@@ -20,7 +20,7 @@ A pinned nmap container pulls assignments from a dedicated runner listener. Host
 
 ## API permissions
 
-The dashboard and versioned API share application services. The dashboard is reachable only over Tailscale; Caddy or `tailscale serve` passes the Tailscale identity, and pen15 allows the configured owner login. There are no passwords.
+The dashboard and versioned API share application services. The dashboard is reachable only over Tailscale; `tailscale serve` passes the Tailscale identity, and pen15 allows the configured owner login. There are no passwords.
 
 | Credential | Authority |
 | --- | --- |

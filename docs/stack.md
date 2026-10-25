@@ -12,8 +12,7 @@
 | Deployment | Docker Compose, Ansible, Debian 13 |
 | Network boundary | Host-managed nftables netdev egress |
 | Remote transport | Tailscale, separate runner listener |
-| Private TLS | Caddy with Tailscale certificate integration |
-| Owner auth | Tailscale identity headers; no passwords |
+| Private TLS + owner auth | tailscale serve |
 | Secrets | sops + age, controller-side decryption |
 | Intelligence (M2) | KEV, selected advisories, optional NVD |
 | Notifications | ntfy-compatible HTTP POST |
