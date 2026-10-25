@@ -9,14 +9,31 @@
 
 **Find the holes before they do.**
 
-Self-hosted attack-surface monitoring for networks you own. Scheduled internal and external scans, history and diffs over time, threat-intel matching, and AI triage that hands remediation and testing playbooks to a human.
+A security dashboard for your homelab and home network. See what’s exposed, what changed, and which new vulnerabilities may affect what you run. Set it up, let it monitor, tune it when you want.
 
-> **Status:** design phase. See [SPEC.md](SPEC.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
+> **In development:** this repository contains design and documentation. There is no runnable release yet.
 
-## Responsible use
+## What it will do
 
-pen15 is for assessing networks and systems you own or are explicitly authorized to test. Every scan is checked against a scope allowlist you define, and nothing runs against targets outside it. Scanning systems without permission is illegal in most places; don't.
+- **Show your attack surface.** Browse assets, services, changes, and evidence in one dashboard.
+- **Catch unexpected exposure.** Compare reachable services with what you intended, inside the network and from an external probe.
+- **Surface relevant threats.** Connect new advisories and known exploitation to your software, with source links.
+- **Check your fixes.** Request a bounded verification and see what the scanner actually observed.
+- **Work with your assistant.** Give Hermes or another client restricted API access to read status and request approved scans.
+- **Stay out of your way.** Run scheduled checks, handle routine housekeeping, and alert on useful changes or monitoring failures.
 
-## License
+For example: a new NAS container exposes an admin port. pen15 shows it on the dashboard and alerts you. You restrict access, ask for verification, and review the result. A later advisory for that software can warn you even without an active vulnerability check.
+
+## Built for a homelab
+
+One owner, self-hosted infrastructure, and almost no routine work. Core operation needs no LLM or paid cloud service.
+
+The first release delivers the dashboard and internal monitoring loop. Lightweight vulnerability awareness and the outside view complete v1. See the [specification and milestones](docs/SPEC.md).
+
+## Contributing
+
+Start with [AGENTS.md](AGENTS.md) for engineering standards, [architecture](docs/ARCHITECTURE.md), [security](docs/SECURITY.md), and [stack choices](docs/stack.md).
+
+Use pen15 only on networks you own or are explicitly authorized to assess.
 
 Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
