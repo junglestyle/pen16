@@ -1,0 +1,5 @@
+# Fictional lab scope (RFC 5737 addresses).
+add element netdev pen15_runner targets { 192.0.2.8/29 }
+add element netdev pen15_runner excluded { 192.0.2.12 }
+add element netdev pen15_runner dependencies { 192.0.2.2 . tcp . 8443 }
+add element netdev pen15_runner neighbors { 192.0.2.2 }

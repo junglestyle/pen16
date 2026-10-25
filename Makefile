@@ -1,4 +1,4 @@
-.PHONY: check standards lint test db sync-standards
+.PHONY: check standards lint test db lab sync-standards
 SHELL := bash
 ORG = https://github.com/junglestyle/.github
 RAW = https://raw.githubusercontent.com/junglestyle/.github
@@ -20,6 +20,9 @@ lint:
 test:
 	PEN15_DATABASE_URL=$(TEST_DATABASE_URL) uv run pytest
 	PEN15_DATABASE_URL=$(TEST_DATABASE_URL) uv run alembic check
+
+lab:
+	lab/egress.sh
 
 db:
 	docker compose -f compose.test.yaml up -d --wait

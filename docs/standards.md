@@ -50,6 +50,8 @@ examples. Where it differs from an org rule, it says so, and it wins.
 
 - `make check` runs everything CI runs, including a diff of [org-standards.md](org-standards.md) against the org's
   current file. `make sync-standards` refreshes the copy.
+- `sudo make lab` proves the runner egress policy in network namespaces. It needs root and nmap, so it runs as its
+  own CI job.
 - Doc changes also check links, FR/ADR numbering, and `git diff --check`.
 
 ## Privacy

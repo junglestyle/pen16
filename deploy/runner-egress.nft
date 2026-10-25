@@ -1,0 +1,52 @@
+# Default-deny egress for a scanner runner's interface (ADR-004). The host loads it into the runner's network
+# namespace before any job runs; the runner has NET_RAW but not NET_ADMIN, so it can't change it.
+#
+# A netdev egress hook sees every frame the interface sends, including raw IP and AF_PACKET frames that
+# bypass the inet hooks.
+#
+# Load it together with the deployment's scope elements in one transaction:
+#   cat runner-egress.nft scope.nft | nft -D runner_if=eth0 -f -
+
+table netdev pen15_runner
+delete table netdev pen15_runner
+
+table netdev pen15_runner {
+	# Authorized scan targets.
+	set targets {
+		type ipv4_addr
+		flags interval
+	}
+
+	# Never probed, even inside a target range. ARP requests included.
+	set excluded {
+		type ipv4_addr
+		flags interval
+	}
+
+	# Named dependencies, such as the runner listener and DNS: address . protocol . port.
+	set dependencies {
+		type ipv4_addr . inet_proto . inet_service
+	}
+
+	# On-link hosts the runner may ARP for besides targets, such as the gateway or the API host.
+	set neighbors {
+		type ipv4_addr
+	}
+
+	chain egress {
+		type filter hook egress device $runner_if priority 0; policy drop;
+
+		ip daddr @excluded counter drop
+		arp daddr ip @excluded counter drop
+
+		arp operation reply accept
+		arp operation request arp daddr ip @targets accept
+		arp operation request arp daddr ip @neighbors accept
+
+		ip daddr . ip protocol . th dport @dependencies accept
+		# Internal probe ceiling. Excess packets fall through to the drop policy.
+		ip daddr @targets limit rate 500/second burst 500 packets accept
+
+		counter
+	}
+}
