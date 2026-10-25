@@ -1,6 +1,6 @@
 # pen15 architecture
 
-pen15 is a scan pipeline with a history store at its center. Deterministic tools do the scanning, a normalized store turns their output into diffs and checks it against declared intent, and an AI agent reads that history to triage and write playbooks. The agent never touches the network directly. Requirements live in [SPEC.md](SPEC.md); technology choices are justified in [docs/stack.md](docs/stack.md).
+pen15 is a scan pipeline with a history store at its center. Deterministic tools do the scanning, a normalized store turns their output into diffs and checks it against declared intent, and an AI agent reads that history to triage and write playbooks. The agent never touches the network directly. Requirements live in [SPEC.md](SPEC.md); technology choices are justified in [stack.md](stack.md).
 
 ## Overview
 

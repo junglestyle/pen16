@@ -2,7 +2,7 @@
 
 pen15 continuously assesses the security of a network you own. It scans from inside and outside, keeps history, tells you what changed and what doesn't match your intent, matches new vulnerabilities against what you actually run, and uses an LLM to triage findings and write remediation and testing playbooks that a human executes.
 
-This document says **what** pen15 does and doesn't do. [ARCHITECTURE.md](ARCHITECTURE.md) says how. [docs/stack.md](docs/stack.md) records why each major technology was chosen.
+This document says **what** pen15 does and doesn't do. [ARCHITECTURE.md](ARCHITECTURE.md) says how. [stack.md](stack.md) records why each major technology was chosen.
 
 ## Goals
 
