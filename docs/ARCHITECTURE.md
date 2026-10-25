@@ -1,81 +1,82 @@
 # Architecture
 
-This is the intended design. Only documentation and branding exist today. [PLAN.md](PLAN.md) stages delivery; [contracts.md](contracts.md) defines evidence and execution, and [SECURITY.md](SECURITY.md) defines trust boundaries.
-
-## Small core
+One Python service contains the FastAPI API, server-rendered dashboard, scheduler, parser, notifier, and later advisory matching. Postgres stores inventory, settings, intent, observations, jobs, findings, decisions, audit history, and notification retries. Compressed raw evidence lives in immutable files named by digest.
 
 ```mermaid
 flowchart LR
   owner[Owner dashboard] --> api[API + scheduler + parser + notifier]
-  hermes[Hermes or other client] -->|restricted read / scan| api
-  runner[Internal nmap runner] -->|pull jobs / upload evidence| api
-  probe[External probe: M3] -->|restricted tunnel listener| api
+  hermes[Hermes] -->|read / scan| api
+  runner[Internal nmap runner] -->|pull / upload| api
+  probe[External probe: M3] -->|restricted runner listener| api
   api --> db[(Postgres + raw files)]
-  api -->|M2: fetch configured feeds| feeds[KEV + advisories]
+  api --> feeds[KEV + advisories: M2]
   api --> alerts[Notification destination]
-  api --> monitor[Optional external heartbeat monitor]
+  api --> monitor[Optional external monitor]
   runner --> lan[Approved internal targets]
   probe --> wan[Approved public targets]
 ```
 
-One Python service provides a FastAPI API, server-rendered dashboard, scheduler, result normalization, advisory matching, and notification delivery. These are internal modules, not separate services or a public plugin framework. Postgres holds inventory, settings, intent, observations, jobs, findings, audit history, and a durable outbox. Compressed evidence lives in immutable files named by digest.
+A pinned nmap container pulls assignments from a dedicated runner listener. Host deployment installs egress policy before execution. The external probe uses the same protocol with its own identity and vantage.
 
-One long-lived pinned nmap container pulls assigned jobs from a dedicated runner listener. It has `NET_RAW`, no other capabilities, no database credentials, and no container-runtime socket. It runs one job at a time. Host deployment machinery installs network policy before the runner can execute; the API cannot rewrite host firewall rules. The external probe reuses this protocol and has its own identity and vantage.
+## API permissions
 
-## Dashboard and API
+The dashboard and versioned API share application services.
 
-The dashboard is the primary interface. It reads and mutates through the same application services as the versioned API; HTML responses need no separate SPA. [UX.md](UX.md) defines the views and controls.
-
-| API capability | Initial use |
+| Credential | Authority |
 | --- | --- |
-| Read health, assets, services, findings, changes, jobs, and later advisories | Dashboard and resource-restricted `read` clients |
-| Request a scan or targeted verification; inspect or cancel owned requests | Owner and resource/profile-restricted `scan` clients |
-| Manage intent, product labels, decisions, schedules, and alert preferences | Authenticated owner session only |
-| Pull assignments, upload assigned results, report heartbeat | Enrolled `runner` identity on the dedicated listener only |
+| Owner session | Read status; manage intent, settings, labels, decisions, and jobs |
+| read | Read permitted inventory, findings, jobs, and sanitized evidence |
+| scan | Request approved scans/verification for bound assets/profiles; inspect/cancel own requests |
+| runner | Pull assigned jobs, upload their results, and report own heartbeat |
 
-A client can hold combined read/scan permissions. An assistant such as Hermes uses the API schema and a restricted token; pen15 does not run the assistant or give it a shell. A restricted scan request selects one registered asset, an approved profile, and a reason. It cannot supply command arguments, arbitrary URLs, scope additions, or finding decisions. Shared scan budgets, coalescing, and request limits prevent an assistant from bypassing schedules or flooding the runner. See [SECURITY.md](SECURITY.md).
-
-Future remediation needs a separate permission and action contract. No execution endpoint, remediation credentials, or general action engine ships in v1.
+Hermes receives read and scan. Each request selects one registered asset, an approved profile, and a reason. Tokens cannot change intent, findings, scope, or deployment policy. Apply a simple per-token rate limit, initially six scan requests/hour. Return the API schema with permissions documented.
 
 ## Evidence flow
 
-1. A schedule, owner, or restricted API client requests work. Snapshot the authorized targets, bindings, profile, vantage, configuration revision, and deadline.
-2. Split it into bounded jobs. Validate scope at dispatch. The assigned runner receives its current attempt over authenticated TLS and checks identity, expiry, scope, and fixed options.
-3. Store bounded raw output durably, then parse locally with external resource loading disabled. Retain explicit positive, negative, unavailable, and failed coverage.
-4. In one database transaction, update observations, derived findings, transitions, and outbox events. Old or duplicate attempts cannot override current evidence.
-5. Deliver grouped notifications with retries. Update dashboard freshness independently of finding counts.
+1. A schedule, owner, or permitted client requests work. Record targets, bindings, profile, vantage, requester, and deadline.
+2. Split large work into bounded jobs. Validate scope at dispatch; the runner checks recipient, expiry, and local scope over authenticated TLS.
+3. Store raw output durably before parsing and database finalization.
+4. Commit observations, finding changes, and notification retry rows in a transaction.
+5. Deliver grouped notifications and update dashboard freshness independently of finding counts.
 
-Transport authentication and resource-bound assignments are sufficient for v1; there is no separate job-signing/key-rotation system. Local deadlines still apply when the runner loses contact. Only one active job is allowed per runner and per asset/vantage.
+A stale or duplicate upload can't overwrite newer state.
 
-## Inventory and intelligence
+## Data rules
 
-Known assets have owner-chosen IDs and explicit address/identity bindings. Unknown devices receive provisional IDs. Conservative matching and owner corrections avoid a general identity-resolution engine. A product label can be entered once for a service or watchlist entry when a banner is unhelpful; it retains its source and observation date.
+Observations record asset/address binding, protocol/port, vantage, time, tool/profile/parser versions, and evidence digest. Preserve detected, closed, filtered, unavailable, unsupported, failed, and cancelled outcomes. Missing output stays missing. Coverage includes the planned addresses/ports, including unresponsive addresses in routed ranges. L2 discovery requires an interface on that segment.
 
-M2 fetches KEV and a small set of owner-selected advisory feeds. Match structured product identifiers and explicit aliases, retain affected-version evidence, and label incomplete matches as potentially affected. Unmatched disclosures remain browsable. An optional NVD adapter supplements this; missing enrichment cannot mean unaffected. Feed content never becomes instructions or a scan target.
+Gateway failure blocks negative conclusions for that network. Sleeping clients show availability gaps without repeated health alarms. Failed execution/parser work degrades schedule health. Positive evidence remains usable.
 
-No built-in model, vector store, vulnerability scanner fleet, compliance agent, or analytical database is required. Internal parser, tool, notifier, and feed interfaces can grow when there is a working second use case.
+Settings, expected exposure, bindings, labels, and decisions have change history. Corrections preserve evidence. Findings are keyed by asset, service, check/advisory identity, and vantage. Automatic closure requires newer compatible closed-port evidence for every applicable binding. Internal results cannot close external findings. Manual resolution, intent changes, and asset retirement record their reasons. Filtered results follow [FR-6](SPEC.md#requirements).
+
+Accepted-risk and false-positive decisions suppress notifications for their precise scope. Changed identity, product/version, severity/exploitation evidence, or vantage invalidates affected decisions. Unchanged observations update history quietly.
+
+M2 matches explicit product identifiers/aliases and affected versions. Ambiguous versions remain potentially affected. Deduplicate by advisory and asset; retain source identity for non-CVE items. Feed disappearance and port closure leave advisory findings open.
+
+## Jobs and notifications
+
+Jobs are queued, running, succeeded, failed, or cancelled. Run one at a time per runner, with a 30-minute deadline and one automatic retry. Further failures wait for the next schedule or owner request. Cancellation stops reachable tool work within 10 seconds; local expiry stops disconnected execution. Discard expired assignments after restart.
+
+Respect quiet windows. Manual pauses need explicit resume; resource pauses recover automatically. Show incomplete coverage separately from job status.
+
+Group related alerts by asset/vantage over five minutes. Start with a short ntfy-compatible HTTP POST containing a summary and authenticated dashboard link.
+
+| Delivery result | Retry behavior |
+| --- | --- |
+| Success | Mark delivered |
+| Transient failure | Back off automatically, capped at one hour, for up to 24 hours |
+| Permanent failure or retry exhaustion | Show failed delivery and one health incident; allow replay |
+
+Alert after two missed/failed scheduled windows; gateway failure alerts immediately. M2 feed health degrades after two missed daily fetches. M3 heartbeats run every minute and alert after five minutes missing. An optional independent monitor receives a heartbeat while database, scheduler, and notification health pass.
 
 ## Deployment and state ownership
 
-The reference host is an existing Debian 13 VM with Docker. The core supplies Compose and a `pen15.deploy` Ansible collection with `server` and, in M3, `probe` roles. Ansible owns host interfaces, egress policy, service startup, private TLS, runtime secret files, and backup timers. The owner provisions the VM/VPS separately.
+Use Compose and Ansible server/probe roles on existing Debian 13 hosts. Start measurements on a 4 vCPU / 16 GB VM with 50 GiB data storage.
 
-| State | Authority |
+| State | Owner |
 | --- | --- |
-| Scope, exclusions, host networking, permitted profile ceilings, secret references, release pins | Private deployment repository, applied by Ansible |
-| Asset declarations, expected exposure, product labels/watchlist, schedules and notification preferences | Database; edited in dashboard and included in the settings export |
-| Observations, findings, decisions, enrollment credentials, and audit history | Database backup; never overwritten by a settings import |
+| Scope, exclusions, networking, ceilings, secret references, release pins | Private deployment repository; Ansible applies it |
+| Assets, intent, settings, decisions, observations, enrollment, history | Database; dashboard edits routine settings |
+| Raw evidence | Immutable files included with database backups |
 
-Scope/ceiling changes are rare deployment operations. Routine settings can be changed within those ceilings without a deployment. Applying a deployment never reloads old exported intent over UI changes.
-
-```text
-<deployment>/
-  pen15.yaml            # release, networks, scope, exclusions, safety ceilings
-  settings-export/      # optional versioned assets.yaml, exposure.yaml, settings.yaml bundle
-  secrets.enc.yaml      # sops + age; decrypted only on the Ansible controller
-  compose.override.yaml # host-specific interfaces/mounts
-  site.yml
-  inventory/
-  requirements.yml      # pinned deployment collection
-```
-
-Exports are optional portability artifacts, not a second live source of truth. Backups recover current state without requiring Git synchronization. [operations.md](operations.md) covers restart, restore, and upgrades.
+Ansible owns startup, interfaces, egress rules, private TLS, runtime secrets, and backup timers. Scope/ceiling changes stop affected work until policy readiness passes. Deployment preserves dashboard settings. Restore uses database state. The owner provisions hosts separately.

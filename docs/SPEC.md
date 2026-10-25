@@ -1,81 +1,72 @@
 # pen15 specification
 
-This is a planned personal attack-surface monitor, not shipped software. [product.md](product.md) defines purpose and success; [PLAN.md](PLAN.md) defines delivery. The dashboard and restricted API are core. Lightweight vulnerability awareness and one external vantage complete v1.
+pen15 helps one homelab owner see what is exposed, what changed, and which emerging vulnerabilities may affect their software. It should be fun to build and run unattended after setup. Working deployment, scope controls, and recovery demonstrate useful infrastructure engineering. Core operation needs no LLM or paid service.
 
-## Scope
+The threats are accidental exposure, vulnerable or forgotten services, opportunistic exploitation, and monitoring that silently stops. [SECURITY.md](SECURITY.md) maps these to controls and demonstrations.
 
-Monitor the owner's authorized infrastructure, compare exposure with intent, surface relevant emerging disclosures, and make operational failures visible. Setup should lead to unattended operation with optional dashboard use and incremental tuning. Core operation needs no LLM or paid service.
+## Dashboard
 
-No enterprise tenancy, certification claim, intrusion prevention, exploitation, generic scanner platform, or autonomous remediation is included. Future approved API remediation has its own design gate in [PLAN.md](PLAN.md).
+| View | Shows |
+| --- | --- |
+| Monitoring health | Last successful scans, notifications, backups, and later feeds/probe |
+| Exposure | Reachable services and unexpected exposure by vantage |
+| Recent changes | New, removed, or changed services and versions |
+| Needs attention | Open findings, with accepted risks available separately |
+| Relevant advisories (M2) | Potentially affected software, match reasons, and sources |
 
-## Functional requirements
+Counts link to assets and findings. Show observation time, vantage, coverage, and sweep age. Asset detail includes bindings, declared/observed services, product labels, and history. Finding detail explains the evidence and resolution. Use readable text, keyboard controls, visible focus, labeled inputs, and phone-friendly layouts. Show empty, stale, and failed states explicitly.
 
-Existing IDs are retained for traceability; retired IDs below are not requirements to implement.
+## Requirements
 
-### Scope, discovery, and exposure
+- **FR-1** Validate authorized targets before dispatch and enforce scope outside the runner. Apply exclusions, fragile-host profiles, traffic ceilings, deadlines, and cancellation.
+- **FR-2** Configure L2 discovery or bounded routed address/host lists. Ping each network's configured gateway before trusting negative results. Failure preserves positive evidence, blocks automatic resolution, and raises one health incident.
+- **FR-3** Scan internal IPv4/TCP nightly: top-1000 plus declared/observed ports. Split rolling full-range sweeps into bounded chunks, targeting seven-day freshness. Show actual coverage and unavailable targets.
+- **FR-4** Use owner-chosen asset IDs and static bindings; unknown devices get provisional IDs. Preserve history through corrections and retirement. IP reuse must not transfer decisions.
+- **FR-5** Compare observations with expected exposure by asset/protocol/port/vantage. Bulk declarations affect selected services only; new observations never become expected automatically.
+- **FR-6** Findings are open or resolved. A newer closed-port observation from the same binding and vantage resolves exposure. Filtered stays open until the owner resolves it manually. Failed or missing coverage leaves findings open. New positive evidence reopens unexpected exposure.
+- **FR-7** Store settings and intent in the database; edit them in the dashboard within deployment ceilings. Support scan/verify/cancel, manual resolution/reopen, scoped accepted-risk/false-positive decisions, and history. Decisions require reasons; material evidence changes bring them back for attention.
+- **FR-8** Run one job per runner with a deadline and one automatic retry. Record requester and reason. Keep immutable observations, provenance, bounded raw evidence, and job outcomes.
+- **FR-9** Alert on new unexpected exposure and operational exceptions. Group related events, suppress unchanged detections, retry delivery, and show failures on the dashboard. Recover transient faults automatically and send one recovery notice.
+- **FR-10** Provide a versioned API with revocable read, scan, and runner tokens and a per-token rate limit. Hermes uses restricted read/scan access. Owner sessions control settings and decisions.
+- **FR-11** Provide Compose, Ansible, migrations, fictional configuration, and offline validation. Automate backups, upgrades, TLS renewal, and retention. Demonstrate restore and measure resource use and owner interventions.
+- **FR-12** M2 fetches KEV and selected advisories daily, with optional NVD enrichment. Match explicit product identifiers/aliases and versions; show potentially affected assets, unmatched services, source freshness, and non-CVE watchlist items. Alert on relevant high/critical or known-exploited issues. Feeds never start scans or resolve findings; advisory resolution is an owner decision.
+- **FR-13** M3 adds one external IPv4/TCP probe with independent internet egress, restricted transport, DDNS checks, and heartbeat alerts. Keep internal and external evidence separate.
 
-- **FR-1** Resolve and validate targets against explicit scope before dispatch; enforce network scope outside the runner process.
-- **FR-2** External jobs for dynamic public targets compare DDNS with deployment-observed addresses for each enabled family. Mismatch skips work and degrades health.
-- **FR-3** `exclude` prohibits probes to the host; `fragile` permits only an explicit light port set at a lower rate. Ordinary link-layer broadcasts on a shared segment are not a guarantee of zero received frames.
-- **FR-4** Record who requested a job and why.
-- **FR-5** Compare observed services with owner-declared exposure per asset/protocol/port/vantage on every run. Support bulk declarations in the dashboard, history, and explicit export/import. New observations never implicitly become expected.
-- **FR-7** Declare each network's discovery method: an L2 interface, or a bounded routed address/host list scanned without relying on ping discovery. Check a configured reachability witness per network; expose the limits of that check.
-- **FR-8** Use stable owner-chosen IDs for declared assets and explicit bindings. Infer unknown identities conservatively; do not transfer decisions on IP reuse. Support owner retirement, retaining history.
-- **FR-9** Start with nightly TCP top-1000 plus declared/observed ports and a configurable rolling full-range sweep. Report actual port coverage and sweep age. Fragile hosts and unavailable devices have explicit coverage gaps. Public family support arrives with M3; broader discovery and UDP need a later use case.
-- **FR-12** One external probe uses its own internet path, a restricted tunnel to the runner listener, pre-job vantage checks, and per-vantage observations. Its observations are trusted; it has no LAN credentials.
-- **FR-14** Fixed, reviewed profiles enforce scope, traffic limits, deadlines, and cancellation. No brute force, exploit payloads, arbitrary scripts, or state-changing checks.
+## Limits
 
-### History and decisions
+The owner, deployment host, and probe observations are trusted. Coverage depends on inventory, feeds, scan intervals, and vantage; a gateway check can miss downstream failures. Filtered ports can reflect packet loss. pen15 cannot establish that software is patched or prevent compromise. Enterprise tenancy, compliance certification, intrusion prevention, exploitation, and autonomous remediation are outside scope. Whole-host loss needs an independent monitor.
 
-- **FR-16** Retain assets, services, immutable observations, evidence provenance, findings, and owner decisions.
-- **FR-17** Show exposure, service/version, and finding changes. Do not repeatedly notify on unchanged evidence.
-- **FR-18** Resolve only with compatible newer evidence from the relevant binding and vantage, or an explicit owner action. Distinguish closed ports, repeated filtering, manual resolution, intent changes, and retirement. Missing or failed coverage is not a fix. See [contracts.md](contracts.md).
-- **FR-19** Retain bounded raw output long enough for inspection and parser debugging; show when it has expired.
-- **FR-28** Store owner acknowledgements, accepted risks, and false-positive decisions with reasons and precise scope. Apply them deterministically.
-- **FR-39** The owner can resolve manually with a reason/evidence reference or reopen a finding. No attachment workflow is required.
-- **FR-46** Accepted risks may have an owner-selected review date; false positives are invalidated by material evidence changes. No recurring renewal is required by default. Keep accepted risks visible separately.
+## Milestones
 
-### Vulnerability awareness
+All milestones are planned and incomplete.
 
-- **FR-20** Fetch KEV and selected advisory feeds daily; optionally supplement with NVD. Track source freshness and errors.
-- **FR-21** Match to observed or owner-declared products and versions using explicit identifiers/aliases. Show match reason and uncertainty. Count services lacking usable product evidence; an empty match list is not a clean assessment.
-- **FR-22** Matches are potentially affected warnings until supported by appropriate evidence or owner review. v1 intelligence never automatically starts checks or closes findings because a feed item disappeared.
-- **FR-23** Disclosures without CVEs remain source-linked advisory items. Owner watchlist filters can surface relevant products without implying confirmed asset applicability.
+| Milestone | Deliver and demonstrate |
+| --- | --- |
+| M0 | Package, lockfile, CI, configuration, initial migration; one fixture becomes an unexpected-exposure finding |
+| M1 / v0.1 | FR-1–11: dashboard, internal monitoring, restricted API, alerts, deployment, and recovery |
+| M2 | FR-12: relevant, unrelated, ambiguous, stale, and duplicate advisory fixtures |
+| M3 | FR-13: external scope, egress/DDNS checks, lost-probe alerts, and vantage separation |
 
-### Dashboard, alerts, and API
+M2 and M3 can follow M1 in either order; together they complete v1.
 
-- **FR-31** Notify on new unexpected exposure and relevant high/critical or known-exploited advisories. Group related changes, respect scoped decisions, and send one continuing incident for operational problems. Start with an ntfy-compatible HTTP POST.
-- **FR-32** Offer an optional weekly digest; useful alerts and the dashboard do not depend on reading it.
-- **FR-33** The built-in dashboard shows monitoring freshness, exposure, recent changes, relevant advisories, and open/accepted findings. No score or external dashboard is required.
-- **FR-34** Alert on missed or persistently incomplete scheduled work. Expected sleeping clients are availability gaps, not failed scanner execution.
-- **FR-35** A missing external-probe heartbeat alerts.
-- **FR-36** Show last completed work, failed coverage, unavailable targets, and advisory freshness separately.
-- **FR-37** A versioned API supports the dashboard's reads/actions and restricted integrations such as Hermes. It exposes no generic result importer or command execution endpoint.
-- **FR-38** Owner sessions and separately revocable `read`, `scan`, and `runner` API tokens. Tokens may combine read/scan privileges within owner-selected resources. Scan authority uses approved profiles and the same budgets as schedules; it cannot modify intent, suppress findings, or administer deployment.
-- **FR-45** The dashboard supports baseline declaration, scan/verify/cancel, evidence review, product labels/watchlists, decisions, and routine tuning. Core controls work with a keyboard and show text status as well as color.
+M1 demo:
 
-### Deployment and operation
+1. Bring up the fictional lab and private dashboard.
+2. Scan and inspect discovered services.
+3. Bulk-declare selected services expected.
+4. Open an unexpected port.
+5. Receive one alert, close the port, and verify resolution.
 
-- **FR-40** Use typed internal tool/parser/notifier/feed interfaces. A public plugin API requires a concrete need; multiple implementations alone do not trigger one.
-- **FR-41** Keep deployment-specific configuration and secrets outside the core. Provide a fictional example and offline validation. Export database-held assets, intent, and routine settings as one revisioned bundle.
-- **FR-42** Ship versioned migrations. Test upgrades from a previous release when one exists.
-- **FR-43** Automate encrypted backups of database, referenced evidence, and deployment metadata; demonstrate restore.
-- **FR-44** Provide Ansible server and probe roles for existing Debian hosts, plus Compose. VM/VPS creation stays outside the core.
-- **FR-47** Bound execution, prevent overlapping attempts and stale completion, deduplicate uploads, and commit findings with a durable notification outbox.
-- **FR-48** Support an owner-provided external heartbeat monitor for host loss; disclose its absence. Notification failures remain visible and retry automatically.
-- **FR-49** Bound scan work, pause/cancel it, and stop collection under disk pressure. Recover automatically from transient operational faults when safe.
-- **FR-50** Authenticate, scope, revoke, and audit access. Escape hostile evidence, bound parsing, minimize notification data, and keep credentials out of logs and exports.
+Also demonstrate scope containment, filtered/unavailable results staying open, cancellation/deadlines, denied assistant actions, notification failure, and restored evidence/settings. Run a four-week unattended pilot; record setup effort, resource use, nuisance alerts, and interventions. Remove recurring chores before adding integrations.
 
-## Retired requirements
+## After the pilot
 
-FR-6 (router import), FR-10–11 and FR-13/15 (broad assessment/compliance), FR-24–27 and FR-29–30 (built-in AI), and FR-51 (change announcements) are removed from committed scope. Useful individual extensions can receive a new scoped proposal. Historical ADRs do not reactivate them.
-
-## Non-functional requirements
-
-- **NFR-1–3:** self-hosted, bounded disruption, private authenticated access, and scope containment as specified in [SECURITY.md](SECURITY.md).
-- **NFR-4–6:** reproducible deployment, useful logs, and isolated tests of the real operator loop.
-- **NFR-7:** no required routine review, credential renewal, or Git synchronization; measure interventions in the unattended pilot.
-- **NFR-8–9:** measure resource use and demonstrate backup/restore on the reference workload; do not claim unmeasured capacity or recovery guarantees.
-- **NFR-10:** a readable, keyboard-usable dashboard that keeps uncertainty and freshness visible.
-
-The execution/state rules in [contracts.md](contracts.md), trust boundaries in [SECURITY.md](SECURITY.md), and recovery behavior in [operations.md](operations.md) complete this specification.
+- Filtered-port heuristic.
+- Routed-network witnesses.
+- Request coalescing and runner-time budgets.
+- Settings export/import, import preview, and optimistic revisions.
+- Client housekeeping.
+- UPnP port-mapping read from the router.
+- IPv6/UDP.
+- TLS checks.
+- Approved remediation.

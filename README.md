@@ -17,7 +17,7 @@ A security-aware dashboard for your homelab. See what's exposed, what changed, a
 
 - **Show your attack surface.** Browse assets, services, changes, and evidence in one dashboard.
 - **Catch unexpected exposure.** Compare reachable services with what you intended, inside the network and from an external probe.
-- **Surface relevant threats.** Connect new advisories and known exploitation to your software, with source links and honest uncertainty.
+- **Surface relevant threats.** Connect new advisories and known exploitation to your software, with source links.
 - **Check your fixes.** Request a bounded verification and see what the scanner actually observed.
 - **Work with your assistant.** Give Hermes or another client restricted API access to read status and request approved scans.
 - **Stay out of your way.** Run scheduled checks, handle routine housekeeping, and alert on useful changes or monitoring failures.
@@ -26,14 +26,14 @@ For example: a new NAS container exposes an admin port. pen15 shows it on the da
 
 ## Built for a homelab
 
-One owner, self-hosted infrastructure, and controls matched to a practical threat model. The project demonstrates reproducible deployment, clear trust boundaries, secret handling, and tested recovery while keeping ongoing work small. Core operation needs no LLM or paid cloud service.
+One owner, self-hosted infrastructure, and almost no routine work. Core operation needs no LLM or paid cloud service.
 
-The first release delivers the dashboard and internal monitoring loop. Lightweight vulnerability awareness and the outside view complete v1. API-triggered remediation is a later extension with named actions and explicit owner approval. See the [delivery plan](docs/PLAN.md) and [documentation](docs/README.md).
+The first release delivers the dashboard and internal monitoring loop. Lightweight vulnerability awareness and the outside view complete v1. See the [specification and milestones](docs/SPEC.md).
 
 ## Contributing
 
-Start with the [engineering standards](docs/CONTRIBUTING.md) and [specification](docs/SPEC.md). Guidance for coding agents is in [AGENTS.md](AGENTS.md).
+Start with [AGENTS.md](AGENTS.md) for engineering standards, [architecture](docs/ARCHITECTURE.md), [security](docs/SECURITY.md), and [stack choices](docs/stack.md).
 
-Use pen15 only on networks you own or are explicitly authorized to assess. Automated exploitation and autonomous remediation are outside its scope.
+Use pen15 only on networks you own or are explicitly authorized to assess.
 
 Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
