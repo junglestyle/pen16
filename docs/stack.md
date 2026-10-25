@@ -13,6 +13,7 @@
 | Network boundary | Host-managed nftables netdev egress |
 | Remote transport | Tailscale, separate runner listener |
 | Private TLS | Caddy with Tailscale certificate integration |
+| Owner auth | Tailscale identity headers; no passwords |
 | Secrets | sops + age, controller-side decryption |
 | Intelligence (M2) | KEV, selected advisories, optional NVD |
 | Notifications | ntfy-compatible HTTP POST |
@@ -34,3 +35,7 @@ Keep scope, ceilings, networking, and encrypted secrets in a private deployment 
 ## ADR-004: Enforce scan scope on the host
 
 Raw-packet scanning needs an egress boundary outside the runner process. Ansible installs policy before execution and keeps firewall authority away from the runner. Prove containment with raw-packet tests in the isolated lab.
+
+## ADR-005: Tailscale identity instead of passwords
+
+The dashboard is only reachable over Tailscale, so it uses Tailscale identity for the owner instead of its own login system. That means no passwords, sessions or recovery flow to build or maintain. API tokens still cover Hermes and runners.

@@ -21,7 +21,7 @@ M3 uses a dedicated runner listener. Tunnel ACLs allow only that listener, witho
 
 ## Access and secrets
 
-Serve private TLS with automatic certificate renewal. Owner authentication uses an adaptive password hash, expiring server-side sessions, secure cookies, CSRF protection, and login throttling. Bootstrap uses a one-time private secret; local recovery revokes sessions.
+Serve the dashboard only over Tailscale, with automatic certificate renewal. The owner is identified by Tailscale identity headers and an allowed login; pen15 stores no passwords. Reject identity headers that don't come from the local proxy, and use CSRF protection on state-changing forms.
 
 API tokens are random, hashed, shown once, and individually revocable. Store runner tokens in restricted files. Replace compromised credentials and re-enroll affected runners.
 
@@ -37,4 +37,4 @@ Restore in isolation and demonstrate evidence/settings intact. Keep schedules, n
 
 Delete raw evidence after 30 days, observations/audit history after one year, and logs after 14 days; preserve unresolved findings, decisions, settings, and supporting evidence. Warn at 80% storage; pause collection at 90% or below 5 GiB free. Clean automatically and resume below 80% with 5 GiB free.
 
-Automate host security updates and pinned application/tool upgrades through Ansible. Validate a backup, drain jobs, migrate once, and run health checks. On failure, restore the matching backup. Test parser fixtures and upgrades from the previous supported release.
+Host security updates run automatically with Debian's unattended-upgrades. Application and tool upgrades are deliberate: bump the pin and run the playbook. Renovate can optionally open the bump PR. Validate a backup, drain jobs, migrate once, and run health checks. On failure, restore the matching backup. Test parser fixtures and upgrades from the previous supported release.
