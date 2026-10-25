@@ -2,15 +2,15 @@
 # Keeps the runner egress policy (ADR-004) on the runner container's network namespace.
 #
 # Docker gives a container a fresh namespace every time it starts, without the policy. This loads
-# runner-egress.nft plus the deployment's scope elements into it, then writes the namespace ID to the
-# marker the runner checks before every job, with the container's start time because the kernel reuses
-# namespace IDs. A restarted runner doesn't match the old marker, so it waits until this runs.
+# runner-egress.nft, runner-network.nft, and the deployment's scope elements into it, then writes the
+# namespace ID to the marker the runner checks before every job, with the container's start time because
+# the kernel reuses namespace IDs. A restarted runner doesn't match the old marker, so it waits for this.
 #
 #   pen15-egress apply   load the policy now if the runner's namespace lacks it
 #   pen15-egress watch   apply, then again on every runner start (the systemd unit runs this)
 set -euo pipefail
 
-policy=${PEN15_EGRESS_POLICY:-/opt/pen15/deploy/runner-egress.nft}
+deploy=$(dirname "$(readlink -f "$0")")
 scope=${PEN15_RUNNER_SCOPE:-/etc/pen15/runner-scope.nft}
 marker=${PEN15_EGRESS_MARKER:-/run/pen15-egress/ready}
 
@@ -37,7 +37,7 @@ apply() {
 		echo "pen15-egress: runner has interfaces [$interfaces], expected [eth0 lo]" >&2
 		return 1
 	fi
-	cat "$policy" "$scope" | nsenter --target "$pid" --net nft -D runner_if=eth0 -f -
+	cat "$deploy/runner-egress.nft" "$deploy/runner-network.nft" "$scope" | nsenter --target "$pid" --net nft -D runner_if=eth0 -f -
 	mkdir -p "$(dirname "$marker")"
 	echo "$stamp" > "$marker.tmp"
 	mv "$marker.tmp" "$marker"
