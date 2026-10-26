@@ -6,8 +6,8 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import Connection, Engine, text
 
-from pen15 import db, scope
-from pen15.scope import Scope
+from pen16 import db, scope
+from pen16.scope import Scope
 
 FIXTURES = Path(__file__).parent / "fixtures"
 LAB_SCAN = FIXTURES / "nmap-lab.xml"

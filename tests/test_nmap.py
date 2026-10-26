@@ -1,7 +1,7 @@
 import pytest
 from defusedxml import EntitiesForbidden
 
-from pen15 import nmap
+from pen16 import nmap
 
 
 def test_entity_expansion_is_refused() -> None:

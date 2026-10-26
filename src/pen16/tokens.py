@@ -4,7 +4,7 @@ import secrets
 
 from sqlalchemy import Connection, func, insert, select, update
 
-from pen15.db import tokens
+from pen16.db import tokens
 
 
 def create(conn: Connection, kind: str, name: str) -> str:
@@ -12,14 +12,14 @@ def create(conn: Connection, kind: str, name: str) -> str:
     token_id = secrets.token_hex(4)
     secret = secrets.token_urlsafe(32)
     conn.execute(insert(tokens).values(id=token_id, kind=kind, name=name, secret_hash=_hash(secret)))
-    return f"pen15_{token_id}_{secret}"
+    return f"pen16_{token_id}_{secret}"
 
 
 def verify(conn: Connection, presented: str, kind: str) -> str | None:
     """Return the token's ID if it's a live token of this kind, and record that it was used."""
     prefix, _, rest = presented.partition("_")
     token_id, _, secret = rest.partition("_")
-    if prefix != "pen15" or not secret:
+    if prefix != "pen16" or not secret:
         return None
     stored = conn.scalar(
         select(tokens.c.secret_hash).where(

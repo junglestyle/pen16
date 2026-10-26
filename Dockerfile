@@ -15,4 +15,4 @@ COPY src ./src
 RUN uv sync --frozen --no-dev
 
 USER nobody
-ENTRYPOINT ["pen15"]
+ENTRYPOINT ["pen16"]

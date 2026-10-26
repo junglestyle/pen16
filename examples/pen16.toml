@@ -1,10 +1,10 @@
 # Fictional deployment config (RFC 5737 addresses). The deployment repository renders the real one to
-# /etc/pen15/pen15.toml. It holds no secrets: those go in /etc/pen15/pen15.env.
+# /etc/pen16/pen16.toml. It holds no secrets: those go in /etc/pen16/pen16.env.
 
 # The Tailscale login allowed into the dashboard.
 owner_login = "owner@example.com"
 # Linked from alerts.
-dashboard_url = "https://pen15.example.ts.net"
+dashboard_url = "https://pen16.example.ts.net"
 # Never probed, even inside a network below.
 exclude = ["192.0.2.50/32"]
 

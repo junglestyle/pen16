@@ -1,0 +1,13 @@
+[Unit]
+Description=pen16 runner egress policy
+Documentation=https://github.com/junglestyle/pen16/blob/main/docs/SECURITY.md#scan-safety
+After=docker.service
+Requires=docker.service
+
+[Service]
+ExecStart=/opt/pen16/deploy/pen16-egress watch
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

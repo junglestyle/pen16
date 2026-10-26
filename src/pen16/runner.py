@@ -1,7 +1,7 @@
 """The scanner runner: claims jobs from the listener, runs nmap, and uploads the XML.
 
 It holds no database credentials. It runs nothing until the host has loaded the egress policy into its
-network namespace and stamped that namespace into the egress marker (see deploy/pen15-egress).
+network namespace and stamped that namespace into the egress marker (see deploy/pen16-egress).
 """
 
 import gzip
@@ -15,9 +15,9 @@ from typing import Any
 
 import httpx
 
-from pen15 import config, profiles
-from pen15.evidence import MAX_EXPANDED
-from pen15.scope import OutOfScope, Scope
+from pen16 import config, profiles
+from pen16.evidence import MAX_EXPANDED
+from pen16.scope import OutOfScope, Scope
 
 log = logging.getLogger(__name__)
 
@@ -39,16 +39,16 @@ def egress_ready(marker: Path, process: Path = Path("/proc/1")) -> bool:
 
 
 def stamp(process: Path) -> str:
-    """The same value pen15-egress writes: the namespace ID, then the start time in clock ticks since boot."""
+    """The same value pen16-egress writes: the namespace ID, then the start time in clock ticks since boot."""
     fields = (process / "stat").read_text().rpartition(")")[2].split()
     return f"{os.readlink(process / 'ns' / 'net')} {fields[19]}"
 
 
 def run_forever() -> None:
     scope = config.load().scope
-    url = os.environ["PEN15_LISTENER_URL"]
-    token = Path(os.environ.get("PEN15_RUNNER_TOKEN_FILE", "/etc/pen15/runner.token")).read_text().strip()
-    marker = Path(os.environ.get("PEN15_EGRESS_MARKER", "/run/pen15-egress/ready"))
+    url = os.environ["PEN16_LISTENER_URL"]
+    token = Path(os.environ.get("PEN16_RUNNER_TOKEN_FILE", "/etc/pen16/runner.token")).read_text().strip()
+    marker = Path(os.environ.get("PEN16_EGRESS_MARKER", "/run/pen16-egress/ready"))
     with httpx.Client(base_url=url, headers={"Authorization": f"Bearer {token}"}, timeout=30) as client:
         waiting = False
         while True:

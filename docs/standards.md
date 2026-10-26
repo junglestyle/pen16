@@ -1,8 +1,8 @@
 # Coding standards
 
-pen15 follows the [org standards](org-standards.md) and the org's [Python standards](org-standards-python.md),
+pen16 follows the [org standards](org-standards.md) and the org's [Python standards](org-standards-python.md),
 unchanged copies of [junglestyle's](https://github.com/junglestyle/.github/tree/main/code-standards). `.org-standards`
-lists the topics it copies beyond the general one. This file adds pen15's own rules and examples. Where it differs
+lists the topics it copies beyond the general one. This file adds pen16's own rules and examples. Where it differs
 from an org rule, it says so, and it wins.
 
 ## Scanning and evidence
@@ -59,7 +59,7 @@ from an org rule, it says so, and it wins.
 
 ## Known deviations
 
-Where pen15 doesn't follow the org standards yet. These are debt to pay down, not overrides: each one should go.
+Where pen16 doesn't follow the org standards yet. These are debt to pay down, not overrides: each one should go.
 
 - SQLAlchemy and alembic have no ADR in [stack.md](stack.md): ADR-002 picks Postgres, but not the ORM or the
   migration tool. With that ADR, the ORM and `NNN_name.sql` rules are met.
@@ -69,5 +69,5 @@ Where pen15 doesn't follow the org standards yet. These are debt to pay down, no
 - `web.py` loads its templates from `Path(__file__).parent`, not `importlib.resources`.
 - Dependencies: FastAPI has no ADR in [stack.md](stack.md), only a row in its table.
 - Structure: `tokens.revoke` has no caller.
-- Privacy: `examples/` has no env file. `db.py` and `worker.py` read `PEN15_DATABASE_URL`, `PEN15_NTFY_URL` and
-  `PEN15_NTFY_TOKEN`, and no example or doc names them.
+- Privacy: `examples/` has no env file. `db.py` and `worker.py` read `PEN16_DATABASE_URL`, `PEN16_NTFY_URL` and
+  `PEN16_NTFY_TOKEN`, and no example or doc names them.

@@ -21,7 +21,7 @@ M3 uses a dedicated runner listener. Tunnel ACLs allow only that listener, witho
 
 ## Access and secrets
 
-Serve the dashboard only over Tailscale, with automatic certificate renewal. The owner is identified by Tailscale identity headers and an allowed login; pen15 stores no passwords. Reject identity headers that don't come from the local proxy, and use CSRF protection on state-changing forms.
+Serve the dashboard only over Tailscale, with automatic certificate renewal. The owner is identified by Tailscale identity headers and an allowed login; pen16 stores no passwords. Reject identity headers that don't come from the local proxy, and use CSRF protection on state-changing forms.
 
 API tokens are random, hashed, shown once, and individually revocable. Store runner tokens in restricted files. Replace compromised credentials and re-enroll affected runners.
 

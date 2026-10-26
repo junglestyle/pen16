@@ -1,4 +1,4 @@
 # The runner's fixed bridge from compose.yaml: the listener it uploads to, and the host gateway it routes
-# scans through. pen15-egress loads this with runner-egress.nft and the deployment's scope elements.
-add element netdev pen15_runner dependencies { 172.30.15.2 . tcp . 8443 }
-add element netdev pen15_runner neighbors { 172.30.15.1, 172.30.15.2 }
+# scans through. pen16-egress loads this with runner-egress.nft and the deployment's scope elements.
+add element netdev pen16_runner dependencies { 172.30.15.2 . tcp . 8443 }
+add element netdev pen16_runner neighbors { 172.30.15.1, 172.30.15.2 }

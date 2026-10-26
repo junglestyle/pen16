@@ -9,8 +9,8 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from pydantic import BaseModel
 from sqlalchemy import Engine
 
-from pen15 import config, db, evidence, jobs, nmap, tokens
-from pen15.config import Config
+from pen16 import config, db, evidence, jobs, nmap, tokens
+from pen16.config import Config
 
 log = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ class Failure(BaseModel):
 
 
 def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
-    app = FastAPI(title="pen15 runner listener", docs_url=None, redoc_url=None)
+    app = FastAPI(title="pen16 runner listener", docs_url=None, redoc_url=None)
 
     def runner(authorization: Annotated[str, Header()] = "") -> str:
         scheme, _, presented = authorization.partition(" ")
@@ -84,5 +84,5 @@ def _fail(engine: Engine, job_id: int, runner_id: str, error: str) -> None:
 
 def app() -> FastAPI:
     return create(
-        db.connect(), config.load(), Path(os.environ.get("PEN15_EVIDENCE_DIR", "/var/lib/pen15/evidence"))
+        db.connect(), config.load(), Path(os.environ.get("PEN16_EVIDENCE_DIR", "/var/lib/pen16/evidence"))
     )
