@@ -1,9 +1,10 @@
 # Coding standards
 
-pen16 follows the [org standards](org-standards.md) and the org's [Python standards](org-standards-python.md),
+pen16 follows the [org standards](org-standards.md) and the org's standards for [Python](org-standards-python.md),
+[SQL](org-standards-sql.md), [containers](org-standards-containers.md) and [shell scripts](org-standards-shell.md),
 unchanged copies of [junglestyle's](https://github.com/junglestyle/.github/tree/main/code-standards). `.org-standards`
-lists the topics it copies beyond the general one. This file adds pen16's own rules and examples. Where it differs
-from an org rule, it says so, and it wins.
+lists the topics it copies beyond the general one. This file adds pen16's own rules and examples. Where it differs from
+an org rule, it says so, and it wins.
 
 ## Scanning and evidence
 
@@ -71,3 +72,14 @@ Where pen16 doesn't follow the org standards yet. These are debt to pay down, no
 - Structure: `tokens.revoke` has no caller.
 - Privacy: `examples/` has no env file. `db.py` and `worker.py` read `PEN16_DATABASE_URL`, `PEN16_NTFY_URL` and
   `PEN16_NTFY_TOKEN`, and no example or doc names them.
+- SQL: surrogate keys are `BIGSERIAL`, SQLAlchemy's default for a `BigInteger` primary key, not identity columns.
+- Data modeling: statuses and kinds are literals with a `CHECK`, not `StrEnum`s.
+- Testing: the code doesn't refuse a non-local test database, and the test fixture downgrades whatever
+  `PEN16_DATABASE_URL` names.
+- Errors: a missing `PEN16_DATABASE_URL` raises `RuntimeError`, not `SystemExit`.
+- Dependencies: no dependency has a lower bound.
+- Running it: CI's `image` job isn't in `make check`, and nothing here says so.
+- Containers: `worker` and `runner` don't handle SIGTERM and don't run with `init: true`.
+- Containers: `deploy/compose.yaml` sets no `logging:`.
+- Shell: `make check` doesn't run shellcheck, which reports two findings in `lab/egress.sh:63`; `deploy/pen16-egress`
+  has no `.sh` name, so a `'*.sh'` glob would miss it.
