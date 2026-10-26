@@ -5,7 +5,7 @@ RAW = https://raw.githubusercontent.com/junglestyle/.github
 # Tests drop and recreate the schema, so they get their own database, never PEN15_DATABASE_URL.
 TEST_DATABASE_URL = postgresql+psycopg://pen15:pen15@localhost:5432/pen15_test
 
-check: standards lint test
+check: lint test
 
 standards:
 	@curl -fsSL $(RAW)/main/STANDARDS.md | diff -u - <(tail -n +2 docs/org-standards.md) \

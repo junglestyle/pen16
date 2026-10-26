@@ -32,3 +32,5 @@ jobs:
       - uses: actions/checkout@v4
       - run: docker build -t pen15:ci .
       - run: docker run --rm --entrypoint nmap pen15:ci --version
+  standards:
+    uses: junglestyle/.github/.github/workflows/standards-check.yml@main
