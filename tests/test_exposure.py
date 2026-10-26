@@ -1,12 +1,9 @@
-from pathlib import Path
-
 from sqlalchemy import Connection, func, insert, select
 
 from pen15 import exposure, nmap
 from pen15.db import assets, bindings, expected_services, findings, observations
 from pen15.exposure import Finding
-
-LAB_SCAN = Path(__file__).parent / "fixtures" / "nmap-lab.xml"
+from tests.conftest import CLOSED_SCAN, LAB_SCAN
 
 
 def declare_fileserver(conn: Connection) -> None:
@@ -34,6 +31,12 @@ def open_findings(conn: Connection) -> list[tuple[str, str, int]]:
     return [tuple(row) for row in rows]
 
 
+def later(shift: int = 2 * 86400) -> nmap.Scan:
+    """The lab scan's result, observed later."""
+    finished = b'<finished time="1767225612"'
+    return nmap.parse(LAB_SCAN.read_bytes().replace(finished, b'<finished time="%d"' % (1767225612 + shift)))
+
+
 def test_unexpected_listener_becomes_one_finding(conn: Connection) -> None:
     declare_fileserver(conn)
 
@@ -58,3 +61,60 @@ def test_unknown_host_gets_a_provisional_asset(conn: Connection) -> None:
 
     assert conn.scalar(select(assets.c.provisional).where(assets.c.id == "new-192.0.2.10")) is True
     assert sorted(port for _, _, port in open_findings(conn)) == [22, 445, 8080]
+
+
+def test_still_open_next_night_alerts_once(conn: Connection) -> None:
+    declare_fileserver(conn)
+    exposure.ingest(conn, nmap.read(LAB_SCAN), vantage="internal")
+
+    assert exposure.ingest(conn, later(), vantage="internal") == []
+    assert open_findings(conn) == [("fileserver", "tcp", 8080)]
+
+
+def test_closed_port_resolves_and_reopening_alerts_again(conn: Connection) -> None:
+    declare_fileserver(conn)
+    exposure.ingest(conn, nmap.read(LAB_SCAN), vantage="internal")
+
+    exposure.ingest(conn, nmap.read(CLOSED_SCAN), vantage="internal")
+    assert open_findings(conn) == []
+    assert conn.scalar(select(findings.c.resolution)) == "closed"
+
+    reopened = exposure.ingest(conn, later(), vantage="internal")
+    assert reopened == [Finding("fileserver", "tcp", 8080, "internal")]
+
+
+def test_untrusted_negatives_resolve_nothing(conn: Connection) -> None:
+    declare_fileserver(conn)
+    exposure.ingest(conn, nmap.read(LAB_SCAN), vantage="internal")
+
+    exposure.ingest(conn, nmap.read(CLOSED_SCAN), vantage="internal", closures=False)
+
+    assert open_findings(conn) == [("fileserver", "tcp", 8080)]
+
+
+def test_older_closed_evidence_resolves_nothing(conn: Connection) -> None:
+    declare_fileserver(conn)
+    exposure.ingest(conn, later(shift=7 * 86400), vantage="internal")
+
+    exposure.ingest(conn, nmap.read(CLOSED_SCAN), vantage="internal")
+
+    assert open_findings(conn) == [("fileserver", "tcp", 8080)]
+
+
+def test_expected_service_resolves_and_stays_quiet(conn: Connection) -> None:
+    exposure.ingest(conn, nmap.read(LAB_SCAN), vantage="internal")
+    ids = list(conn.scalars(select(findings.c.id).where(findings.c.port.in_([22, 445]))))
+
+    exposure.expect(conn, ids, "file sharing for the LAN")
+
+    assert open_findings(conn) == [("new-192.0.2.10", "tcp", 8080)]
+    assert exposure.ingest(conn, later(), vantage="internal") == []
+
+
+def test_naming_a_device_keeps_its_findings(conn: Connection) -> None:
+    exposure.ingest(conn, nmap.read(LAB_SCAN), vantage="internal")
+
+    exposure.name_asset(conn, "new-192.0.2.10", "fileserver")
+
+    assert sorted(port for asset, _, port in open_findings(conn) if asset == "fileserver") == [22, 445, 8080]
+    assert exposure.ingest(conn, later(), vantage="internal") == []

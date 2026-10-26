@@ -1,0 +1,102 @@
+# pen15 on one host. Ansible renders /etc/pen15 (pen15.toml, pen15.env, runner.token, runner-scope.nft),
+# runs the pen15-egress timer, and starts this file. See docs/ARCHITECTURE.md#deployment-and-state-ownership.
+name: pen15
+
+x-app: &app
+  image: pen15:local
+  build: ..
+  restart: unless-stopped
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  environment:
+    PEN15_CONFIG: /etc/pen15/pen15.toml
+  volumes:
+    - /etc/pen15/pen15.toml:/etc/pen15/pen15.toml:ro
+
+x-core: &core
+  <<: *app
+  env_file: /etc/pen15/pen15.env
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+
+services:
+  db:
+    image: postgres:16@sha256:9e2cf6287f25c3151f4c9421ccce2b17f3e60061c111a29165e0d2cdd9ff0a97
+    restart: unless-stopped
+    env_file: /etc/pen15/pen15.env
+    volumes:
+      - db:/var/lib/postgresql/data
+    networks: [core]
+    healthcheck:
+      test: pg_isready -U pen15
+      interval: 5s
+      retries: 30
+
+  migrate:
+    <<: *app
+    env_file: /etc/pen15/pen15.env
+    command: [migrate]
+    restart: "no"
+    networks: [core]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  worker:
+    <<: *core
+    command: [worker]
+    networks: [core]
+
+  # tailscale serve on the host proxies the tailnet to this localhost port and adds identity headers.
+  web:
+    <<: *core
+    command: [web, --host, 0.0.0.0, --port, "8080"]
+    ports:
+      - 127.0.0.1:8080:8080
+    networks: [core]
+
+  listener:
+    <<: *core
+    command: [listener, --host, 0.0.0.0, --port, "8443"]
+    volumes:
+      - /etc/pen15/pen15.toml:/etc/pen15/pen15.toml:ro
+      - /var/lib/pen15/evidence:/var/lib/pen15/evidence
+    networks:
+      core: {}
+      runner:
+        ipv4_address: 172.30.15.2
+
+  # No database credentials and no route to anything but the listener and scan targets. The host loads
+  # deploy/runner-egress.nft into this container's namespace before it runs a job (deploy/pen15-egress).
+  runner:
+    <<: *app
+    command: [runner]
+    # nmap's raw sockets need root inside the container; NET_RAW is the only capability it keeps.
+    user: root
+    cap_add: [NET_RAW]
+    labels:
+      pen15.role: runner
+    environment:
+      PEN15_CONFIG: /etc/pen15/pen15.toml
+      PEN15_LISTENER_URL: http://172.30.15.2:8443
+    volumes:
+      - /etc/pen15/pen15.toml:/etc/pen15/pen15.toml:ro
+      - /etc/pen15/runner.token:/etc/pen15/runner.token:ro
+      - /run/pen15-egress:/run/pen15-egress:ro
+    networks: [runner]
+
+networks:
+  core: {}
+  runner:
+    driver_opts:
+      com.docker.network.bridge.name: pen15-runner
+    enable_ipv6: false
+    ipam:
+      config:
+        - subnet: 172.30.15.0/24
+          gateway: 172.30.15.1
+
+volumes:
+  db: {}

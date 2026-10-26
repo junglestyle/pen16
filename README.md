@@ -11,7 +11,7 @@
 
 A security dashboard for your homelab and home network. See what’s exposed, what changed, and which new vulnerabilities may affect what you run. Set it up, let it monitor, tune it when you want.
 
-> **In development:** M0 records an nmap XML scan and reports unexpected exposure. There is no scanner, dashboard, or release yet.
+> **In development:** M1 is partway. A nightly nmap scan runs from a contained runner, unexpected open ports alert over ntfy, and a minimal dashboard marks services expected. There is no release yet.
 
 ## What it will do
 
@@ -39,8 +39,11 @@ make db      # throwaway Postgres for the checks
 make check   # everything CI runs
 ```
 
-Against your own database, `PEN15_DATABASE_URL=... uv run alembic upgrade head`, then
-`uv run pen15 ingest scan.xml` records an internal nmap XML scan and prints each unexpected open port.
+To run it on a Debian 13 host, put a deployment config like [examples/pen15.toml](examples/pen15.toml) and its
+secrets in `/etc/pen15`, then start [deploy/compose.yaml](deploy/compose.yaml) and the
+[pen15-egress](deploy/pen15-egress) service. The image builds on the host, because nmap's license limits
+redistributing it. A private deployment repository with Ansible normally does all of this; the
+[architecture](docs/ARCHITECTURE.md#deployment-and-state-ownership) says what it owns.
 
 ## Contributing
 

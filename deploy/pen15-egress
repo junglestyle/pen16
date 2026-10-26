@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Keeps the runner egress policy (ADR-004) on the runner container's network namespace.
+#
+# Docker gives a container a fresh namespace every time it starts, without the policy. This loads
+# runner-egress.nft, runner-network.nft, and the deployment's scope elements into it, then writes the
+# namespace ID to the marker the runner checks before every job, with the container's start time because
+# the kernel reuses namespace IDs. A restarted runner doesn't match the old marker, so it waits for this.
+#
+#   pen15-egress apply   load the policy now if the runner's namespace lacks it
+#   pen15-egress watch   apply, then again on every runner start (the systemd unit runs this)
+set -euo pipefail
+
+deploy=$(dirname "$(readlink -f "$0")")
+scope=${PEN15_RUNNER_SCOPE:-/etc/pen15/runner-scope.nft}
+marker=${PEN15_EGRESS_MARKER:-/run/pen15-egress/ready}
+
+apply() {
+	local containers pid stamp interfaces
+	mapfile -t containers < <(docker ps -q --filter label=pen15.role=runner)
+	(( ${#containers[@]} == 0 )) && return 0
+	if (( ${#containers[@]} > 1 )); then
+		echo "pen15-egress: more than one runner container; refusing to mark any ready" >&2
+		rm -f "$marker"
+		return 1
+	fi
+	pid=$(docker inspect -f '{{.State.Pid}}' "${containers[0]}")
+	# Field 22 of stat, counted after the parenthesized command name, which may contain spaces.
+	stamp="$(readlink "/proc/$pid/ns/net") $(sed 's/.*) //' "/proc/$pid/stat" | cut -d' ' -f20)"
+	if [[ "$(cat "$marker" 2>/dev/null)" == "$stamp" ]] \
+		&& nsenter --target "$pid" --net nft list table netdev pen15_runner >/dev/null 2>&1; then
+		return 0
+	fi
+	rm -f "$marker"
+	# The policy covers one interface, so the runner must have exactly one besides loopback.
+	interfaces=$(nsenter --target "$pid" --net ip -o link show | awk -F': ' '{ sub(/@.*/, "", $2); print $2 }' | sort | xargs)
+	if [[ "$interfaces" != "eth0 lo" ]]; then
+		echo "pen15-egress: runner has interfaces [$interfaces], expected [eth0 lo]" >&2
+		return 1
+	fi
+	cat "$deploy/runner-egress.nft" "$deploy/runner-network.nft" "$scope" | nsenter --target "$pid" --net nft -D runner_if=eth0 -f -
+	mkdir -p "$(dirname "$marker")"
+	echo "$stamp" > "$marker.tmp"
+	mv "$marker.tmp" "$marker"
+	echo "pen15-egress: policy loaded for runner ${containers[0]:0:12} ($stamp)"
+}
+
+case "${1:-}" in
+	apply) apply ;;
+	watch)
+		apply
+		docker events --filter label=pen15.role=runner --filter event=start --format '{{.Actor.ID}}' |
+			while read -r _; do apply; done
+		;;
+	*) echo "usage: pen15-egress apply|watch" >&2; exit 2 ;;
+esac
