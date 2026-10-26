@@ -48,8 +48,10 @@ examples. Where it differs from an org rule, it says so, and it wins.
 
 ## Running it
 
-- `make check` runs everything CI runs, including a diff of [org-standards.md](org-standards.md) against the org's
-  current file. `make sync-standards` refreshes the copy.
+- `make check` runs everything CI runs except the org standards diff.
+- `make standards` diffs [org-standards.md](org-standards.md) against the org's current file, so a hand edit or a
+  stale copy fails. It needs the network, so it isn't part of `make check`; CI runs it as its own job.
+  `make sync-standards` refreshes the copy.
 - `sudo make lab` proves the runner egress policy in network namespaces. It needs root and nmap, so it runs as its
   own CI job.
 - Doc changes also check links, FR/ADR numbering, and `git diff --check`.
