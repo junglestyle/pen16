@@ -96,6 +96,8 @@ networks:
     ipam:
       config:
         - subnet: 172.30.15.0/24
+          # Dynamic addresses stay above .128, so a runner started first can't take the listener's .2.
+          ip_range: 172.30.15.128/25
           gateway: 172.30.15.1
 
 volumes:
