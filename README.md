@@ -51,4 +51,4 @@ Start with [AGENTS.md](AGENTS.md) and the [coding standards](docs/standards.md).
 
 Use pen15 only on networks you own or are explicitly authorized to assess.
 
-Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+MIT. See [LICENSE](LICENSE).

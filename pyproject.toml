@@ -2,7 +2,7 @@
 name = "pen15"
 version = "0.0.0"
 description = "Low-touch security dashboard for a homelab and home network"
-license = "Apache-2.0"
+license = "MIT"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "alembic",

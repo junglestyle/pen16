@@ -17,7 +17,7 @@
 | Intelligence (M2) | KEV, selected advisories, optional NVD |
 | Notifications | ntfy-compatible HTTP POST |
 | Development | uv, Ruff, mypy, pytest, isolated listener lab |
-| License | Apache-2.0; check tool redistribution terms before publishing images |
+| License | MIT; check tool redistribution terms before publishing images |
 
 ## ADR-001: A small, tunable homelab monitor
 
