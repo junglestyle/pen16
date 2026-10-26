@@ -7,10 +7,10 @@
 # Load it together with the deployment's scope elements in one transaction:
 #   cat runner-egress.nft scope.nft | nft -D runner_if=eth0 -f -
 
-table netdev pen15_runner
-delete table netdev pen15_runner
+table netdev pen16_runner
+delete table netdev pen16_runner
 
-table netdev pen15_runner {
+table netdev pen16_runner {
 	# Authorized scan targets.
 	set targets {
 		type ipv4_addr

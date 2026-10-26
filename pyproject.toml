@@ -1,5 +1,5 @@
 [project]
-name = "pen15"
+name = "pen16"
 version = "0.0.0"
 description = "Low-touch security dashboard for a homelab and home network"
 license = "MIT"
@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.scripts]
-pen15 = "pen15.cli:main"
+pen16 = "pen16.cli:main"
 
 [dependency-groups]
 dev = [
@@ -41,7 +41,7 @@ select = ["E", "F", "W", "I", "B", "UP", "S", "SIM"]
 
 [tool.mypy]
 strict = true
-packages = ["pen15", "tests"]
+packages = ["pen16", "tests"]
 mypy_path = "src"
 
 [[tool.mypy.overrides]]

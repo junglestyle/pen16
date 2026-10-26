@@ -10,12 +10,12 @@ jobs:
       db:
         image: postgres:16@sha256:9e2cf6287f25c3151f4c9421ccce2b17f3e60061c111a29165e0d2cdd9ff0a97
         env:
-          POSTGRES_USER: pen15
-          POSTGRES_PASSWORD: pen15
-          POSTGRES_DB: pen15_test
+          POSTGRES_USER: pen16
+          POSTGRES_PASSWORD: pen16
+          POSTGRES_DB: pen16_test
         ports:
           - 5432:5432
-        options: --health-cmd "pg_isready -U pen15" --health-interval 2s --health-retries 15
+        options: --health-cmd "pg_isready -U pen16" --health-interval 2s --health-retries 15
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t pen15:ci .
-      - run: docker run --rm --entrypoint nmap pen15:ci --version
+      - run: docker build -t pen16:ci .
+      - run: docker run --rm --entrypoint nmap pen16:ci --version
   standards:
     uses: junglestyle/.github/.github/workflows/standards-check.yml@main

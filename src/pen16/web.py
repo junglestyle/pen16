@@ -10,9 +10,9 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import Connection, Engine, func, select
 
-from pen15 import config, db, exposure, jobs
-from pen15.config import Config
-from pen15.db import (
+from pen16 import config, db, exposure, jobs
+from pen16.config import Config
+from pen16.db import (
     assets,
     bindings,
     expected_services,
@@ -39,7 +39,7 @@ def create(engine: Engine, settings: Config) -> FastAPI:
         return login
 
     Owner = Annotated[str, Depends(owner)]
-    app = FastAPI(title="pen15", docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title="pen16", docs_url=None, redoc_url=None, openapi_url=None)
 
     @app.get("/", response_class=HTMLResponse)
     def dashboard(request: Request, login: Owner) -> HTMLResponse:

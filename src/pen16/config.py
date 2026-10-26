@@ -3,8 +3,8 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-from pen15 import scope
-from pen15.scope import Scope
+from pen16 import scope
+from pen16.scope import Scope
 
 
 @dataclass(frozen=True)
@@ -17,7 +17,7 @@ class Config:
 
 
 def load() -> Config:
-    path = Path(os.environ.get("PEN15_CONFIG", "/etc/pen15/pen15.toml"))
+    path = Path(os.environ.get("PEN16_CONFIG", "/etc/pen16/pen16.toml"))
     with path.open("rb") as file:
         raw = tomllib.load(file)
     return Config(

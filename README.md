@@ -1,13 +1,13 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/pen15-lockup-dark.svg">
-    <img src="docs/assets/pen15-lockup-light.svg" alt="pen15" width="200">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/pen16-lockup-dark.svg">
+    <img src="docs/assets/pen16-lockup-light.svg" alt="pen16" width="200">
   </picture>
 </p>
 
-# pen15
+# pen16
 
-**Find the holes before they do.**
+**Next-generation penetration testing.**
 
 A security dashboard for your homelab and home network. See what’s exposed, what changed, and which new vulnerabilities may affect what you run. Set it up, let it monitor, tune it when you want.
 
@@ -22,7 +22,7 @@ A security dashboard for your homelab and home network. See what’s exposed, wh
 - **Work with your assistant.** Give an assistant such as Hermes restricted API access to read status and request approved scans.
 - **Stay out of your way.** Run scheduled checks, handle routine housekeeping, and alert on useful changes or monitoring failures.
 
-For example: a new container on your server exposes an admin port. pen15 shows it on the dashboard and alerts you. You restrict access, ask for verification, and review the result. A later advisory for that software can warn you even without an active vulnerability check.
+For example: a new container on your server exposes an admin port. pen16 shows it on the dashboard and alerts you. You restrict access, ask for verification, and review the result. A later advisory for that software can warn you even without an active vulnerability check.
 
 ## Built for a homelab
 
@@ -39,9 +39,9 @@ make db      # throwaway Postgres for the checks
 make check   # everything CI runs
 ```
 
-To run it on a Debian 13 host, put a deployment config like [examples/pen15.toml](examples/pen15.toml) and its
-secrets in `/etc/pen15`, then start [deploy/compose.yaml](deploy/compose.yaml) and the
-[pen15-egress](deploy/pen15-egress) service. The image builds on the host, because nmap's license limits
+To run it on a Debian 13 host, put a deployment config like [examples/pen16.toml](examples/pen16.toml) and its
+secrets in `/etc/pen16`, then start [deploy/compose.yaml](deploy/compose.yaml) and the
+[pen16-egress](deploy/pen16-egress) service. The image builds on the host, because nmap's license limits
 redistributing it. A private deployment repository with Ansible normally does all of this; the
 [architecture](docs/ARCHITECTURE.md#deployment-and-state-ownership) says what it owns.
 
@@ -49,6 +49,6 @@ redistributing it. A private deployment repository with Ansible normally does al
 
 Start with [AGENTS.md](AGENTS.md) and the [coding standards](docs/standards.md).
 
-Use pen15 only on networks you own or are explicitly authorized to assess.
+Use pen16 only on networks you own or are explicitly authorized to assess.
 
 MIT. See [LICENSE](LICENSE).

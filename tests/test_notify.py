@@ -1,8 +1,8 @@
 import httpx
 from sqlalchemy import Engine, select
 
-from pen15 import notify
-from pen15.db import notifications
+from pen16 import notify
+from pen16.db import notifications
 
 
 def deliver(engine: Engine, status: int) -> list[httpx.Request]:
@@ -15,8 +15,8 @@ def deliver(engine: Engine, status: int) -> list[httpx.Request]:
     with engine.begin() as conn:
         notify.enqueue(conn, "finding", "1 unexpected service(s)", "nas 8080/tcp")
     with httpx.Client(transport=httpx.MockTransport(ntfy)) as client:
-        notify.deliver_due(engine, client, "https://ntfy.example/topic", "", "https://pen15.example")
-        notify.deliver_due(engine, client, "https://ntfy.example/topic", "", "https://pen15.example")
+        notify.deliver_due(engine, client, "https://ntfy.example/topic", "", "https://pen16.example")
+        notify.deliver_due(engine, client, "https://ntfy.example/topic", "", "https://pen16.example")
     return sent
 
 
@@ -30,7 +30,7 @@ def test_alert_is_delivered_once_with_a_dashboard_link(committed: Engine) -> Non
     sent = deliver(committed, 200)
 
     assert len(sent) == 1
-    assert sent[0].headers["Click"] == "https://pen15.example"
+    assert sent[0].headers["Click"] == "https://pen16.example"
     assert sent[0].content == b"nas 8080/tcp"
     assert stored(committed) == ("delivered", 1)
 

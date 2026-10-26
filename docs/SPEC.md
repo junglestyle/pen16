@@ -1,6 +1,6 @@
-# pen15 specification
+# pen16 specification
 
-pen15 is a homegrown monitor for small, self-run infrastructure: homelabs, home networks, and the devices on them. It provides security awareness and remediation channels while staying low touch, and runs mostly unattended after setup. It's deliberately straightforward, not overbuilt. Working deployment, scope controls, and recovery demonstrate useful infrastructure engineering. Core operation needs no LLM or paid service.
+pen16 is a homegrown monitor for small, self-run infrastructure: homelabs, home networks, and the devices on them. It provides security awareness and remediation channels while staying low touch, and runs mostly unattended after setup. It's deliberately straightforward, not overbuilt. Working deployment, scope controls, and recovery demonstrate useful infrastructure engineering. Core operation needs no LLM or paid service.
 
 The threats are accidental exposure, vulnerable or forgotten services, opportunistic exploitation, and monitoring that silently stops. [SECURITY.md](SECURITY.md) maps these to controls and demonstrations.
 
@@ -35,7 +35,7 @@ Counts link to assets and findings. Show observation time, vantage, coverage, an
 
 ## Limits
 
-The owner, deployment host, and probe observations are trusted. Coverage depends on inventory, feeds, scan intervals, and vantage; a gateway check can miss downstream failures. Filtered ports can reflect packet loss. pen15 cannot establish that software is patched or prevent compromise. Enterprise tenancy, compliance certification, intrusion prevention, exploitation, and autonomous remediation are outside scope. Whole-host loss needs an independent monitor.
+The owner, deployment host, and probe observations are trusted. Coverage depends on inventory, feeds, scan intervals, and vantage; a gateway check can miss downstream failures. Filtered ports can reflect packet loss. pen16 cannot establish that software is patched or prevent compromise. Enterprise tenancy, compliance certification, intrusion prevention, exploitation, and autonomous remediation are outside scope. Whole-host loss needs an independent monitor.
 
 ## Milestones
 
@@ -70,6 +70,6 @@ Also demonstrate scope containment, filtered/unavailable results staying open, c
 - UPnP port-mapping read from the router.
 - IPv6 and broader UDP.
 - TLS checks.
-- Remediation loop: an assistant client drafts mitigations and manual tests from the read API; pen15 verifies with scan requests.
+- Remediation loop: an assistant client drafts mitigations and manual tests from the read API; pen16 verifies with scan requests.
 - Advisory digest and news/RSS feeds.
 - Approved remediation actions.

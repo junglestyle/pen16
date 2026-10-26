@@ -1,15 +1,15 @@
 # Throwaway Postgres for make check. Tests wipe it.
-name: pen15-test
+name: pen16-test
 services:
   db:
     image: postgres:16@sha256:9e2cf6287f25c3151f4c9421ccce2b17f3e60061c111a29165e0d2cdd9ff0a97
     environment:
-      POSTGRES_USER: pen15
-      POSTGRES_PASSWORD: pen15
-      POSTGRES_DB: pen15_test
+      POSTGRES_USER: pen16
+      POSTGRES_PASSWORD: pen16
+      POSTGRES_DB: pen16_test
     ports:
       - 127.0.0.1:5432:5432
     healthcheck:
-      test: pg_isready -U pen15
+      test: pg_isready -U pen16
       interval: 2s
       retries: 15

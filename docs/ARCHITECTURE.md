@@ -20,7 +20,7 @@ A pinned nmap container pulls assignments from a dedicated runner listener. Host
 
 ## API permissions
 
-The dashboard and versioned API share application services. The dashboard is reachable only over Tailscale; `tailscale serve` passes the Tailscale identity, and pen15 allows the configured owner login. There are no passwords.
+The dashboard and versioned API share application services. The dashboard is reachable only over Tailscale; `tailscale serve` passes the Tailscale identity, and pen16 allows the configured owner login. There are no passwords.
 
 | Credential | Authority |
 | --- | --- |
@@ -81,4 +81,4 @@ Use Compose and Ansible server/probe roles on existing Debian 13 hosts.
 
 Ansible owns startup, interfaces, egress rules, private TLS, runtime secrets, and backup timers.
 
-On the server, [deploy/compose.yaml](../deploy/compose.yaml) runs Postgres, the worker, the dashboard, the listener, and the internal runner. The runner sits alone on a bridge with the listener and reaches targets through the host's NAT, so this release scans routed address lists without L2 discovery. The host's `pen15-egress` service loads [runner-egress.nft](../deploy/runner-egress.nft) into the runner's namespace on every start. Scope/ceiling changes stop affected work until policy readiness passes. Deployment preserves dashboard settings. Restore uses database state. The owner provisions hosts separately.
+On the server, [deploy/compose.yaml](../deploy/compose.yaml) runs Postgres, the worker, the dashboard, the listener, and the internal runner. The runner sits alone on a bridge with the listener and reaches targets through the host's NAT, so this release scans routed address lists without L2 discovery. The host's `pen16-egress` service loads [runner-egress.nft](../deploy/runner-egress.nft) into the runner's namespace on every start. Scope/ceiling changes stop affected work until policy readiness passes. Deployment preserves dashboard settings. Restore uses database state. The owner provisions hosts separately.

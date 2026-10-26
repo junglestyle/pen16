@@ -7,11 +7,11 @@ import uvicorn
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-from pen15 import db, exposure, nmap, runner, tokens, worker
+from pen16 import db, exposure, nmap, runner, tokens, worker
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="pen15")
+    parser = argparse.ArgumentParser(prog="pen16")
     commands = parser.add_subparsers(dest="command", required=True)
     ingest = commands.add_parser(
         "ingest", help="record an internal nmap XML scan and report unexpected exposure"
@@ -37,7 +37,7 @@ def main() -> None:
             print(f"unexpected {finding.asset_id} {finding.port}/{finding.protocol} ({finding.vantage})")
     elif args.command == "migrate":
         alembic = AlembicConfig()
-        alembic.set_main_option("script_location", str(files("pen15") / "migrations"))
+        alembic.set_main_option("script_location", str(files("pen16") / "migrations"))
         command.upgrade(alembic, "head")
     elif args.command == "worker":
         worker.run_forever()
@@ -45,7 +45,7 @@ def main() -> None:
         runner.run_forever()
     elif args.command in ("web", "listener"):
         uvicorn.run(
-            f"pen15.{args.command}:app", factory=True, host=args.host, port=args.port, proxy_headers=False
+            f"pen16.{args.command}:app", factory=True, host=args.host, port=args.port, proxy_headers=False
         )
     elif args.command == "token":
         with db.connect().begin() as conn:

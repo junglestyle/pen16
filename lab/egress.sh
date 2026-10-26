@@ -7,8 +7,8 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-runner=pen15-lab-runner
-lan=pen15-lab-lan
+runner=pen16-lab-runner
+lan=pen16-lab-lan
 cleanup() { ip netns del "$runner" 2>/dev/null || true; ip netns del "$lan" 2>/dev/null || true; }
 trap cleanup EXIT
 cleanup

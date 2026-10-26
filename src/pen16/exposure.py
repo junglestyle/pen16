@@ -5,8 +5,8 @@ from datetime import datetime
 from sqlalchemy import Connection, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 
-from pen15.db import assets, bindings, expected_services, findings, observations
-from pen15.nmap import PARSER_VERSION, Port, Scan
+from pen16.db import assets, bindings, expected_services, findings, observations
+from pen16.nmap import PARSER_VERSION, Port, Scan
 
 UNEXPECTED_EXPOSURE = "unexpected-exposure"
 ASSET_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,62}")

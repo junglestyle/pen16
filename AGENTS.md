@@ -1,10 +1,10 @@
-# Working on pen15
+# Working on pen16
 
 Low-touch security dashboard for a homelab and home network.
 
 Read before changing behavior:
 
-- [Specification](docs/SPEC.md): what pen15 does, and its milestones
+- [Specification](docs/SPEC.md): what pen16 does, and its milestones
 - [Coding standards](docs/standards.md): how the code should read
 - [Architecture](docs/ARCHITECTURE.md): components, API permissions, and data rules
 - [Security and recovery](docs/SECURITY.md): scan safety, access, backups, and upgrades

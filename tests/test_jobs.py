@@ -6,11 +6,11 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, select, update
 
-from pen15 import jobs, listener, runner, scope, tokens
-from pen15.config import Config
-from pen15.db import findings, notifications
-from pen15.db import jobs as jobs_table
-from pen15.scope import OutOfScope, Scope
+from pen16 import jobs, listener, runner, scope, tokens
+from pen16.config import Config
+from pen16.db import findings, notifications
+from pen16.db import jobs as jobs_table
+from pen16.scope import OutOfScope, Scope
 from tests.conftest import CLOSED_SCAN, LAB_SCAN
 
 SERVICES = Path(__file__).parent / "fixtures" / "nmap-services"
@@ -109,7 +109,7 @@ def test_runner_token_is_required(committed: Engine, lab_scope: Scope, tmp_path:
     queue(committed, lab_scope)
 
     assert (
-        client.post("/runner/v1/jobs/claim", headers={"Authorization": "Bearer pen15_x_y"}).status_code == 401
+        client.post("/runner/v1/jobs/claim", headers={"Authorization": "Bearer pen16_x_y"}).status_code == 401
     )
     assert client.post("/runner/v1/jobs/claim", headers={"Authorization": ""}).status_code == 401
 

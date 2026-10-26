@@ -1,10 +1,10 @@
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, insert, select
 
-from pen15 import exposure, nmap, web
-from pen15.config import Config
-from pen15.db import expected_services, findings
-from pen15.scope import Scope
+from pen16 import exposure, nmap, web
+from pen16.config import Config
+from pen16.db import expected_services, findings
+from pen16.scope import Scope
 from tests.conftest import LAB_SCAN
 
 OWNER = {"Tailscale-User-Login": "owner@example.com"}
@@ -12,7 +12,7 @@ OWNER = {"Tailscale-User-Login": "owner@example.com"}
 
 def dashboard(engine: Engine, scope: Scope) -> TestClient:
     settings = Config(scope=scope, owner_login="owner@example.com", dashboard_url="")
-    return TestClient(web.create(engine, settings), base_url="https://pen15.example.ts.net")
+    return TestClient(web.create(engine, settings), base_url="https://pen16.example.ts.net")
 
 
 def scanned(engine: Engine, raw: bytes = LAB_SCAN.read_bytes()) -> None:
@@ -45,7 +45,7 @@ def test_marking_findings_expected_from_the_dashboard(committed: Engine, lab_sco
     response = client.post(
         "/findings/expect",
         data={"finding": [str(ssh)], "reason": "admin over ssh"},
-        headers={**OWNER, "Origin": "https://pen15.example.ts.net"},
+        headers={**OWNER, "Origin": "https://pen16.example.ts.net"},
         follow_redirects=False,
     )
 

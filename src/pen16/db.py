@@ -152,9 +152,9 @@ notifications = Table(
 
 
 def database_url() -> str:
-    url = os.environ.get("PEN15_DATABASE_URL")
+    url = os.environ.get("PEN16_DATABASE_URL")
     if not url:
-        raise RuntimeError("PEN15_DATABASE_URL is not set")
+        raise RuntimeError("PEN16_DATABASE_URL is not set")
     return url
 
 

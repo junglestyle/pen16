@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 from sqlalchemy import Connection, Engine, insert, select, update
 
-from pen15.db import notifications
+from pen16.db import notifications
 
 log = logging.getLogger(__name__)
 

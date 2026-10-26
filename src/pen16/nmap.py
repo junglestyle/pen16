@@ -9,7 +9,7 @@ from defusedxml import ElementTree
 PARSER_VERSION = "2"
 MAX_XML_BYTES = 250 * 1024 * 1024
 
-# open|filtered is what UDP reports for silence. pen15 can't tell it from a drop, so it stays filtered.
+# open|filtered is what UDP reports for silence. pen16 can't tell it from a drop, so it stays filtered.
 STATES = {
     "open": "open",
     "closed": "closed",
