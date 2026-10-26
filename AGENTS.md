@@ -13,4 +13,5 @@ Read before changing behavior:
 Docs live in `docs/` and change with behavior. Never scan anything outside the isolated test lab. Never commit
 hostnames, tokens, deployment config, or real network evidence (see [Privacy](docs/standards.md#privacy)).
 
-`make check` runs everything CI runs, except the runner egress lab: `sudo make lab` (needs nmap).
+`make check` runs everything CI runs, except the org standards check (`make standards`, needs the network) and
+the runner egress lab: `sudo make lab` (needs nmap).

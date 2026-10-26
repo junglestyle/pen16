@@ -5,32 +5,6 @@ unchanged copies of [junglestyle's](https://github.com/junglestyle/.github/tree/
 lists the topics it copies beyond the general one. This file adds pen15's own rules and examples. Where it differs
 from an org rule, it says so, and it wins.
 
-## Jungle Style
-
-- Lean on Postgres transactions, Compose restarts, nftables, Tailscale identity, and unattended-upgrades before
-  writing your own.
-
-## DRY
-
-- Scope checks and finding closure are critical invariants: one implementation each.
-
-## YAGNI
-
-- A deferred requirement gets a line in [After the pilot](SPEC.md#after-the-pilot).
-
-## Zen
-
-- Routes call application services that the dashboard and API share. Background jobs enforce the same permissions.
-
-## Wu wei
-
-- Converging state here: closed ports resolve findings, transient faults recover, storage pauses clear.
-
-## Pragmatic Programmer
-
-- Orthogonality: identity, coverage, findings, intent, and authorization don't know about HTTP or the scanner
-  process. The scanner, parser, notifier, and feeds sit behind small typed interfaces.
-
 ## Scanning and evidence
 
 - Run fixed executables with argument arrays and `shell=False`. Bound runtime and output, and support cancellation.
@@ -39,6 +13,22 @@ from an org rule, it says so, and it wins.
 - Escape untrusted tool and feed output everywhere it's shown.
 - Log requester, operation, job, outcome, and safe errors. Never log tokens, full request bodies, or raw evidence.
 - Pin runtime and tool images by digest, and record tool and parser versions with their fixtures.
+
+## Dependencies
+
+- Lean on Postgres transactions, Compose restarts, nftables, Tailscale identity, and unattended-upgrades before
+  writing your own.
+
+## Structure
+
+- Scope checks and finding closure are critical invariants: one implementation each.
+- Routes call application services that the dashboard and API share. Background jobs enforce the same permissions.
+- Identity, coverage, findings, intent, and authorization don't know about HTTP or the scanner process. The scanner,
+  parser, notifier, and feeds sit behind small typed interfaces.
+
+## Errors and recovery
+
+- Converging state here: closed ports resolve findings, transient faults recover, storage pauses clear.
 
 ## Testing
 
@@ -49,19 +39,18 @@ from an org rule, it says so, and it wins.
 
 ## Running it
 
-- `make check` runs everything CI runs except the org standards check.
-- `make standards` checks [org-standards.md](org-standards.md) and each topic's copy against the org's current
-  files, so a hand edit, a stale copy, or a copy whose topic isn't in `.org-standards` fails. It needs the network,
-  so it isn't part of `make check`; CI runs it as its own job. `make sync-standards` refreshes the copies; to follow
-  another topic, add it to `.org-standards` and run it.
 - `sudo make lab` proves the runner egress policy in network namespaces. It needs root and nmap, so it runs as its
   own CI job.
 - Doc changes also check links, FR/ADR numbering, and `git diff --check`.
 
 ## Privacy
 
-- Overrides the org rule's `.env.example`: deployment config, addresses, and real network evidence live in the
-  private deployment repository. Examples and fixtures are fictional.
+- Config shape lives in `examples/`. Deployment config, addresses, and real network evidence live in the private
+  deployment repository. Examples and fixtures are fictional.
+
+## Docs
+
+- A deferred requirement gets a line in [After the pilot](SPEC.md#after-the-pilot).
 
 ## Prose
 
@@ -70,8 +59,7 @@ from an org rule, it says so, and it wins.
 
 ## Known deviations
 
-Where pen15 doesn't follow the [Python standards](org-standards-python.md) yet. These are debt to pay down, not
-overrides: each one should go.
+Where pen15 doesn't follow the org standards yet. These are debt to pay down, not overrides: each one should go.
 
 - SQLAlchemy and alembic have no ADR in [stack.md](stack.md): ADR-002 picks Postgres, but not the ORM or the
   migration tool. With that ADR, the ORM and `NNN_name.sql` rules are met.
@@ -79,3 +67,7 @@ overrides: each one should go.
 - The `Dockerfile` installs uv with `pip`.
 - Typing: the four `# type: ignore[type-arg]` in `jobs.py` don't say why they're safe.
 - `web.py` loads its templates from `Path(__file__).parent`, not `importlib.resources`.
+- Dependencies: FastAPI has no ADR in [stack.md](stack.md), only a row in its table.
+- Structure: `tokens.revoke` has no caller.
+- Privacy: `examples/` has no env file. `db.py` and `worker.py` read `PEN15_DATABASE_URL`, `PEN15_NTFY_URL` and
+  `PEN15_NTFY_TOKEN`, and no example or doc names them.
