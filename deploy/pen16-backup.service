@@ -8,3 +8,5 @@ Requires=docker.service
 Type=oneshot
 # PEN16_BACKUP_DIR defaults to /mnt/pen16-backup; the deployment mounts its off-host storage there.
 ExecStart=/opt/pen16/deploy/pen16-backup
+# A hung mount fails the run instead of blocking the next night's; the stale-backup alert covers it.
+TimeoutStartSec=2h
