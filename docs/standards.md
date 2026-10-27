@@ -51,7 +51,8 @@ an org rule, it says so, and it wins.
 
 ## Docs
 
-- A deferred requirement gets a line in [After the pilot](SPEC.md#after-the-pilot).
+- A deferred requirement stays in the [spec](SPEC.md) and gets a later slice in the roadmap, which for now is
+  [After the pilot](SPEC.md#after-the-pilot) (see Known deviations).
 
 ## Prose
 
@@ -83,3 +84,5 @@ Where pen16 doesn't follow the org standards yet. These are debt to pay down, no
 - Containers: `deploy/compose.yaml` sets no `logging:`.
 - Shell: `make check` doesn't run shellcheck, which reports two findings in `lab/egress.sh:63`; `deploy/pen16-egress`
   has no `.sh` name, so a `'*.sh'` glob would miss it.
+- Docs: the build order is the [spec](SPEC.md)'s [Milestones](SPEC.md#milestones) and
+  [After the pilot](SPEC.md#after-the-pilot), not slices in a `docs/ROADMAP.md`.
