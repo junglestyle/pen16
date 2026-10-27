@@ -150,6 +150,16 @@ notifications = Table(
     CheckConstraint("status IN ('pending', 'delivered', 'failed')", name="notification_status"),
 )
 
+# One row per verified backup, written by deploy/pen16-backup through `pen16 backed-up`.
+backups = Table(
+    "backups",
+    metadata,
+    Column("id", BigInteger, primary_key=True),
+    Column("name", Text, nullable=False, unique=True),
+    Column("size_bytes", BigInteger, nullable=False),
+    Column("finished_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+)
+
 
 def database_url() -> str:
     url = os.environ.get("PEN16_DATABASE_URL")

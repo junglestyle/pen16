@@ -38,7 +38,7 @@ def committed(engine: Engine) -> Iterator[Engine]:
         connection.execute(
             text(
                 "TRUNCATE assets, bindings, expected_services, observations, findings, jobs, tokens, "
-                "notifications CASCADE"
+                "notifications, backups CASCADE"
             )
         )
 

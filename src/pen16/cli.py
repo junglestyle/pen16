@@ -7,7 +7,7 @@ import uvicorn
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-from pen16 import db, exposure, nmap, runner, tokens, worker
+from pen16 import backups, db, exposure, nmap, runner, tokens, worker
 
 
 def main() -> None:
@@ -26,6 +26,11 @@ def main() -> None:
         serve.add_argument("--port", type=int, default=8080 if name == "web" else 8443)
     token = commands.add_parser("token", help="create a runner token and print it once")
     token.add_argument("name")
+    backed_up = commands.add_parser(
+        "backed-up", help="record a verified backup (deploy/pen16-backup runs this)"
+    )
+    backed_up.add_argument("name")
+    backed_up.add_argument("size_bytes", type=int)
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
@@ -50,3 +55,6 @@ def main() -> None:
     elif args.command == "token":
         with db.connect().begin() as conn:
             print(tokens.create(conn, "runner", args.name))
+    elif args.command == "backed-up":
+        with db.connect().begin() as conn:
+            backups.record(conn, args.name, args.size_bytes)

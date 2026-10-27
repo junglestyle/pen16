@@ -1,0 +1,10 @@
+[Unit]
+Description=pen16 nightly backup
+Documentation=https://github.com/junglestyle/pen16/blob/main/docs/SECURITY.md#backups-housekeeping-and-upgrades
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# PEN16_BACKUP_DIR defaults to /mnt/pen16-backup; the deployment mounts its off-host storage there.
+ExecStart=/opt/pen16/deploy/pen16-backup

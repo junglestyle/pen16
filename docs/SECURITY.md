@@ -31,7 +31,7 @@ Keep sops/age secrets in the private deployment repository. Decrypt on the Ansib
 
 ## Backups, housekeeping, and upgrades
 
-Make nightly encrypted off-host backups, keeping seven daily and four weekly copies. Pause evidence retention during database/file copying; validate checksums and referenced files before marking success. Keep the recovery key independently recoverable. Alert when backups exceed two days old.
+Make nightly off-host backups, keeping seven daily and four weekly copies. [pen16-backup](../deploy/pen16-backup) restores each dump into a throwaway database with no network, checks its schema version and that every evidence file it references is in the archive, and checks the off-host copy against its checksums before recording success. Backups aren't encrypted: they go to storage that already holds the host's own disk, and a plain file is one the nightly check can test. Encrypt them before they leave the owner's network. Pause evidence retention during copying. Alert when backups exceed two days old.
 
 Restore in isolation and demonstrate evidence/settings intact. Keep schedules, notifications, and dispatch disabled on a replacement until activated. Re-enroll runners when restored credentials differ.
 

@@ -10,7 +10,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import Connection, Engine, func, select
 
-from pen16 import config, db, exposure, jobs
+from pen16 import backups, config, db, exposure, jobs
 from pen16.config import Config
 from pen16.db import (
     assets,
@@ -125,8 +125,11 @@ def _dashboard(conn: Connection) -> dict[str, Any]:
         .where(latest_state.c.state == "open")
         .order_by(latest_state.c.asset_id, latest_state.c.protocol, latest_state.c.port)
     ).all()
+    last_backup = backups.latest(conn)
     return {
         "now": now,
+        "last_backup": last_backup,
+        "backup_stale": last_backup is None or now - last_backup > backups.STALE,
         "last_success": last_success,
         "stale": last_success is None or now - last_success > STALE,
         "latest": latest,
