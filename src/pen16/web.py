@@ -38,7 +38,7 @@ def create(engine: Engine, settings: Config) -> FastAPI:
             raise HTTPException(403, "cross-site form post")
         return login
 
-    Owner = Annotated[str, Depends(owner)]
+    Owner = Annotated[str, Depends(owner)]  # noqa: N806  # a type alias, named like one
     app = FastAPI(title="pen16", docs_url=None, redoc_url=None, openapi_url=None)
 
     @app.get("/", response_class=HTMLResponse)
@@ -55,7 +55,7 @@ def create(engine: Engine, settings: Config) -> FastAPI:
 
     @app.post("/findings/expect")
     def expect(
-        login: Owner, finding: Annotated[list[int], Form()], reason: Annotated[str, Form()]
+        _login: Owner, finding: Annotated[list[int], Form()], reason: Annotated[str, Form()]
     ) -> RedirectResponse:
         with engine.begin() as conn:
             exposure.expect(conn, finding, reason)
@@ -63,7 +63,7 @@ def create(engine: Engine, settings: Config) -> FastAPI:
 
     @app.post("/expected/remove")
     def unexpect(
-        login: Owner,
+        _login: Owner,
         asset_id: Annotated[str, Form()],
         protocol: Annotated[str, Form()],
         port: Annotated[int, Form()],
@@ -75,7 +75,7 @@ def create(engine: Engine, settings: Config) -> FastAPI:
 
     @app.post("/assets/name")
     def name_asset(
-        login: Owner, provisional_id: Annotated[str, Form()], asset_id: Annotated[str, Form()]
+        _login: Owner, provisional_id: Annotated[str, Form()], asset_id: Annotated[str, Form()]
     ) -> RedirectResponse:
         try:
             with engine.begin() as conn:

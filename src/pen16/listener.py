@@ -30,7 +30,7 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
             raise HTTPException(401, "runner token required")
         return runner_id
 
-    Runner = Annotated[str, Depends(runner)]
+    Runner = Annotated[str, Depends(runner)]  # noqa: N806  # a type alias, named like one
 
     @app.post("/runner/v1/jobs/claim", response_model=None)
     def claim(runner_id: Runner) -> dict[str, Any] | Response:
@@ -63,7 +63,7 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
         try:
             with engine.begin() as conn:
                 opened = jobs.complete(conn, job_id, runner_id, scan, settings.scope)
-        except jobs.StaleJob as error:
+        except jobs.StaleJobError as error:
             raise HTTPException(409, str(error)) from error
         log.info("job %s succeeded: %s hosts, %s new findings", job_id, len(scan.hosts), len(opened))
 
@@ -78,7 +78,7 @@ def _fail(engine: Engine, job_id: int, runner_id: str, error: str) -> None:
     try:
         with engine.begin() as conn:
             jobs.fail(conn, job_id, runner_id, error)
-    except jobs.StaleJob as stale:
+    except jobs.StaleJobError as stale:
         raise HTTPException(409, str(stale)) from stale
 
 

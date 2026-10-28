@@ -1,26 +1,28 @@
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, insert, select
+from sqlalchemy import insert, select
 
 from pen16 import exposure, nmap, web
 from pen16.config import Config
 from pen16.db import expected_services, findings
-from pen16.scope import Scope
 from tests.conftest import LAB_SCAN
 
 OWNER = {"Tailscale-User-Login": "owner@example.com"}
 
 
-def dashboard(engine: Engine, scope: Scope) -> TestClient:
+def dashboard(engine, scope):
     settings = Config(scope=scope, owner_login="owner@example.com", dashboard_url="")
     return TestClient(web.create(engine, settings), base_url="https://pen16.example.ts.net")
 
 
-def scanned(engine: Engine, raw: bytes = LAB_SCAN.read_bytes()) -> None:
+LAB_BYTES = LAB_SCAN.read_bytes()
+
+
+def scanned(engine, raw=LAB_BYTES):
     with engine.begin() as conn:
         exposure.ingest(conn, nmap.parse(raw), vantage="internal")
 
 
-def test_only_the_owner_gets_in(committed: Engine, lab_scope: Scope) -> None:
+def test_only_the_owner_gets_in(committed, lab_scope):
     client = dashboard(committed, lab_scope)
 
     assert client.get("/").status_code == 403
@@ -28,7 +30,7 @@ def test_only_the_owner_gets_in(committed: Engine, lab_scope: Scope) -> None:
     assert client.get("/", headers=OWNER).status_code == 200
 
 
-def test_cross_site_post_is_refused(committed: Engine, lab_scope: Scope) -> None:
+def test_cross_site_post_is_refused(committed, lab_scope):
     client = dashboard(committed, lab_scope)
 
     response = client.post("/scan", headers={**OWNER, "Sec-Fetch-Site": "cross-site"})
@@ -36,7 +38,7 @@ def test_cross_site_post_is_refused(committed: Engine, lab_scope: Scope) -> None
     assert response.status_code == 403
 
 
-def test_marking_findings_expected_from_the_dashboard(committed: Engine, lab_scope: Scope) -> None:
+def test_marking_findings_expected_from_the_dashboard(committed, lab_scope):
     scanned(committed)
     client = dashboard(committed, lab_scope)
     with committed.connect() as conn:
@@ -55,7 +57,7 @@ def test_marking_findings_expected_from_the_dashboard(committed: Engine, lab_sco
         assert conn.scalar(select(findings.c.status).where(findings.c.id == ssh)) == "resolved"
 
 
-def test_scan_output_is_escaped(committed: Engine, lab_scope: Scope) -> None:
+def test_scan_output_is_escaped(committed, lab_scope):
     scanned(
         committed, LAB_SCAN.read_bytes().replace(b'product="Werkzeug httpd"', b'product="&lt;script&gt;x"')
     )

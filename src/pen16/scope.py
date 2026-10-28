@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from ipaddress import IPv4Address, IPv4Network
 
 
-class OutOfScope(ValueError):
+class OutOfScopeError(ValueError):
     pass
 
 
@@ -20,21 +20,21 @@ class Scope:
     exclude: list[IPv4Network]
 
     def check(self, targets: list[str], exclude: list[str]) -> None:
-        """Raise OutOfScope unless every target sits inside a scope network and every exclusion is kept.
+        """Raise OutOfScopeError unless every target sits inside a scope network and every exclusion is kept.
 
         The worker runs this before dispatch and the runner again before nmap starts. The host egress
         policy is the boundary that doesn't depend on either.
         """
         if not targets:
-            raise OutOfScope("no targets")
+            raise OutOfScopeError("no targets")
         for target in targets:
             network = _network(target)
             if not any(network.subnet_of(allowed.cidr) for allowed in self.networks):
-                raise OutOfScope(f"{target} is outside every scope network")
+                raise OutOfScopeError(f"{target} is outside every scope network")
         kept = {_network(excluded) for excluded in exclude}
         for excluded in self.exclude:
             if excluded not in kept:
-                raise OutOfScope(f"exclusion {excluded} is missing")
+                raise OutOfScopeError(f"exclusion {excluded} is missing")
 
 
 def parse(networks: list[dict[str, str]], exclude: list[str]) -> Scope:
@@ -55,4 +55,4 @@ def _network(value: str) -> IPv4Network:
     try:
         return ipaddress.IPv4Network(value, strict=True)
     except ValueError as error:
-        raise OutOfScope(f"{value!r} is not an IPv4 address or network") from error
+        raise OutOfScopeError(f"{value!r} is not an IPv4 address or network") from error
