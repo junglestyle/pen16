@@ -20,7 +20,7 @@ class Finding:
     vantage: str
 
 
-def ingest(conn: Connection, scan: Scan, vantage: str, closures: bool = True) -> list[Finding]:
+def ingest(conn: Connection, scan: Scan, vantage: str, *, closures: bool = True) -> list[Finding]:
     """Record a scan's observations, open findings for unexpected open ports, and resolve closed ones.
 
     Returns the findings this scan newly opened or reopened: the ones worth an alert. Run it inside one

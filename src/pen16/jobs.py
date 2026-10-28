@@ -16,7 +16,7 @@ MAX_ATTEMPTS = 2
 UNCLAIMED = timedelta(hours=1)
 
 
-class StaleJob(Exception):
+class StaleJobError(Exception):
     """The job isn't running on this runner any more, so its result can't change state."""
 
 
@@ -153,7 +153,7 @@ def _running(conn: Connection, job_id: int, runner: str) -> Row[Any]:
         .with_for_update()
     ).first()
     if job is None:
-        raise StaleJob(f"job {job_id} isn't running on runner {runner}")
+        raise StaleJobError(f"job {job_id} isn't running on runner {runner}")
     return job
 
 
