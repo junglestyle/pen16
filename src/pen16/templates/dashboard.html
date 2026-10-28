@@ -39,6 +39,11 @@ form.inline { display: inline; }
     {% if last_success %}{{ last_success.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}never{% endif %}
     {% if stale %}(stale){% endif %}
   </dd>
+  <dt>Last backup</dt>
+  <dd class="{{ 'bad' if backup_stale else 'ok' }}">
+    {% if last_backup %}{{ last_backup.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}never{% endif %}
+    {% if last_backup and backup_stale %}(stale){% endif %}
+  </dd>
   <dt>Latest job</dt>
   <dd>
     {% if latest %}#{{ latest.id }} {{ latest.status }}{% if latest.error %} <span class="{{ 'bad' if latest.status == 'failed' else 'muted' }}">({{ latest.error }})</span>{% endif %}

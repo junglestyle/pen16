@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# Backs pen16 up to $PEN16_BACKUP_DIR, an off-host mount the deployment provides, and records it so the
+# dashboard and the stale-backup alert see it. The systemd timer runs this nightly; it's safe to rerun,
+# and a second run on the same day replaces that day's backup.
+#
+# A backup is a directory named by UTC date holding pen16.dump (pg_dump -Fc), evidence.tgz, and
+# SHA256SUMS. Before it counts, the dump is restored into a throwaway Postgres with no network, which must
+# reach the live schema version and reference only evidence the tarball holds, and the copy on the mount
+# must match its checksums. Keeps the newest 7, plus the newest of each week for the 4 weeks before them.
+set -euo pipefail
+
+compose=(docker compose -f "$(dirname "$(readlink -f "$0")")/compose.yaml")
+dest=${PEN16_BACKUP_DIR:-/mnt/pen16-backup}
+evidence=${PEN16_EVIDENCE_DIR:-/var/lib/pen16/evidence}
+name=$(date -u +%F)
+scratch=pen16-backup-verify
+
+fail() {
+	echo "pen16-backup: $*" >&2
+	exit 1
+}
+
+# Touch it first so an automount comes up; refuse to fill the local disk if the mount isn't there.
+ls "$dest" >/dev/null
+mountpoint -q "$dest" || fail "$dest isn't a mount"
+
+work=$(mktemp -d /var/tmp/pen16-backup.XXXXXX)
+cleanup() {
+	docker rm -f "$scratch" >/dev/null 2>&1 || true
+	rm -rf "$work" "$dest/.$name.partial"
+}
+trap cleanup EXIT
+
+# Dump before archiving: evidence is written before the job that names it, and never changes, so every
+# digest in the dump already has its file on disk.
+"${compose[@]}" exec -T db pg_dump -U pen16 -Fc pen16 > "$work/pen16.dump"
+tar -C "$(dirname "$evidence")" -czf "$work/evidence.tgz" "$(basename "$evidence")"
+
+image=$(docker inspect -f '{{.Config.Image}}' "$("${compose[@]}" ps -q db)")
+docker rm -f "$scratch" >/dev/null 2>&1 || true
+docker run -d --rm --name "$scratch" --network none \
+	-e POSTGRES_USER=pen16 -e POSTGRES_PASSWORD=verify -e POSTGRES_DB=pen16 "$image" >/dev/null
+# Over TCP: the image's first-start server listens only on its socket, so this waits for the real one.
+for _ in $(seq 60); do
+	docker exec "$scratch" pg_isready -q -h 127.0.0.1 -U pen16 && break
+	sleep 1
+done
+docker exec -i "$scratch" pg_restore -U pen16 -d pen16 --no-owner --exit-on-error < "$work/pen16.dump"
+
+query='select version_num from alembic_version'
+live=$("${compose[@]}" exec -T db psql -U pen16 -d pen16 -tAc "$query")
+restored=$(docker exec "$scratch" psql -U pen16 -d pen16 -tAc "$query")
+[[ -n "$restored" && "$restored" == "$live" ]] || fail "restored schema [$restored] isn't the live [$live]"
+
+docker exec "$scratch" psql -U pen16 -d pen16 -tAc \
+	'select distinct evidence_digest from jobs where evidence_digest is not null' | sort > "$work/wanted"
+tar -tzf "$work/evidence.tgz" | sed -n "s|^$(basename "$evidence")/\([0-9a-f]*\)\.xml\.gz$|\1|p" | sort > "$work/held"
+missing=$(comm -23 "$work/wanted" "$work/held" | wc -l)
+(( missing == 0 )) || fail "$missing evidence file(s) the database references aren't in the archive"
+
+(cd "$work" && sha256sum pen16.dump evidence.tgz > SHA256SUMS)
+partial="$dest/.$name.partial"
+rm -rf "$partial"
+mkdir "$partial"
+cp "$work/pen16.dump" "$work/evidence.tgz" "$work/SHA256SUMS" "$partial/"
+sync
+(cd "$partial" && sha256sum --quiet -c SHA256SUMS) || fail "the copy on $dest doesn't match its checksums"
+rm -rf "${dest:?}/$name"
+mv "$partial" "$dest/$name"
+
+size=$(du -sb "$dest/$name" | cut -f1)
+"${compose[@]}" run --rm --no-deps -T worker backed-up "$name" "$size"
+echo "pen16-backup: $name verified and written to $dest ($size bytes)"
+
+mapfile -t backups < <(find "$dest" -mindepth 1 -maxdepth 1 -type d -regextype posix-extended \
+	-regex '.*/[0-9]{4}-[0-9]{2}-[0-9]{2}' -printf '%f\n' | sort -r)
+kept=0
+weekly=0
+weeks=" "
+for backup in "${backups[@]}"; do
+	week=$(date -u -d "$backup" +%G-W%V)
+	if (( kept < 7 )); then
+		kept=$((kept + 1))
+	elif [[ "$weeks" != *" $week "* ]] && (( weekly < 4 )); then
+		weekly=$((weekly + 1))
+	else
+		rm -rf "${dest:?}/$backup"
+		echo "pen16-backup: pruned $backup"
+		continue
+	fi
+	weeks+="$week "
+done

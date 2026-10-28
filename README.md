@@ -41,7 +41,8 @@ make check   # everything CI runs
 
 To run it on a Debian 13 host, put a deployment config like [examples/pen16.toml](examples/pen16.toml) and its
 secrets in `/etc/pen16`, then start [deploy/compose.yaml](deploy/compose.yaml) and the
-[pen16-egress](deploy/pen16-egress) service. The image builds on the host, because nmap's license limits
+[pen16-egress](deploy/pen16-egress) service. For backups, mount off-host storage at `/mnt/pen16-backup` and
+enable the [pen16-backup](deploy/pen16-backup) timer. The image builds on the host, because nmap's license limits
 redistributing it. A private deployment repository with Ansible normally does all of this; the
 [architecture](docs/ARCHITECTURE.md#deployment-and-state-ownership) says what it owns.
 
