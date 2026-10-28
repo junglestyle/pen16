@@ -11,6 +11,7 @@ from sqlalchemy import Engine
 
 from pen16 import config, db, evidence, jobs, nmap, tokens
 from pen16.config import Config
+from pen16.db import TokenKind
 
 log = logging.getLogger(__name__)
 
@@ -25,7 +26,9 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
     def runner(authorization: Annotated[str, Header()] = "") -> str:
         scheme, _, presented = authorization.partition(" ")
         with engine.begin() as conn:
-            runner_id = tokens.verify(conn, presented, "runner") if scheme.lower() == "bearer" else None
+            runner_id = (
+                tokens.verify(conn, presented, TokenKind.RUNNER) if scheme.lower() == "bearer" else None
+            )
         if runner_id is None:
             raise HTTPException(401, "runner token required")
         return runner_id

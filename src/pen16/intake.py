@@ -11,6 +11,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Response, UploadFil
 from sqlalchemy import Engine
 
 from pen16 import arf, compliance, db, evidence, tokens
+from pen16.db import TokenKind
 
 log = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ def create(engine: Engine, evidence_dir: Path) -> FastAPI:
         """The host a compliance token speaks for. A token can only ever upload for its own host."""
         scheme, _, presented = authorization.partition(" ")
         with engine.begin() as conn:
-            token_id = tokens.verify(conn, presented, "compliance") if scheme.lower() == "bearer" else None
+            token_id = tokens.verify(conn, presented, TokenKind.COMPLIANCE) if scheme.lower() == "bearer" else None
             if token_id is None:
                 raise HTTPException(401, "compliance token required")
             return tokens.name(conn, token_id)

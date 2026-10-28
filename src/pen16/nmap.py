@@ -6,16 +6,18 @@ from typing import Any
 
 from defusedxml import ElementTree
 
+from pen16.db import ObservationState
+
 PARSER_VERSION = "2"
 MAX_XML_BYTES = 250 * 1024 * 1024
 
 # open|filtered is what UDP reports for silence. pen16 can't tell it from a drop, so it stays filtered.
 STATES = {
-    "open": "open",
-    "closed": "closed",
-    "filtered": "filtered",
-    "open|filtered": "filtered",
-    "closed|filtered": "filtered",
+    "open": ObservationState.OPEN,
+    "closed": ObservationState.CLOSED,
+    "filtered": ObservationState.FILTERED,
+    "open|filtered": ObservationState.FILTERED,
+    "closed|filtered": ObservationState.FILTERED,
 }
 
 
@@ -24,7 +26,7 @@ class Port:
     address: str
     protocol: str
     port: int
-    state: str
+    state: ObservationState
     service: str | None
     product: str | None
     version: str | None
@@ -35,7 +37,7 @@ class Host:
     address: str
     up: bool
     # Ports nmap folded into <extraports>, as (protocol, port) -> state. Closed ports usually land here.
-    unlisted: dict[tuple[str, int], str]
+    unlisted: dict[tuple[str, int], ObservationState]
 
 
 @dataclass(frozen=True)
@@ -46,7 +48,7 @@ class Scan:
     ports: list[Port]
     hosts: list[Host]
 
-    def state(self, address: str, protocol: str, port: int) -> str | None:
+    def state(self, address: str, protocol: str, port: int) -> ObservationState | None:
         """What this scan saw on one port, or None when it didn't cover it."""
         for listed in self.ports:
             if (listed.address, listed.protocol, listed.port) == (address, protocol, port):
@@ -111,8 +113,8 @@ def parse(raw: bytes) -> Scan:
     )
 
 
-def _unlisted(host: Any) -> dict[tuple[str, int], str]:
-    unlisted = {}
+def _unlisted(host: Any) -> dict[tuple[str, int], ObservationState]:
+    unlisted: dict[tuple[str, int], ObservationState] = {}
     for extra in host.iter("extraports"):
         state = STATES[extra.attrib["state"]]
         # nmap 7.92+ names the folded ports; without that, coverage is unknown and nothing gets closed.

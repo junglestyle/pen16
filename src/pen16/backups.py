@@ -6,7 +6,7 @@ from sqlalchemy import Connection, exists, func, select
 from sqlalchemy.dialects.postgresql import insert
 
 from pen16 import notify
-from pen16.db import backups, notifications
+from pen16.db import NotificationKind, backups, notifications
 
 STALE = timedelta(hours=48)
 STALE_TITLE = "Backups are stale"
@@ -23,7 +23,9 @@ def record(conn: Connection, name: str, size_bytes: int) -> None:
         )
     )
     if previous is not None and _warned_since(conn, previous):
-        notify.enqueue(conn, "health", "Backups recovered", f"Backup {name} finished and verified.")
+        notify.enqueue(
+            conn, NotificationKind.HEALTH, "Backups recovered", f"Backup {name} finished and verified."
+        )
 
 
 def check(conn: Connection) -> None:
@@ -33,7 +35,10 @@ def check(conn: Connection) -> None:
     if last is None or datetime.now(UTC) - last < STALE or _warned_since(conn, last):
         return
     notify.enqueue(
-        conn, "health", STALE_TITLE, f"The last verified backup finished {last:%Y-%m-%d %H:%M} UTC."
+        conn,
+        NotificationKind.HEALTH,
+        STALE_TITLE,
+        f"The last verified backup finished {last:%Y-%m-%d %H:%M} UTC.",
     )
 
 
@@ -47,7 +52,7 @@ def _warned_since(conn: Connection, when: datetime) -> bool:
         conn.scalar(
             select(
                 exists().where(
-                    notifications.c.kind == "health",
+                    notifications.c.kind == NotificationKind.HEALTH,
                     notifications.c.title == STALE_TITLE,
                     notifications.c.created_at > when,
                 )
