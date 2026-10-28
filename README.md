@@ -11,7 +11,7 @@
 
 A security dashboard for your homelab and home network. See what’s exposed, what changed, and which new vulnerabilities may affect what you run. Set it up, let it monitor, tune it when you want.
 
-> **In development:** M1 is partway. A nightly nmap scan runs from a contained runner, unexpected open ports alert over ntfy, and a minimal dashboard marks services expected. There is no release yet.
+> **In development:** M1 is partway. A nightly nmap scan runs from a contained runner, unexpected open ports alert over ntfy, and a minimal dashboard marks services expected. There is no release yet; the [roadmap](docs/ROADMAP.md) says what comes next.
 
 ## What it will do
 
@@ -28,7 +28,7 @@ For example: a new container on your server exposes an admin port. pen16 shows i
 
 One owner, self-hosted infrastructure, and almost no routine work. Core operation needs no LLM or paid cloud service.
 
-The first release delivers the dashboard and internal monitoring loop. Lightweight vulnerability awareness and the outside view complete v1. See the [specification and milestones](docs/SPEC.md).
+The first release delivers the dashboard and internal monitoring loop. Lightweight vulnerability awareness and the outside view complete v1. See the [specification](docs/SPEC.md) and [roadmap](docs/ROADMAP.md).
 
 ## Running it
 

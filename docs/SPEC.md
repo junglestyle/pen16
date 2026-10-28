@@ -37,30 +37,15 @@ Counts link to assets and findings. Show observation time, vantage, coverage, an
 
 The owner, deployment host, and probe observations are trusted. Coverage depends on inventory, feeds, scan intervals, and vantage; a gateway check can miss downstream failures. Filtered ports can reflect packet loss. pen16 cannot establish that software is patched or prevent compromise. Enterprise tenancy, compliance certification, intrusion prevention, exploitation, and autonomous remediation are outside scope. Whole-host loss needs an independent monitor.
 
-## Milestones
+## Build order
 
-All milestones are planned and incomplete.
-
-| Milestone | Deliver and demonstrate |
-| --- | --- |
-| M0 | Package, lockfile, CI, configuration, initial migration; one fixture becomes an unexpected-exposure finding; prototype runner egress filtering |
-| M1 / v0.1 | FR-1–11: dashboard, internal monitoring, restricted API, alerts, deployment, and recovery |
-| M2 | FR-12: relevant, unrelated, ambiguous, stale, and duplicate advisory fixtures; trends view |
-| M3 | FR-13: external scope, egress/DDNS checks, lost-probe alerts, and vantage separation |
-
-M2 and M3 can follow M1 in either order; together they complete v1.
-
-M1 demo:
-
-1. Bring up the fictional lab and private dashboard.
-2. Scan and inspect discovered services.
-3. Bulk-declare selected services expected.
-4. Open an unexpected port.
-5. Receive one alert, close the port, and verify resolution.
-
-Also demonstrate scope containment, filtered/unavailable results staying open, cancellation/deadlines, denied assistant actions, notification failure, and restored evidence/settings. Run a four-week unattended pilot; record setup effort, resource use, nuisance alerts, and interventions. Remove recurring chores before adding integrations.
+The [roadmap](ROADMAP.md) orders the work in slices and names the requirements each delivers. M1 is v0.1: the
+dashboard and internal monitoring loop, FR-1 to FR-11. M2 is FR-12 and M3 is FR-13; they can follow M1 in either
+order, and together they complete v1.
 
 ## After the pilot
+
+Deferred requirements. Each gets its own slice in the [roadmap](ROADMAP.md) once the pilot has run.
 
 - Filtered-port heuristic.
 - Routed-network witnesses.

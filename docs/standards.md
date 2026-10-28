@@ -42,7 +42,6 @@ an org rule, it says so, and it wins.
 
 - `sudo make lab` proves the runner egress policy in network namespaces. It needs root and nmap, so it runs as its
   own CI job.
-- Doc changes also check links, FR/ADR numbering, and `git diff --check`.
 
 ## Privacy
 
@@ -51,8 +50,9 @@ an org rule, it says so, and it wins.
 
 ## Docs
 
-- A deferred requirement stays in the [spec](SPEC.md) and gets a later slice in the roadmap, which for now is
-  [After the pilot](SPEC.md#after-the-pilot) (see Known deviations).
+- A slice in the [roadmap](ROADMAP.md) ends with a done-when someone can show on infrastructure they own, with
+  fixtures where one exists and the owner's own network otherwise. What it showed is described in roles, and its
+  evidence stays out of the repo. The spec keeps the requirement; the roadmap names it.
 
 ## Prose
 
@@ -84,5 +84,3 @@ Where pen16 doesn't follow the org standards yet. These are debt to pay down, no
 - Containers: `deploy/compose.yaml` sets no `logging:`.
 - Shell: `make check` doesn't run shellcheck, which reports two findings in `lab/egress.sh:63`; `deploy/pen16-egress`
   has no `.sh` name, so a `'*.sh'` glob would miss it.
-- Docs: the build order is the [spec](SPEC.md)'s [Milestones](SPEC.md#milestones) and
-  [After the pilot](SPEC.md#after-the-pilot), not slices in a `docs/ROADMAP.md`.
