@@ -4,7 +4,7 @@
 
 | Layer | Choice |
 | --- | --- |
-| Core | Python 3.12, FastAPI |
+| Core | Python 3.15, FastAPI |
 | Dashboard | Server-rendered HTML/CSS, progressive enhancement |
 | State | PostgreSQL 16, Alembic |
 | Evidence | Immutable compressed files |

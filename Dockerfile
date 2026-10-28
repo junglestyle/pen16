@@ -1,6 +1,6 @@
 # One image for every role: web, listener, worker, and runner. Built on the scanner host from a pinned
 # commit rather than published, because nmap's license limits redistributing it.
-FROM python:3.12-slim-trixie@sha256:a0f57064cbdcd6285fa45f51237ab0b35ea8ebaed06a1f5973e89e19dfb86704
+FROM python:3.15-slim-trixie@sha256:94d3426f1def7db4a106a232ac121bfd975393e5dfd40a619b955fae45fe7913
 
 RUN apt-get update \
 	&& apt-get install -y --no-install-recommends nmap \
