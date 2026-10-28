@@ -6,7 +6,7 @@
 | --- | --- |
 | Core | Python 3.12, FastAPI |
 | Dashboard | Server-rendered HTML/CSS, progressive enhancement |
-| State | PostgreSQL 16, Alembic |
+| State | PostgreSQL 16, SQLAlchemy Core, Alembic |
 | Evidence | Immutable compressed files |
 | Scanner | Pinned nmap, serial pull runner |
 | Deployment | Docker Compose, Ansible, Debian 13 |
@@ -38,3 +38,11 @@ Raw-packet scanning needs an egress boundary outside the runner process. The hos
 ## ADR-005: Tailscale identity instead of passwords
 
 The dashboard is only reachable over Tailscale, so it uses Tailscale identity for the owner instead of its own login system. That means no passwords, sessions or recovery flow to build or maintain. API tokens still cover assistant clients and runners.
+
+## ADR-006: SQLAlchemy Core and Alembic instead of SQL files
+
+The org default is raw SQL through psycopg and numbered `NNN_name.sql` migrations. pen16 declares its tables once, in `db.py`, and builds queries from them with SQLAlchemy Core: no ORM, no sessions, no mapped classes. That one declaration also drives Alembic, so `alembic check` in `make check` fails when the migrations and the tables the code queries drift apart, which plain SQL files can't catch. The locking and dedup the job queue needs (`FOR UPDATE SKIP LOCKED`, `DISTINCT ON`, `RETURNING`) compose as expressions instead of strings. Migrations are numbered Python files, applied once each and never edited after they ship, so the intent of the SQL-file rule carries over; the rule itself doesn't apply here.
+
+## ADR-007: FastAPI and uvicorn for the dashboard and listener
+
+The dashboard, the runner listener, and the versioned API are all HTTP, and each one checks who is calling before it does anything. FastAPI gives the owner check and the runner token check as dependencies every route must pass, validates uploads at the trust edge, parses forms, and produces the OpenAPI schema FR-10 publishes with its permissions. uvicorn serves it and handles SIGTERM. Routes stay synchronous functions; the framework runs them off its event loop, so the rest of the code needs no async. The stdlib's server has none of the validation or form handling, and a sync framework would need a separate validation layer and schema generator.
