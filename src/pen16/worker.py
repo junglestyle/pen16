@@ -2,7 +2,8 @@
 
 import logging
 import os
-import time
+import signal
+import threading
 
 import httpx
 
@@ -14,6 +15,8 @@ TICK = 15
 
 
 def run_forever() -> None:
+    stop = threading.Event()
+    signal.signal(signal.SIGTERM, lambda *_: stop.set())
     settings = config.load()
     engine = db.connect()
     url = os.environ.get("PEN16_NTFY_URL", "")
@@ -21,11 +24,11 @@ def run_forever() -> None:
     if not url:
         log.warning("PEN16_NTFY_URL is not set: notifications stay queued on the dashboard")
     with httpx.Client() as client:
-        while True:
+        while not stop.is_set():
             with engine.begin() as conn:
                 jobs.run_due_schedules(conn, settings.scope)
                 jobs.expire(conn)
                 backups.check(conn)
             if url:
                 notify.deliver_due(engine, client, url, token, settings.dashboard_url)
-            time.sleep(TICK)
+            stop.wait(TICK)

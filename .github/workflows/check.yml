@@ -30,7 +30,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t pen16:ci .
-      - run: docker run --rm --entrypoint nmap pen16:ci --version
+      - run: make image
   standards:
     uses: junglestyle/.github/.github/workflows/standards-check.yml@main

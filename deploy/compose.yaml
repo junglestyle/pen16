@@ -2,10 +2,14 @@
 # runs the pen16-egress timer, and starts this file. See docs/ARCHITECTURE.md#deployment-and-state-ownership.
 name: pen16
 
+x-logging: &logging
+  driver: journald
+
 x-app: &app
   image: pen16:local
   build: ..
   restart: unless-stopped
+  logging: *logging
   read_only: true
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]
@@ -25,6 +29,7 @@ services:
   db:
     image: postgres:16@sha256:9e2cf6287f25c3151f4c9421ccce2b17f3e60061c111a29165e0d2cdd9ff0a97
     restart: unless-stopped
+    logging: *logging
     env_file: /etc/pen16/pen16.env
     volumes:
       - db:/var/lib/postgresql/data

@@ -7,8 +7,9 @@ network namespace and stamped that namespace into the egress marker (see deploy/
 import gzip
 import logging
 import os
+import signal
 import subprocess
-import time
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -45,6 +46,8 @@ def stamp(process: Path) -> str:
 
 
 def run_forever() -> None:
+    stop = threading.Event()
+    signal.signal(signal.SIGTERM, lambda *_: stop.set())  # a scan in progress finishes first
     scope = config.load().scope
     url = os.environ.get("PEN16_LISTENER_URL")
     if not url:
@@ -53,18 +56,18 @@ def run_forever() -> None:
     marker = Path(os.environ.get("PEN16_EGRESS_MARKER", "/run/pen16-egress/ready"))
     with httpx.Client(base_url=url, headers={"Authorization": f"Bearer {token}"}, timeout=30) as client:
         waiting = False
-        while True:
+        while not stop.is_set():
             if not egress_ready(marker):
                 if not waiting:
                     log.warning("waiting for the host to apply egress policy")
                 waiting = True
-                time.sleep(WAIT_FOR_EGRESS)
+                stop.wait(WAIT_FOR_EGRESS)
                 continue
             waiting = False
             response = client.post("/runner/v1/jobs/claim")
             response.raise_for_status()
             if response.status_code == 204:
-                time.sleep(IDLE)
+                stop.wait(IDLE)
                 continue
             run_job(client, scope, response.json(), profiles.NMAP_SERVICES)
 

@@ -42,6 +42,8 @@ an org rule, it says so, and it wins.
 
 - `sudo make lab` proves the runner egress policy in network namespaces. It needs root and nmap, so it runs as its
   own CI job.
+- `make image` builds the image and checks that nmap runs in it. It needs Docker and the network, so it's also its
+  own CI job.
 
 ## Privacy
 
@@ -64,9 +66,5 @@ an org rule, it says so, and it wins.
 
 Where pen16 doesn't follow the org standards yet. These are debt to pay down, not overrides: each one should go.
 
-- The `Dockerfile` installs uv with `pip`.
-- Running it: CI's `image` job isn't in `make check`, and nothing here says so.
-- Containers: `worker` and `runner` don't handle SIGTERM and don't run with `init: true`.
-- Containers: `deploy/compose.yaml` sets no `logging:`.
 - Shell: `make check` doesn't run shellcheck, which reports two findings in `lab/egress.sh:63`; `deploy/pen16-egress`
   has no `.sh` name, so a `'*.sh'` glob would miss it.
