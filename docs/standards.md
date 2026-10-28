@@ -65,8 +65,6 @@ an org rule, it says so, and it wins.
 Where pen16 doesn't follow the org standards yet. These are debt to pay down, not overrides: each one should go.
 
 - The `Dockerfile` installs uv with `pip`.
-- SQL: surrogate keys are `BIGSERIAL`, SQLAlchemy's default for a `BigInteger` primary key, not identity columns.
-- Data modeling: statuses and kinds are literals with a `CHECK`, not `StrEnum`s.
 - Running it: CI's `image` job isn't in `make check`, and nothing here says so.
 - Containers: `worker` and `runner` don't handle SIGTERM and don't run with `init: true`.
 - Containers: `deploy/compose.yaml` sets no `logging:`.

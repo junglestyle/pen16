@@ -13,6 +13,11 @@ from sqlalchemy import Connection, Engine, func, select
 from pen16 import backups, config, db, exposure, jobs
 from pen16.config import Config
 from pen16.db import (
+    FindingStatus,
+    JobStatus,
+    NotificationStatus,
+    ObservationState,
+    TokenKind,
     assets,
     bindings,
     expected_services,
@@ -89,13 +94,15 @@ def create(engine: Engine, settings: Config) -> FastAPI:
 
 def _dashboard(conn: Connection) -> dict[str, Any]:
     now = datetime.now(UTC)
-    last_success = conn.scalar(select(func.max(db.jobs.c.finished_at)).where(db.jobs.c.status == "succeeded"))
+    last_success = conn.scalar(
+        select(func.max(db.jobs.c.finished_at)).where(db.jobs.c.status == JobStatus.SUCCEEDED)
+    )
     latest = conn.execute(select(db.jobs).order_by(db.jobs.c.id.desc()).limit(1)).first()
     seen = observations.alias("seen")
     open_findings = conn.execute(
         select(findings, seen.c.address, seen.c.service, seen.c.product, seen.c.version, seen.c.observed_at)
         .join(seen, seen.c.id == findings.c.last_observation_id)
-        .where(findings.c.status == "open")
+        .where(findings.c.status == FindingStatus.OPEN)
         .order_by(findings.c.opened_at.desc())
     ).all()
     latest_state = (
@@ -122,7 +129,7 @@ def _dashboard(conn: Connection) -> dict[str, Any]:
             & (expected.c.port == latest_state.c.port)
             & (expected.c.vantage == latest_state.c.vantage),
         )
-        .where(latest_state.c.state == "open")
+        .where(latest_state.c.state == ObservationState.OPEN)
         .order_by(latest_state.c.asset_id, latest_state.c.protocol, latest_state.c.port)
     ).all()
     last_backup = backups.latest(conn)
@@ -134,9 +141,11 @@ def _dashboard(conn: Connection) -> dict[str, Any]:
         "stale": last_success is None or now - last_success > STALE,
         "latest": latest,
         "next_run": conn.scalar(select(func.min(schedules.c.next_run_at)).where(schedules.c.enabled)),
-        "runner_seen": conn.scalar(select(func.max(tokens.c.last_used_at)).where(tokens.c.kind == "runner")),
-        "pending": _count(conn, notifications.c.status == "pending"),
-        "failed": _count(conn, notifications.c.status == "failed"),
+        "runner_seen": conn.scalar(
+            select(func.max(tokens.c.last_used_at)).where(tokens.c.kind == TokenKind.RUNNER)
+        ),
+        "pending": _count(conn, notifications.c.status == NotificationStatus.PENDING),
+        "failed": _count(conn, notifications.c.status == NotificationStatus.FAILED),
         "findings": open_findings,
         "exposed": exposed,
         "expected": conn.execute(select(expected_services).order_by(expected_services.c.asset_id)).all(),

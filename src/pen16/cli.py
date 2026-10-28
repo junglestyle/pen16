@@ -8,6 +8,7 @@ from alembic import command
 from alembic.config import Config as AlembicConfig
 
 from pen16 import backups, db, exposure, nmap, runner, tokens, worker
+from pen16.db import TokenKind
 
 
 def main() -> None:
@@ -54,7 +55,7 @@ def main() -> None:
         )
     elif args.command == "token":
         with db.connect().begin() as conn:
-            print(tokens.create(conn, "runner", args.name))
+            print(tokens.create(conn, TokenKind.RUNNER, args.name))
     elif args.command == "backed-up":
         with db.connect().begin() as conn:
             backups.record(conn, args.name, args.size_bytes)

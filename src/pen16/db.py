@@ -1,4 +1,5 @@
 import os
+from enum import StrEnum
 
 from sqlalchemy import (
     BigInteger,
@@ -8,6 +9,7 @@ from sqlalchemy import (
     DateTime,
     Engine,
     ForeignKey,
+    Identity,
     Integer,
     MetaData,
     PrimaryKeyConstraint,
@@ -20,6 +22,47 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import ARRAY, INET
 
 metadata = MetaData()
+
+
+class ObservationState(StrEnum):
+    OPEN = "open"
+    CLOSED = "closed"
+    FILTERED = "filtered"
+
+
+class FindingStatus(StrEnum):
+    OPEN = "open"
+    RESOLVED = "resolved"
+
+
+class JobStatus(StrEnum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class TokenKind(StrEnum):
+    RUNNER = "runner"
+
+
+class NotificationKind(StrEnum):
+    FINDING = "finding"
+    HEALTH = "health"
+
+
+class NotificationStatus(StrEnum):
+    PENDING = "pending"
+    DELIVERED = "delivered"
+    FAILED = "failed"
+
+
+def _one_of(column: str, names: type[StrEnum], constraint: str) -> CheckConstraint:
+    """The CHECK for a column holding a closed set of names, built from its StrEnum so the two can't drift."""
+    listed = ", ".join(f"'{name}'" for name in names)
+    return CheckConstraint(f"{column} IN ({listed})", name=constraint)
+
 
 assets = Table(
     "assets",
@@ -51,7 +94,7 @@ expected_services = Table(
 observations = Table(
     "observations",
     metadata,
-    Column("id", BigInteger, primary_key=True),
+    Column("id", BigInteger, Identity(always=True), primary_key=True),
     Column("asset_id", Text, ForeignKey("assets.id"), nullable=False),
     Column("address", INET, nullable=False),
     Column("protocol", Text, nullable=False),
@@ -65,14 +108,14 @@ observations = Table(
     Column("tool_version", Text, nullable=False),
     Column("parser_version", Text, nullable=False),
     Column("evidence_digest", Text, nullable=False),
-    CheckConstraint("state IN ('open', 'closed', 'filtered')", name="observation_state"),
+    _one_of("state", ObservationState, "observation_state"),
     UniqueConstraint("evidence_digest", "address", "protocol", "port", "vantage"),
 )
 
 findings = Table(
     "findings",
     metadata,
-    Column("id", BigInteger, primary_key=True),
+    Column("id", BigInteger, Identity(always=True), primary_key=True),
     Column("kind", Text, nullable=False),
     Column("asset_id", Text, ForeignKey("assets.id"), nullable=False),
     Column("protocol", Text, nullable=False),
@@ -83,7 +126,7 @@ findings = Table(
     Column("resolved_at", DateTime(timezone=True)),
     Column("resolution", Text),
     Column("last_observation_id", BigInteger, ForeignKey("observations.id"), nullable=False),
-    CheckConstraint("status IN ('open', 'resolved')", name="finding_status"),
+    _one_of("status", FindingStatus, "finding_status"),
     UniqueConstraint("kind", "asset_id", "protocol", "port", "vantage"),
 )
 
@@ -100,7 +143,7 @@ schedules = Table(
 jobs = Table(
     "jobs",
     metadata,
-    Column("id", BigInteger, primary_key=True),
+    Column("id", BigInteger, Identity(always=True), primary_key=True),
     Column("schedule", Text, ForeignKey("schedules.name")),
     Column("requester", Text, nullable=False),
     Column("reason", Text, nullable=False),
@@ -117,7 +160,7 @@ jobs = Table(
     Column("finished_at", DateTime(timezone=True)),
     Column("error", Text),
     Column("evidence_digest", Text),
-    CheckConstraint("status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')", name="job_status"),
+    _one_of("status", JobStatus, "job_status"),
 )
 
 tokens = Table(
@@ -130,31 +173,31 @@ tokens = Table(
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     Column("last_used_at", DateTime(timezone=True)),
     Column("revoked_at", DateTime(timezone=True)),
-    CheckConstraint("kind IN ('runner')", name="token_kind"),
+    _one_of("kind", TokenKind, "token_kind"),
 )
 
 notifications = Table(
     "notifications",
     metadata,
-    Column("id", BigInteger, primary_key=True),
+    Column("id", BigInteger, Identity(always=True), primary_key=True),
     Column("kind", Text, nullable=False),
     Column("title", Text, nullable=False),
     Column("body", Text, nullable=False),
-    Column("status", Text, nullable=False, server_default="pending"),
+    Column("status", Text, nullable=False, server_default=NotificationStatus.PENDING),
     Column("attempts", Integer, nullable=False, server_default="0"),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     Column("next_attempt_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     Column("delivered_at", DateTime(timezone=True)),
     Column("last_error", Text),
-    CheckConstraint("kind IN ('finding', 'health')", name="notification_kind"),
-    CheckConstraint("status IN ('pending', 'delivered', 'failed')", name="notification_status"),
+    _one_of("kind", NotificationKind, "notification_kind"),
+    _one_of("status", NotificationStatus, "notification_status"),
 )
 
 # One row per verified backup, written by deploy/pen16-backup through `pen16 backed-up`.
 backups = Table(
     "backups",
     metadata,
-    Column("id", BigInteger, primary_key=True),
+    Column("id", BigInteger, Identity(always=True), primary_key=True),
     Column("name", Text, nullable=False, unique=True),
     Column("size_bytes", BigInteger, nullable=False),
     Column("finished_at", DateTime(timezone=True), nullable=False, server_default=func.now()),

@@ -4,10 +4,10 @@ import secrets
 
 from sqlalchemy import Connection, func, insert, select, update
 
-from pen16.db import tokens
+from pen16.db import TokenKind, tokens
 
 
-def create(conn: Connection, kind: str, name: str) -> str:
+def create(conn: Connection, kind: TokenKind, name: str) -> str:
     """Create a token and return it. Only its hash is stored, so this is the one chance to see it."""
     token_id = secrets.token_hex(4)
     secret = secrets.token_urlsafe(32)
@@ -15,7 +15,7 @@ def create(conn: Connection, kind: str, name: str) -> str:
     return f"pen16_{token_id}_{secret}"
 
 
-def verify(conn: Connection, presented: str, kind: str) -> str | None:
+def verify(conn: Connection, presented: str, kind: TokenKind) -> str | None:
     """Return the token's ID if it's a live token of this kind, and record that it was used."""
     prefix, _, rest = presented.partition("_")
     token_id, _, secret = rest.partition("_")
