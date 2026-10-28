@@ -64,7 +64,4 @@ an org rule, it says so, and it wins.
 
 ## Known deviations
 
-Where pen16 doesn't follow the org standards yet. These are debt to pay down, not overrides: each one should go.
-
-- Shell: `make check` doesn't run shellcheck, which reports two findings in `lab/egress.sh:63`; `deploy/pen16-egress`
-  has no `.sh` name, so a `'*.sh'` glob would miss it.
+None. Where pen16 stops following an org rule, the deviation goes here as debt to pay down, not as an override.
