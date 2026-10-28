@@ -42,6 +42,8 @@ an org rule, it says so, and it wins.
 
 - `sudo make lab` proves the runner egress policy in network namespaces. It needs root and nmap, so it runs as its
   own CI job.
+- `make image` builds the image and checks that nmap runs in it. It needs Docker and the network, so it's also its
+  own CI job.
 
 ## Privacy
 
