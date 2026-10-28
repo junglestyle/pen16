@@ -164,7 +164,7 @@ backups = Table(
 def database_url() -> str:
     url = os.environ.get("PEN16_DATABASE_URL")
     if not url:
-        raise RuntimeError("PEN16_DATABASE_URL is not set")
+        raise SystemExit("PEN16_DATABASE_URL is not set (see examples/pen16.env)")
     return url
 
 

@@ -1,7 +1,7 @@
 """The owner dashboard. tailscale serve puts it on the tailnet and names the visitor in a header."""
 
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
+from importlib.resources import files
 from typing import Annotated, Any
 from urllib.parse import urlsplit
 
@@ -24,7 +24,7 @@ from pen16.db import (
 )
 
 STALE = timedelta(hours=48)
-templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
+templates = Jinja2Templates(directory=str(files("pen16") / "templates"))
 
 
 def create(engine: Engine, settings: Config) -> FastAPI:

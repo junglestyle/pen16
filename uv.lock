@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = "==3.12.*"
 
 [[package]]
@@ -355,22 +355,22 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "alembic" },
-    { name = "defusedxml" },
-    { name = "fastapi" },
-    { name = "httpx" },
-    { name = "jinja2" },
-    { name = "psycopg", extras = ["binary"] },
-    { name = "python-multipart" },
-    { name = "sqlalchemy" },
-    { name = "uvicorn" },
+    { name = "alembic", specifier = ">=1.20" },
+    { name = "defusedxml", specifier = ">=0.7" },
+    { name = "fastapi", specifier = ">=0.162" },
+    { name = "httpx", specifier = ">=0.28" },
+    { name = "jinja2", specifier = ">=3.1" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.3" },
+    { name = "python-multipart", specifier = ">=0.0.32" },
+    { name = "sqlalchemy", specifier = ">=2.1" },
+    { name = "uvicorn", specifier = ">=0.54" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "mypy" },
-    { name = "pytest" },
-    { name = "ruff" },
+    { name = "mypy", specifier = ">=2.4" },
+    { name = "pytest", specifier = ">=9.1" },
+    { name = "ruff", specifier = ">=0.17" },
 ]
 
 [[package]]

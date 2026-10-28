@@ -1,5 +1,6 @@
 import logging
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy import Connection, Row, func, insert, select, union, update
 
@@ -62,7 +63,7 @@ def run_due_schedules(conn: Connection, scope: Scope) -> None:
         conn.execute(update(schedules).where(schedules.c.name == schedule.name).values(next_run_at=next_run))
 
 
-def claim(conn: Connection, runner: str) -> Row | None:  # type: ignore[type-arg]
+def claim(conn: Connection, runner: str) -> Row[Any] | None:
     """Hand the runner the oldest queued job. Anything it was already running was lost in a restart."""
     abandoned = conn.execute(
         select(jobs).where(jobs.c.status == "running", jobs.c.runner == runner).with_for_update()
@@ -140,7 +141,7 @@ def expire(conn: Connection) -> None:
         _finish_failed(conn, job, "no runner claimed it")
 
 
-def _running(conn: Connection, job_id: int, runner: str) -> Row:  # type: ignore[type-arg]
+def _running(conn: Connection, job_id: int, runner: str) -> Row[Any]:
     job = conn.execute(
         select(jobs)
         .where(
@@ -156,7 +157,7 @@ def _running(conn: Connection, job_id: int, runner: str) -> Row:  # type: ignore
     return job
 
 
-def _retry_or_fail(conn: Connection, job: Row, error: str) -> None:  # type: ignore[type-arg]
+def _retry_or_fail(conn: Connection, job: Row[Any], error: str) -> None:
     if job.attempts < MAX_ATTEMPTS:
         log.warning("job %s: %s; retrying", job.id, error)
         conn.execute(
@@ -168,7 +169,7 @@ def _retry_or_fail(conn: Connection, job: Row, error: str) -> None:  # type: ign
     _finish_failed(conn, job, error)
 
 
-def _finish_failed(conn: Connection, job: Row, error: str) -> None:  # type: ignore[type-arg]
+def _finish_failed(conn: Connection, job: Row[Any], error: str) -> None:
     log.warning("job %s failed: %s", job.id, error)
     conn.execute(
         update(jobs).where(jobs.c.id == job.id).values(status="failed", finished_at=func.now(), error=error)

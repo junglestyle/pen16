@@ -32,9 +32,5 @@ def verify(conn: Connection, presented: str, kind: str) -> str | None:
     return token_id
 
 
-def revoke(conn: Connection, token_id: str) -> None:
-    conn.execute(update(tokens).where(tokens.c.id == token_id).values(revoked_at=func.now()))
-
-
 def _hash(secret: str) -> str:
     return hashlib.sha256(secret.encode()).hexdigest()

@@ -45,7 +45,8 @@ an org rule, it says so, and it wins.
 
 ## Privacy
 
-- Config shape lives in `examples/`. Deployment config, addresses, and real network evidence live in the private
+- Config shape lives in `examples/`: `pen16.toml` for the deployment config and `pen16.env`, in place of
+  `.env.example`, for the environment. Deployment config, addresses, and real network evidence live in the private
   deployment repository. Examples and fixtures are fictional.
 
 ## Docs
@@ -65,17 +66,10 @@ Where pen16 doesn't follow the org standards yet. These are debt to pay down, no
 
 - Tooling: it builds with `uv_build`, not hatchling, and mypy checks `tests` too.
 - The `Dockerfile` installs uv with `pip`.
-- Typing: the four `# type: ignore[type-arg]` in `jobs.py` don't say why they're safe.
-- `web.py` loads its templates from `Path(__file__).parent`, not `importlib.resources`.
-- Structure: `tokens.revoke` has no caller.
-- Privacy: `examples/` has no env file. `db.py` and `worker.py` read `PEN16_DATABASE_URL`, `PEN16_NTFY_URL` and
-  `PEN16_NTFY_TOKEN`, and no example or doc names them.
 - SQL: surrogate keys are `BIGSERIAL`, SQLAlchemy's default for a `BigInteger` primary key, not identity columns.
 - Data modeling: statuses and kinds are literals with a `CHECK`, not `StrEnum`s.
 - Testing: the code doesn't refuse a non-local test database, and the test fixture downgrades whatever
   `PEN16_DATABASE_URL` names.
-- Errors: a missing `PEN16_DATABASE_URL` raises `RuntimeError`, not `SystemExit`.
-- Dependencies: no dependency has a lower bound.
 - Running it: CI's `image` job isn't in `make check`, and nothing here says so.
 - Containers: `worker` and `runner` don't handle SIGTERM and don't run with `init: true`.
 - Containers: `deploy/compose.yaml` sets no `logging:`.

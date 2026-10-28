@@ -46,7 +46,9 @@ def stamp(process: Path) -> str:
 
 def run_forever() -> None:
     scope = config.load().scope
-    url = os.environ["PEN16_LISTENER_URL"]
+    url = os.environ.get("PEN16_LISTENER_URL")
+    if not url:
+        raise SystemExit("PEN16_LISTENER_URL is not set (deploy/compose.yaml sets it for the runner)")
     token = Path(os.environ.get("PEN16_RUNNER_TOKEN_FILE", "/etc/pen16/runner.token")).read_text().strip()
     marker = Path(os.environ.get("PEN16_EGRESS_MARKER", "/run/pen16-egress/ready"))
     with httpx.Client(base_url=url, headers={"Authorization": f"Bearer {token}"}, timeout=30) as client:

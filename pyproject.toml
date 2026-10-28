@@ -5,15 +5,15 @@ description = "Low-touch security dashboard for a homelab and home network"
 license = "MIT"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "alembic",
-    "defusedxml",
-    "fastapi",
-    "httpx",
-    "jinja2",
-    "psycopg[binary]",
-    "python-multipart",
-    "sqlalchemy",
-    "uvicorn",
+    "alembic>=1.20",
+    "defusedxml>=0.7",
+    "fastapi>=0.162",
+    "httpx>=0.28",
+    "jinja2>=3.1",
+    "psycopg[binary]>=3.3",
+    "python-multipart>=0.0.32",
+    "sqlalchemy>=2.1",
+    "uvicorn>=0.54",
 ]
 
 [project.scripts]
@@ -21,9 +21,9 @@ pen16 = "pen16.cli:main"
 
 [dependency-groups]
 dev = [
-    "mypy",
-    "pytest",
-    "ruff",
+    "mypy>=2.4",
+    "pytest>=9.1",
+    "ruff>=0.17",
 ]
 
 [build-system]
