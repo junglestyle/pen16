@@ -63,13 +63,10 @@ an org rule, it says so, and it wins.
 
 Where pen16 doesn't follow the org standards yet. These are debt to pay down, not overrides: each one should go.
 
-- SQLAlchemy and alembic have no ADR in [stack.md](stack.md): ADR-002 picks Postgres, but not the ORM or the
-  migration tool. With that ADR, the ORM and `NNN_name.sql` rules are met.
 - Tooling: it builds with `uv_build`, not hatchling, and mypy checks `tests` too.
 - The `Dockerfile` installs uv with `pip`.
 - Typing: the four `# type: ignore[type-arg]` in `jobs.py` don't say why they're safe.
 - `web.py` loads its templates from `Path(__file__).parent`, not `importlib.resources`.
-- Dependencies: FastAPI has no ADR in [stack.md](stack.md), only a row in its table.
 - Structure: `tokens.revoke` has no caller.
 - Privacy: `examples/` has no env file. `db.py` and `worker.py` read `PEN16_DATABASE_URL`, `PEN16_NTFY_URL` and
   `PEN16_NTFY_TOKEN`, and no example or doc names them.
