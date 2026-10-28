@@ -35,7 +35,7 @@ The first release delivers the dashboard and internal monitoring loop. Lightweig
 
 ## Running it
 
-You need [uv](https://docs.astral.sh/uv/) and Docker.
+You need [uv](https://docs.astral.sh/uv/), Docker, and [shellcheck](https://www.shellcheck.net/).
 
 ```sh
 make db      # throwaway Postgres for the checks

@@ -10,7 +10,7 @@ from urllib.parse import urlsplit
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import Connection, Engine, func, select
+from sqlalchemy import ColumnElement, Connection, Engine, func, select
 
 from pen16 import backups, compliance, config, db, evidence, exposure, jobs
 from pen16.config import Config
@@ -219,7 +219,7 @@ def _dashboard(conn: Connection) -> dict[str, Any]:
     }
 
 
-def _count(conn: Connection, condition: Any) -> int:
+def _count(conn: Connection, condition: ColumnElement[bool]) -> int:
     return int(conn.scalar(select(func.count()).select_from(notifications).where(condition)) or 0)
 
 

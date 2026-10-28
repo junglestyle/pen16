@@ -16,6 +16,7 @@ lint:
 	uv run ruff format --check
 	uv run ruff check
 	uv run mypy
+	{ git ls-files '*.sh'; git ls-files | xargs grep -l '^#!/usr/bin/env bash'; } | sort -u | xargs shellcheck
 
 test:
 	PEN16_DATABASE_URL=$(TEST_DATABASE_URL) uv run pytest

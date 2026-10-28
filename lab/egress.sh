@@ -58,18 +58,18 @@ ip netns exec "$runner" ping -c1 -W1 192.0.2.30 >/dev/null 2>&1 || true
 packets() { ip netns exec "$lan" nft list counter netdev lab "$1" | awk '/packets/ { print $2 }'; }
 fail=0
 expect() {
-	local name=$1 condition=$2 count
+	local name=$1 test=$2 want=$3 count
 	count=$(packets "$name")
-	if (( count $condition )); then
+	if [ "$count" "$test" "$want" ]; then
 		echo "ok   $name: $count packets"
 	else
-		echo "FAIL $name: $count packets, expected $condition"
+		echo "FAIL $name: $count packets, expected $test $want"
 		fail=1
 	fi
 }
-expect target "> 0"
-expect api_allowed "> 0"
-expect excluded "== 0"
-expect offscope "== 0"
-expect api_other "== 0"
+expect target -gt 0
+expect api_allowed -gt 0
+expect excluded -eq 0
+expect offscope -eq 0
+expect api_other -eq 0
 exit "$fail"
