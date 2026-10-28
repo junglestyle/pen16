@@ -42,8 +42,8 @@ make db      # throwaway Postgres for the checks
 make check   # everything CI runs
 ```
 
-To run it on a Debian 13 host, put a deployment config like [examples/pen16.toml](examples/pen16.toml) and its
-secrets in `/etc/pen16`, then start [deploy/compose.yaml](deploy/compose.yaml) and the
+To run it on a Debian 13 host, put a deployment config like [examples/pen16.toml](examples/pen16.toml) and
+secrets like [examples/pen16.env](examples/pen16.env) in `/etc/pen16`, then start [deploy/compose.yaml](deploy/compose.yaml) and the
 [pen16-egress](deploy/pen16-egress) service. For backups, mount off-host storage at `/mnt/pen16-backup` and
 enable the [pen16-backup](deploy/pen16-backup) timer. For compliance, serve the intake on the tailnet
 (`tailscale serve --bg --https=8444 http://127.0.0.1:8444`), import the DISA STIG's manual XCCDF with
