@@ -21,9 +21,11 @@ while read -r datastream profile tailoring; do
 	[[ -z "$datastream" || "$datastream" == \#* ]] && continue
 	work="$state/$(basename "$datastream" .xml)"
 	mkdir -p "$work"
-	rm -f "$work"/arf.xml* "$work"/remediation.yml*
-	args=(xccdf eval --profile "$profile" --results-arf "$work/arf.xml")
-	[[ -n "$tailoring" ]] && args+=(--tailoring-file "$tailoring")
+	rm -f "$work"/arf.xml* "$work"/results.xml "$work"/remediation.yml*
+	tailor=()
+	[[ -n "$tailoring" ]] && tailor=(--tailoring-file "$tailoring")
+	args=(xccdf eval --profile "$profile" "${tailor[@]}")
+	args+=(--results-arf "$work/arf.xml" --results "$work/results.xml")
 	status=0
 	oscap "${args[@]}" "$datastream" > "$work/oscap.log" 2>&1 || status=$?
 	# 0: every rule passed. 2: at least one failed, which is a result like any other. Anything else is an error.
@@ -32,7 +34,11 @@ while read -r datastream profile tailoring; do
 		failed=1
 		continue
 	fi
-	oscap xccdf generate fix --fix-type ansible --output "$work/remediation.yml" "$work/arf.xml"
+	# The playbook comes from the plain XCCDF results, with the tailoring again: OpenSCAP 1.3 can't reread an ARF
+	# that embeds a tailoring file. Name the result too, or oscap can pick none and write a playbook with no tasks.
+	result_id=$(oscap info "$work/arf.xml" | sed -n 's/^[[:space:]]*Result ID: //p' | head -n 1)
+	oscap xccdf generate fix --fix-type ansible "${tailor[@]}" --result-id "$result_id" \
+		--output "$work/remediation.yml" "$work/results.xml"
 	gzip -k "$work/arf.xml" "$work/remediation.yml"
 	if ! curl --fail-with-body --silent --show-error --max-time 300 --retry 5 --retry-connrefused \
 		--header @"$conf/auth-header" \
