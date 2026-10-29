@@ -7,23 +7,24 @@ from typing import Any
 
 from defusedxml import ElementTree
 
+from pen16.db import RuleResult, Severity
+
 PARSER_VERSION = "1"
 
 ARF = "{http://scap.nist.gov/schema/asset-reporting-format/1.1}"
 XCCDF = "{http://checklists.nist.gov/xccdf/1.2}"
 
 # Outcomes that count toward the pass rate. "notselected" rules weren't in the profile, so they aren't kept.
-PASSING = ("pass", "fixed")
-FAILING = ("fail", "error")
-SEVERITIES = ("high", "medium", "low", "info", "unknown")
+PASSING = (RuleResult.PASS, RuleResult.FIXED)
+FAILING = (RuleResult.FAIL, RuleResult.ERROR)
 
 
 @dataclass(frozen=True)
 class Rule:
     id: str
-    result: str
+    result: RuleResult
     title: str
-    severity: str
+    severity: Severity
     rationale: str
     vuln_id: str | None
     stig_rule_id: str | None
@@ -85,8 +86,15 @@ def parse(raw: bytes) -> Result:
         severity = (definition.get("severity") if definition is not None else None) or outcome.get(
             "severity", "unknown"
         )
+        known = severity in Severity.__members__.values()
         rules.append(
-            _rule(rule_id, result, severity if severity in SEVERITIES else "unknown", definition, labels)
+            _rule(
+                rule_id,
+                RuleResult(result),
+                Severity(severity) if known else Severity.UNKNOWN,
+                definition,
+                labels,
+            )
         )
     return Result(
         benchmark_id=benchmark.get("id", benchmark_id),
@@ -101,7 +109,9 @@ def parse(raw: bytes) -> Result:
     )
 
 
-def _rule(rule_id: str, result: str, severity: str, definition: Any, labels: dict[str, str]) -> Rule:
+def _rule(
+    rule_id: str, result: RuleResult, severity: Severity, definition: Any, labels: dict[str, str]
+) -> Rule:
     """Sort a rule's references by what the benchmark says each source is: SSG labels its reference hrefs."""
     found: dict[str, list[str]] = {"stigid": [], "stigref": [], "vuln": [], "srg": [], "cci": [], "nist": []}
     for ref in definition.findall(f"{XCCDF}reference") if definition is not None else []:

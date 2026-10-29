@@ -59,6 +59,25 @@ class NotificationStatus(StrEnum):
     FAILED = "failed"
 
 
+class Severity(StrEnum):
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+    INFO = "info"
+    UNKNOWN = "unknown"
+
+
+class RuleResult(StrEnum):
+    PASS = "pass"  # noqa: S105  # a rule result, not a password
+    FAIL = "fail"
+    ERROR = "error"
+    UNKNOWN = "unknown"
+    NOTAPPLICABLE = "notapplicable"
+    NOTCHECKED = "notchecked"
+    INFORMATIONAL = "informational"
+    FIXED = "fixed"
+
+
 def _one_of(column: str, names: type[StrEnum], constraint: str) -> CheckConstraint:
     """The CHECK for a column holding a closed set of names, built from its StrEnum so the two can't drift."""
     listed = ", ".join(f"'{name}'" for name in names)
@@ -244,7 +263,7 @@ compliance_rules = Table(
     Column("nist", ARRAY(Text), nullable=False),
     Column("rationale", Text, nullable=False),
     PrimaryKeyConstraint("benchmark_id", "rule_id"),
-    CheckConstraint("severity IN ('high', 'medium', 'low', 'info', 'unknown')", name="compliance_severity"),
+    _one_of("severity", Severity, "compliance_severity"),
 )
 
 compliance_results = Table(
@@ -254,11 +273,7 @@ compliance_results = Table(
     Column("rule_id", Text, nullable=False),
     Column("result", Text, nullable=False),
     PrimaryKeyConstraint("scan_id", "rule_id"),
-    CheckConstraint(
-        "result IN ('pass', 'fail', 'error', 'unknown', 'notapplicable', 'notchecked', 'informational', "
-        "'fixed')",
-        name="compliance_result",
-    ),
+    _one_of("result", RuleResult, "compliance_result"),
 )
 
 # Owner decisions: a rule that fails on purpose on one host. It stays failing; the reason travels with it.

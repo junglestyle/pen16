@@ -4,6 +4,7 @@ import json
 import os
 from datetime import UTC, datetime, timedelta
 from importlib.resources import files
+from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import urlsplit
 
@@ -94,7 +95,7 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
 
     @app.post("/compliance/waive")
     def waive(
-        login: Owner,
+        _login: Owner,
         asset_id: Annotated[str, Form()],
         rule_id: Annotated[str, Form()],
         reason: Annotated[str, Form()],
@@ -108,14 +109,14 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
 
     @app.post("/compliance/unwaive")
     def unwaive(
-        login: Owner, asset_id: Annotated[str, Form()], rule_id: Annotated[str, Form()]
+        _login: Owner, asset_id: Annotated[str, Form()], rule_id: Annotated[str, Form()]
     ) -> RedirectResponse:
         with engine.begin() as conn:
             compliance.unwaive(conn, asset_id, rule_id)
         return _back("#compliance")
 
     @app.get("/compliance/{scan_id}/checklist.cklb")
-    def checklist(login: Owner, scan_id: int) -> Response:
+    def checklist(_login: Owner, scan_id: int) -> Response:
         try:
             with engine.connect() as conn:
                 name, document = compliance.checklist(conn, scan_id)
@@ -126,7 +127,7 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
         )
 
     @app.get("/compliance/{scan_id}/playbook.yml")
-    def playbook(login: Owner, scan_id: int) -> Response:
+    def playbook(_login: Owner, scan_id: int) -> Response:
         with engine.connect() as conn:
             scan = conn.execute(select(compliance_scans).where(compliance_scans.c.id == scan_id)).first()
         if scan is None or scan.playbook_digest is None:
