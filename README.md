@@ -52,6 +52,10 @@ enable the [pen16-backup](deploy/pen16-backup) timer. For compliance, serve the 
 redistributing it. A private deployment repository with Ansible normally does all of this; the
 [architecture](docs/ARCHITECTURE.md#deployment-and-state-ownership) says what it owns.
 
+Before upgrading to a commit with new migrations, test them against a copy of the last nightly backup:
+[deploy/test-migration.sh](deploy/test-migration.sh) `pen16.dump`, from that commit's checkout. It restores the dump into
+a throwaway Postgres, migrates it up, down and up again, and fails if a table loses rows.
+
 ## Contributing
 
 Start with [AGENTS.md](AGENTS.md) and the [coding standards](docs/standards.md).
