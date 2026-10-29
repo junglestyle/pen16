@@ -1,4 +1,5 @@
-"""Background work: start due scheduled scans, expire late jobs, watch backups, and deliver notifications."""
+"""Background work: start due scheduled scans, expire late jobs, watch backups and compliance results, and
+deliver notifications."""
 
 import logging
 import os
@@ -6,7 +7,7 @@ import time
 
 import httpx
 
-from pen16 import backups, config, db, jobs, notify
+from pen16 import backups, compliance, config, db, jobs, notify
 
 log = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ def run_forever() -> None:
                 jobs.run_due_schedules(conn, settings.scope)
                 jobs.expire(conn)
                 backups.check(conn)
+                compliance.check(conn)
             if url:
                 notify.deliver_due(engine, client, url, token, settings.dashboard_url)
             time.sleep(TICK)

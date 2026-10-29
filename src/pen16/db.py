@@ -130,7 +130,7 @@ tokens = Table(
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     Column("last_used_at", DateTime(timezone=True)),
     Column("revoked_at", DateTime(timezone=True)),
-    CheckConstraint("kind IN ('runner')", name="token_kind"),
+    CheckConstraint("kind IN ('runner', 'compliance')", name="token_kind"),
 )
 
 notifications = Table(
@@ -158,6 +158,105 @@ backups = Table(
     Column("name", Text, nullable=False, unique=True),
     Column("size_bytes", BigInteger, nullable=False),
     Column("finished_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+)
+
+
+# Compliance: one row per OpenSCAP result a host pushed to the intake (FR-14). The ARF and the playbook the
+# host generated from it are evidence files named by digest.
+compliance_scans = Table(
+    "compliance_scans",
+    metadata,
+    Column("id", BigInteger, primary_key=True),
+    Column("asset_id", Text, ForeignKey("assets.id"), nullable=False),
+    Column("benchmark_id", Text, nullable=False),
+    Column("benchmark_version", Text, nullable=False),
+    Column("profile_id", Text, nullable=False),
+    Column("profile_title", Text, nullable=False),
+    Column("started_at", DateTime(timezone=True), nullable=False),
+    Column("finished_at", DateTime(timezone=True), nullable=False),
+    Column("passed", Integer, nullable=False),
+    Column("failed", Integer, nullable=False),
+    Column("tool_version", Text, nullable=False),
+    Column("parser_version", Text, nullable=False),
+    Column("evidence_digest", Text, nullable=False),
+    Column("playbook_digest", Text),
+    Column("received_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    UniqueConstraint("asset_id", "evidence_digest"),
+)
+
+# What a benchmark says about each rule, refreshed from every result that carries it.
+compliance_rules = Table(
+    "compliance_rules",
+    metadata,
+    Column("benchmark_id", Text, nullable=False),
+    Column("rule_id", Text, nullable=False),
+    Column("title", Text, nullable=False),
+    Column("severity", Text, nullable=False),
+    Column("vuln_id", Text),
+    Column("stig_rule_id", Text),
+    Column("stig_ids", ARRAY(Text), nullable=False),
+    Column("srgs", ARRAY(Text), nullable=False),
+    Column("ccis", ARRAY(Text), nullable=False),
+    Column("nist", ARRAY(Text), nullable=False),
+    Column("rationale", Text, nullable=False),
+    PrimaryKeyConstraint("benchmark_id", "rule_id"),
+    CheckConstraint("severity IN ('high', 'medium', 'low', 'info', 'unknown')", name="compliance_severity"),
+)
+
+compliance_results = Table(
+    "compliance_results",
+    metadata,
+    Column("scan_id", BigInteger, ForeignKey("compliance_scans.id", ondelete="CASCADE"), nullable=False),
+    Column("rule_id", Text, nullable=False),
+    Column("result", Text, nullable=False),
+    PrimaryKeyConstraint("scan_id", "rule_id"),
+    CheckConstraint(
+        "result IN ('pass', 'fail', 'error', 'unknown', 'notapplicable', 'notchecked', 'informational', "
+        "'fixed')",
+        name="compliance_result",
+    ),
+)
+
+# Owner decisions: a rule that fails on purpose on one host. It stays failing; the reason travels with it.
+compliance_waivers = Table(
+    "compliance_waivers",
+    metadata,
+    Column("asset_id", Text, ForeignKey("assets.id"), nullable=False),
+    Column("rule_id", Text, nullable=False),
+    Column("reason", Text, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    PrimaryKeyConstraint("asset_id", "rule_id"),
+)
+
+# DISA STIG releases, imported from the manual XCCDF in DISA's zip. A checklist lists every rule of the STIG,
+# with the status the matching SCAP rules give it.
+stigs = Table(
+    "stigs",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column("title", Text, nullable=False),
+    Column("version", Text, nullable=False),
+    Column("release", Text, nullable=False),
+    Column("target_key", Text, nullable=False),
+    Column("imported_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+)
+
+stig_rules = Table(
+    "stig_rules",
+    metadata,
+    Column("stig_id", Text, ForeignKey("stigs.id"), nullable=False),
+    Column("vuln_id", Text, nullable=False),
+    Column("rule_id", Text, nullable=False),
+    Column("rule_version", Text, nullable=False),
+    Column("title", Text, nullable=False),
+    Column("severity", Text, nullable=False),
+    Column("weight", Text, nullable=False),
+    Column("group_title", Text, nullable=False),
+    Column("discussion", Text, nullable=False),
+    Column("check_content", Text, nullable=False),
+    Column("fix_text", Text, nullable=False),
+    Column("ccis", ARRAY(Text), nullable=False),
+    PrimaryKeyConstraint("stig_id", "vuln_id"),
 )
 
 

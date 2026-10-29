@@ -7,6 +7,7 @@
 | Harmful or escaped scan | Fixed profiles, exclusions, deadlines, host egress rules | Raw-packet scope and cancellation tests |
 | Stolen API token | Resource permissions, separate runner listener, tunnel ACLs | Denied owner/cross-runner actions |
 | Hostile evidence | Bounded parsing, escaped UI, fixed commands | Malformed-output fixtures |
+| Configuration drift on hosts | Weekly SCAP evaluation against pinned content; regressions alert | Regression and stale-host tests |
 | Silent failure or lost state | Health alerts, delivery retries, encrypted backups | Failure and restore demos |
 
 ## Scan safety
@@ -23,9 +24,9 @@ M3 uses a dedicated runner listener. Tunnel ACLs allow only that listener, witho
 
 Serve the dashboard only over Tailscale, with automatic certificate renewal. The owner is identified by Tailscale identity headers and an allowed login; pen16 stores no passwords. Reject identity headers that don't come from the local proxy, and use CSRF protection on state-changing forms.
 
-API tokens are random, hashed, shown once, and individually revocable. Store runner tokens in restricted files. Replace compromised credentials and re-enroll affected runners.
+API tokens are random, hashed, shown once, and individually revocable. Store runner and compliance tokens in restricted files. Compliance is push-only: a host's token uploads results for that host and nothing else, through an intake that serves nothing else, and pen16 holds no credential that reaches a host. Replace compromised credentials and re-enroll affected runners.
 
-Disable parser external resources and XML entities; escape output and generate storage paths. Limit uploads to 50 MiB compressed/250 MiB expanded; bound feed downloads. Treat scan/feed prose as data, including in assistant clients.
+Disable parser external resources and XML entities; escape output and generate storage paths. Limit uploads, including ARF results and their playbooks, to 50 MiB compressed/250 MiB expanded; bound feed downloads. Treat scan/feed prose as data, including in assistant clients.
 
 Keep sops/age secrets in the private deployment repository. Decrypt on the Ansible controller; keep the age key off the scanner host. Restrict runtime files and omit credentials/raw evidence from logs and alerts.
 

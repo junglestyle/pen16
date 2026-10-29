@@ -12,6 +12,10 @@ from pen16.scope import Scope
 FIXTURES = Path(__file__).parent / "fixtures"
 LAB_SCAN = FIXTURES / "nmap-lab.xml"
 CLOSED_SCAN = FIXTURES / "nmap-lab-closed.xml"
+# A real RHEL 9 STIG evaluation (SSG 0.1.82, OpenSCAP 1.3.9) of a UBI 9 filesystem, trimmed to 20 rules, with
+# the target's facts and OVAL results removed. The DISA RHEL 9 STIG V2R9 manual benchmark is trimmed to match.
+STIG_RESULT = FIXTURES / "arf-rhel9-stig.xml"
+DISA_STIG = FIXTURES / "disa-rhel9-stig-xccdf.xml"
 
 
 @pytest.fixture(scope="session")
@@ -38,7 +42,8 @@ def committed(engine: Engine) -> Iterator[Engine]:
         connection.execute(
             text(
                 "TRUNCATE assets, bindings, expected_services, observations, findings, jobs, tokens, "
-                "notifications, backups CASCADE"
+                "notifications, backups, compliance_scans, compliance_rules, compliance_results, "
+                "compliance_waivers, stigs, stig_rules CASCADE"
             )
         )
 

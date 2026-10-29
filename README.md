@@ -18,6 +18,9 @@ A security dashboard for your homelab and home network. See what’s exposed, wh
 - **Show your attack surface.** Browse assets, services, changes, and evidence in one dashboard.
 - **Catch unexpected exposure.** Compare reachable services with what you intended, inside the network and from an external probe.
 - **Surface relevant threats.** Connect new advisories and known exploitation to your software, with source links.
+- **Hold your hosts to a STIG.** Each host evaluates itself with OpenSCAP and pushes the result. See its pass rate
+  and failing rules, waive what fails on purpose, and download a STIG Viewer checklist and an Ansible playbook for
+  the fixes.
 - **Check your fixes.** Request a bounded verification and see what the scanner actually observed.
 - **Work with your assistant.** Give an assistant such as Hermes restricted API access to read status and request approved scans.
 - **Stay out of your way.** Run scheduled checks, handle routine housekeeping, and alert on useful changes or monitoring failures.
@@ -42,7 +45,10 @@ make check   # everything CI runs
 To run it on a Debian 13 host, put a deployment config like [examples/pen16.toml](examples/pen16.toml) and its
 secrets in `/etc/pen16`, then start [deploy/compose.yaml](deploy/compose.yaml) and the
 [pen16-egress](deploy/pen16-egress) service. For backups, mount off-host storage at `/mnt/pen16-backup` and
-enable the [pen16-backup](deploy/pen16-backup) timer. The image builds on the host, because nmap's license limits
+enable the [pen16-backup](deploy/pen16-backup) timer. For compliance, serve the intake on the tailnet
+(`tailscale serve --bg --https=8444 http://127.0.0.1:8444`), import the DISA STIG's manual XCCDF with
+`pen16 stig-import`, and install [deploy/compliance](deploy/compliance) on each host with a token from
+`pen16 token --kind compliance <host>`. The image builds on the host, because nmap's license limits
 redistributing it. A private deployment repository with Ansible normally does all of this; the
 [architecture](docs/ARCHITECTURE.md#deployment-and-state-ownership) says what it owns.
 

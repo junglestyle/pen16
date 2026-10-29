@@ -19,9 +19,9 @@ def expand(compressed: bytes) -> bytes:
     return raw
 
 
-def store(directory: Path, raw: bytes, compressed: bytes) -> Path:
+def store(directory: Path, raw: bytes, compressed: bytes, suffix: str = ".xml.gz") -> Path:
     """Write raw evidence durably, named by the digest of its uncompressed content. Rewriting is a no-op."""
-    path = directory / f"{hashlib.sha256(raw).hexdigest()}.xml.gz"
+    path = directory / f"{hashlib.sha256(raw).hexdigest()}{suffix}"
     if path.exists():
         return path
     partial = path.with_suffix(".partial")
@@ -31,3 +31,9 @@ def store(directory: Path, raw: bytes, compressed: bytes) -> Path:
         os.fsync(file.fileno())
     partial.rename(path)
     return path
+
+
+def read(directory: Path, digest: str, suffix: str = ".xml.gz") -> bytes:
+    """Read back stored evidence, uncompressed. Digests come from the database, never from a request."""
+    with gzip.open(directory / f"{digest}{suffix}") as file:
+        return file.read()

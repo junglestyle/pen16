@@ -9,6 +9,7 @@
 | State | PostgreSQL 16, SQLAlchemy Core, Alembic |
 | Evidence | Immutable compressed files |
 | Scanner | Pinned nmap, serial pull runner |
+| Compliance | OpenSCAP on each host, pinned SCAP Security Guide content, push to an intake |
 | Deployment | Docker Compose, Ansible, Debian 13 |
 | Network boundary | Host-managed nftables netdev egress |
 | Remote transport | Tailscale, separate runner listener |
@@ -46,3 +47,7 @@ The org default is raw SQL through psycopg and numbered `NNN_name.sql` migration
 ## ADR-007: FastAPI and uvicorn for the dashboard and listener
 
 The dashboard, the runner listener, and the versioned API are all HTTP, and each one checks who is calling before it does anything. FastAPI gives the owner check and the runner token check as dependencies every route must pass, validates uploads at the trust edge, parses forms, and produces the OpenAPI schema FR-10 publishes with its permissions. uvicorn serves it and handles SIGTERM. Routes stay synchronous functions; the framework runs them off its event loop, so the rest of the code needs no async. The stdlib's server has none of the validation or form handling, and a sync framework would need a separate validation layer and schema generator.
+
+## ADR-008: OpenSCAP in push mode with pinned SCAP Security Guide content
+
+Host compliance uses OpenSCAP and the ComplianceAsCode SCAP Security Guide: the common open content for automated DISA STIG checks. It carries STIG, SRG, CCI and NIST 800-53 references per rule, so a checklist and a pass rate come out of one result. Each host runs `oscap` itself and pushes the ARF, so pen16 holds no SSH keys or accounts on the hosts it reports on; pulling over SSH would make pen16 the most valuable credential on the network. The content is a pinned upstream release, verified by checksum and bumped like any other pin, because distribution packages lag new releases and vary by host. Tailoring files and custom content live in the deployment repository with the hosts they apply to. Alternatives: Lynis or a CIS-CAT agent report without STIG mapping or a standard result format, and agent platforms such as Wazuh bring a server to run and patch.

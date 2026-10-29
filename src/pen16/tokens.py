@@ -32,6 +32,11 @@ def verify(conn: Connection, presented: str, kind: str) -> str | None:
     return token_id
 
 
+def name(conn: Connection, token_id: str) -> str:
+    """The name a token was created with: for a compliance token, the host it speaks for."""
+    return str(conn.scalar(select(tokens.c.name).where(tokens.c.id == token_id)))
+
+
 def revoke(conn: Connection, token_id: str) -> None:
     conn.execute(update(tokens).where(tokens.c.id == token_id).values(revoked_at=func.now()))
 

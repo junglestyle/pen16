@@ -52,9 +52,12 @@ live=$("${compose[@]}" exec -T db psql -U pen16 -d pen16 -tAc "$query")
 restored=$(docker exec "$scratch" psql -U pen16 -d pen16 -tAc "$query")
 [[ -n "$restored" && "$restored" == "$live" ]] || fail "restored schema [$restored] isn't the live [$live]"
 
-docker exec "$scratch" psql -U pen16 -d pen16 -tAc \
-	'select distinct evidence_digest from jobs where evidence_digest is not null' | sort > "$work/wanted"
-tar -tzf "$work/evidence.tgz" | sed -n "s|^$(basename "$evidence")/\([0-9a-f]*\)\.xml\.gz$|\1|p" | sort > "$work/held"
+docker exec "$scratch" psql -U pen16 -d pen16 -tAc "
+	select evidence_digest || '.xml.gz' from jobs where evidence_digest is not null
+	union select evidence_digest || '.xml.gz' from compliance_scans
+	union select playbook_digest || '.yml.gz' from compliance_scans where playbook_digest is not null" |
+	sort > "$work/wanted"
+tar -tzf "$work/evidence.tgz" | sed -n "s|^$(basename "$evidence")/\([0-9a-f]*\.[xy]ml\.gz\)$|\1|p" | sort > "$work/held"
 missing=$(comm -23 "$work/wanted" "$work/held" | wc -l)
 (( missing == 0 )) || fail "$missing evidence file(s) the database references aren't in the archive"
 
