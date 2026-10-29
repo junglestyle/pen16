@@ -210,7 +210,7 @@ backups = Table(
 compliance_scans = Table(
     "compliance_scans",
     metadata,
-    Column("id", BigInteger, primary_key=True),
+    Column("id", BigInteger, Identity(always=True), primary_key=True),
     Column("asset_id", Text, ForeignKey("assets.id"), nullable=False),
     Column("benchmark_id", Text, nullable=False),
     Column("benchmark_version", Text, nullable=False),

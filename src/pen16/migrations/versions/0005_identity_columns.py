@@ -2,10 +2,10 @@
 
 from alembic import op
 
-revision = "0004"
-down_revision = "0003"
+revision = "0005"
+down_revision = "0004"
 
-TABLES = ["observations", "findings", "jobs", "notifications", "backups"]
+TABLES = ["observations", "findings", "jobs", "notifications", "backups", "compliance_scans"]
 
 
 def _run(statement: str, table: str) -> None:
