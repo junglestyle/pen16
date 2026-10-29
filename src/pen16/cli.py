@@ -8,6 +8,7 @@ from alembic import command
 from alembic.config import Config as AlembicConfig
 
 from pen16 import backups, db, exposure, nmap, runner, stig, tokens, worker
+from pen16.db import TokenKind
 
 
 def main() -> None:
@@ -30,7 +31,7 @@ def main() -> None:
         serve.add_argument("--port", type=int, default=port)
     token = commands.add_parser("token", help="create a token and print it once")
     token.add_argument("name", help="the runner, or for a compliance token the host's asset ID")
-    token.add_argument("--kind", choices=["runner", "compliance"], default="runner")
+    token.add_argument("--kind", type=TokenKind, choices=list(TokenKind), default=TokenKind.RUNNER)
     stig_import = commands.add_parser(
         "stig-import", help="import a DISA STIG's manual XCCDF, the rules a checklist lists"
     )
@@ -62,7 +63,7 @@ def main() -> None:
             f"pen16.{args.command}:app", factory=True, host=args.host, port=args.port, proxy_headers=False
         )
     elif args.command == "token":
-        if args.kind == "compliance" and not exposure.ASSET_ID.fullmatch(args.name):
+        if args.kind == TokenKind.COMPLIANCE and not exposure.ASSET_ID.fullmatch(args.name):
             parser.error(
                 "a compliance token's name is the host's asset ID: lowercase letters, digits, and dashes"
             )

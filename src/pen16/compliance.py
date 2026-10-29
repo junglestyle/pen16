@@ -11,6 +11,9 @@ from sqlalchemy.dialects.postgresql import insert as upsert
 from pen16 import arf, notify
 from pen16.arf import FAILING, PASSING, Result
 from pen16.db import (
+    NotificationKind,
+    RuleResult,
+    Severity,
     assets,
     compliance_results,
     compliance_rules,
@@ -23,13 +26,15 @@ from pen16.db import (
 
 STALE = timedelta(days=10)
 SEVERITY_ORDER = case(
-    {"high": 0, "medium": 1, "low": 2, "info": 3}, value=compliance_rules.c.severity, else_=4
+    {Severity.HIGH: 0, Severity.MEDIUM: 1, Severity.LOW: 2, Severity.INFO: 3},
+    value=compliance_rules.c.severity,
+    else_=4,
 )
 # Names of CKLB statuses, in STIG Viewer's spelling.
 OPEN, NOT_A_FINDING, NOT_APPLICABLE, NOT_REVIEWED = "open", "not_a_finding", "not_applicable", "not_reviewed"
 
 
-class StaleResult(Exception):
+class StaleResultError(Exception):
     """A result no newer than the latest one already recorded for that host, benchmark and profile."""
 
 
@@ -63,7 +68,9 @@ def record(
         .limit(1)
     ).first()
     if previous is not None and previous.finished_at >= result.finished_at:
-        raise StaleResult(f"{asset_id} already has a result from {previous.finished_at:%Y-%m-%d %H:%M} UTC")
+        raise StaleResultError(
+            f"{asset_id} already has a result from {previous.finished_at:%Y-%m-%d %H:%M} UTC"
+        )
     was_stale = _stale_warned(conn, asset_id)
 
     for rule in result.rules:
@@ -112,7 +119,7 @@ def record(
         f"{result.profile_title}: {pass_rate(result.passed, result.failed)} passing, {result.failed} failing."
     )
     if previous is None:
-        notify.enqueue(conn, "finding", f"First compliance result from {asset_id}", summary)
+        notify.enqueue(conn, NotificationKind.FINDING, f"First compliance result from {asset_id}", summary)
     else:
         regressed = _regressions(conn, asset_id, previous.id, scan_id)
         if regressed:
@@ -121,12 +128,12 @@ def record(
                 lines.append(f"and {len(regressed) - 10} more")
             notify.enqueue(
                 conn,
-                "finding",
+                NotificationKind.FINDING,
                 f"{len(regressed)} compliance regression{'s' if len(regressed) > 1 else ''} on {asset_id}",
                 "\n".join([summary, *lines]),
             )
     if was_stale:
-        notify.enqueue(conn, "health", f"Compliance results resumed from {asset_id}", summary)
+        notify.enqueue(conn, NotificationKind.HEALTH, f"Compliance results resumed from {asset_id}", summary)
     return Recorded(scan_id, duplicate=False)
 
 
@@ -162,7 +169,7 @@ def check(conn: Connection) -> None:
         if now - last > STALE and not _stale_warned(conn, asset_id, since=last):
             notify.enqueue(
                 conn,
-                "health",
+                NotificationKind.HEALTH,
                 _stale_title(asset_id),
                 f"The last compliance result from {asset_id} arrived {last:%Y-%m-%d %H:%M} UTC.",
             )
@@ -367,7 +374,7 @@ def _status(results: list[str]) -> str:
         return OPEN
     if all(result in PASSING for result in results):
         return NOT_A_FINDING
-    if all(result == "notapplicable" for result in results):
+    if all(result == RuleResult.NOTAPPLICABLE for result in results):
         return NOT_APPLICABLE
     return NOT_REVIEWED
 
@@ -414,7 +421,7 @@ def _stale_warned(conn: Connection, asset_id: str, since: datetime | None = None
         conn.scalar(
             select(
                 exists().where(
-                    notifications.c.kind == "health",
+                    notifications.c.kind == NotificationKind.HEALTH,
                     notifications.c.title == _stale_title(asset_id),
                     notifications.c.created_at > since,
                 )

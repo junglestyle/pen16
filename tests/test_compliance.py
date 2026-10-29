@@ -69,7 +69,7 @@ def test_parse_reads_profile_results_and_stig_references() -> None:
     ],
 )
 def test_parse_refuses_what_isnt_a_result(raw: bytes) -> None:
-    with pytest.raises(Exception):  # noqa: B017 - any refusal will do; the intake turns it into a 422
+    with pytest.raises(Exception):  # noqa: B017, PT011 - any refusal will do; the intake turns it into a 422
         arf.parse(raw)
 
 
@@ -92,7 +92,8 @@ def test_regression_alerts_with_the_rule_and_a_fix_alone_stays_quiet(conn: Conne
 
     assert titles(conn)[-1] == "1 compliance regression on lab-rhel9"
     body = conn.scalar(select(notifications.c.body).order_by(notifications.c.id.desc()).limit(1))
-    assert body is not None and body.endswith("[high] Ensure gpgcheck Enabled In Main dnf Configuration")
+    assert body is not None
+    assert body.endswith("[high] Ensure gpgcheck Enabled In Main dnf Configuration")
 
 
 def test_a_waived_rule_regresses_quietly_and_stays_failing(conn: Connection) -> None:
@@ -104,7 +105,7 @@ def test_a_waived_rule_regresses_quietly_and_stays_failing(conn: Connection) -> 
     assert len(titles(conn)) == 1
     waived = [row for row in compliance.failing(conn, scan.scan_id) if row.rule_id == GPGCHECK]
     assert waived[0].waiver == "local repo mirror signs nothing"
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="needs a reason"):
         compliance.waive(conn, "lab-rhel9", UMASK, " ")
 
 
@@ -115,7 +116,8 @@ def test_failing_lists_unwaived_worst_first(conn: Connection) -> None:
     rows = compliance.failing(conn, scan.scan_id)
 
     assert len(rows) == 8
-    assert rows[0].severity == "high" and rows[0].waiver is None
+    assert rows[0].severity == "high"
+    assert rows[0].waiver is None
     assert rows[-1].rule_id == f"{RULE}configure_crypto_policy"
 
 
@@ -123,7 +125,7 @@ def test_duplicate_is_a_no_op_and_an_older_result_is_refused(conn: Connection) -
     newer = recorded(conn, later(days=7))
 
     assert recorded(conn, later(days=7)) == compliance.Recorded(newer.scan_id, duplicate=True)
-    with pytest.raises(compliance.StaleResult):
+    with pytest.raises(compliance.StaleResultError):
         recorded(conn, STIG_RESULT.read_bytes())
     assert conn.scalar(select(func.count()).select_from(compliance_scans)) == 1
 
@@ -244,7 +246,8 @@ def test_dashboard_shows_waives_and_downloads(committed: Engine, lab_scope: Scop
     cklb = owner.get(f"/compliance/{scan_id}/checklist.cklb", headers=OWNER)
     playbook = owner.get(f"/compliance/{scan_id}/playbook.yml", headers=OWNER)
 
-    assert "53%" in page and "Configure System Cryptography Policy" in page
+    assert "53%" in page
+    assert "Configure System Cryptography Policy" in page
     assert waived.status_code == 303
     assert "set by the container image" in owner.get("/", headers=OWNER).text
     assert cklb.json()["stigs"][0]["stig_id"] == "RHEL_9_STIG"

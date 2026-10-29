@@ -4,43 +4,41 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, select, update
+from sqlalchemy import select, update
 
 from pen16 import jobs, listener, runner, scope, tokens
 from pen16.config import Config
 from pen16.db import findings, notifications
 from pen16.db import jobs as jobs_table
-from pen16.scope import OutOfScope, Scope
+from pen16.scope import OutOfScopeError
 from tests.conftest import CLOSED_SCAN, LAB_SCAN
 
 SERVICES = Path(__file__).parent / "fixtures" / "nmap-services"
 
 
-def runner_client(engine: Engine, scope: Scope, evidence: Path) -> TestClient:
+def runner_client(engine, scope, evidence):
     app = listener.create(engine, Config(scope=scope, owner_login="", dashboard_url=""), evidence)
     with engine.begin() as conn:
         token = tokens.create(conn, "runner", "lab")
     return TestClient(app, headers={"Authorization": f"Bearer {token}"})
 
 
-def queue(engine: Engine, scope: Scope) -> int:
+def queue(engine, scope):
     with engine.begin() as conn:
         return jobs.request(conn, scope, "owner:test", "test")
 
 
-def upload(client: TestClient, job_id: int, path: Path) -> int:
+def upload(client, job_id, path):
     response = client.post(f"/runner/v1/jobs/{job_id}/result", content=gzip.compress(path.read_bytes()))
     return int(response.status_code)
 
 
-def notices(engine: Engine) -> list[tuple[str, str]]:
+def notices(engine):
     with engine.connect() as conn:
         return [tuple(row) for row in conn.execute(select(notifications.c.kind, notifications.c.title))]
 
 
-def test_scan_round_trip_opens_one_alerted_finding(
-    committed: Engine, lab_scope: Scope, tmp_path: Path
-) -> None:
+def test_scan_round_trip_opens_one_alerted_finding(committed, lab_scope, tmp_path):
     client = runner_client(committed, lab_scope, tmp_path)
     job_id = queue(committed, lab_scope)
 
@@ -55,7 +53,7 @@ def test_scan_round_trip_opens_one_alerted_finding(
         assert conn.scalar(select(jobs_table.c.status)) == "succeeded"
 
 
-def test_late_or_repeated_upload_is_refused(committed: Engine, lab_scope: Scope, tmp_path: Path) -> None:
+def test_late_or_repeated_upload_is_refused(committed, lab_scope, tmp_path):
     client = runner_client(committed, lab_scope, tmp_path)
     job_id = queue(committed, lab_scope)
     client.post("/runner/v1/jobs/claim")
@@ -66,9 +64,7 @@ def test_late_or_repeated_upload_is_refused(committed: Engine, lab_scope: Scope,
         assert conn.scalar(select(findings.c.status).where(findings.c.port == 8080)) == "open"
 
 
-def test_silent_gateway_blocks_closure_and_says_so(
-    committed: Engine, lab_scope: Scope, tmp_path: Path
-) -> None:
+def test_silent_gateway_blocks_closure_and_says_so(committed, lab_scope, tmp_path):
     client = runner_client(committed, lab_scope, tmp_path)
     for path in (LAB_SCAN, LAB_SCAN):
         job_id = queue(committed, lab_scope)
@@ -78,7 +74,7 @@ def test_silent_gateway_blocks_closure_and_says_so(
     assert ("health", "Gateway didn't answer") in notices(committed)
 
 
-def test_gateway_up_lets_closed_ports_resolve(committed: Engine, lab_scope: Scope, tmp_path: Path) -> None:
+def test_gateway_up_lets_closed_ports_resolve(committed, lab_scope, tmp_path):
     client = runner_client(committed, lab_scope, tmp_path)
     for path in (LAB_SCAN, CLOSED_SCAN):
         job_id = queue(committed, lab_scope)
@@ -89,9 +85,7 @@ def test_gateway_up_lets_closed_ports_resolve(committed: Engine, lab_scope: Scop
         assert conn.scalar(select(findings.c.status).where(findings.c.port == 8080)) == "resolved"
 
 
-def test_missed_deadline_retries_once_then_fails_loudly(
-    committed: Engine, lab_scope: Scope, tmp_path: Path
-) -> None:
+def test_missed_deadline_retries_once_then_fails_loudly(committed, lab_scope, tmp_path):
     client = runner_client(committed, lab_scope, tmp_path)
     queue(committed, lab_scope)
     for _ in range(2):
@@ -104,7 +98,7 @@ def test_missed_deadline_retries_once_then_fails_loudly(
     assert notices(committed) == [("health", "Scan failed")]
 
 
-def test_runner_token_is_required(committed: Engine, lab_scope: Scope, tmp_path: Path) -> None:
+def test_runner_token_is_required(committed, lab_scope, tmp_path):
     client = runner_client(committed, lab_scope, tmp_path)
     queue(committed, lab_scope)
 
@@ -114,7 +108,7 @@ def test_runner_token_is_required(committed: Engine, lab_scope: Scope, tmp_path:
     assert client.post("/runner/v1/jobs/claim", headers={"Authorization": ""}).status_code == 401
 
 
-def test_hostile_upload_fails_the_attempt(committed: Engine, lab_scope: Scope, tmp_path: Path) -> None:
+def test_hostile_upload_fails_the_attempt(committed, lab_scope, tmp_path):
     client = runner_client(committed, lab_scope, tmp_path)
     job_id = queue(committed, lab_scope)
     client.post("/runner/v1/jobs/claim")
@@ -127,9 +121,7 @@ def test_hostile_upload_fails_the_attempt(committed: Engine, lab_scope: Scope, t
         assert conn.scalar(select(jobs_table.c.status)) == "queued"
 
 
-def test_runner_refuses_a_job_outside_its_own_scope(
-    committed: Engine, lab_scope: Scope, tmp_path: Path
-) -> None:
+def test_runner_refuses_a_job_outside_its_own_scope(committed, lab_scope, tmp_path):
     client = runner_client(committed, lab_scope, tmp_path)
     queue(committed, lab_scope)
     job = client.post("/runner/v1/jobs/claim").json()
@@ -143,17 +135,17 @@ def test_runner_refuses_a_job_outside_its_own_scope(
         assert conn.scalar(select(jobs_table.c.error)) == "exclusion 192.0.2.13/32 is missing"
 
 
-def test_scope_rejects_targets_outside_and_dropped_exclusions(lab_scope: Scope) -> None:
-    with pytest.raises(OutOfScope):
+def test_scope_rejects_targets_outside_and_dropped_exclusions(lab_scope):
+    with pytest.raises(OutOfScopeError):
         lab_scope.check(["192.0.2.0/23"], ["192.0.2.12/32"])
-    with pytest.raises(OutOfScope):
+    with pytest.raises(OutOfScopeError):
         lab_scope.check(["198.51.100.7/32"], ["192.0.2.12/32"])
-    with pytest.raises(OutOfScope):
+    with pytest.raises(OutOfScopeError):
         lab_scope.check(["192.0.2.0/24"], [])
     lab_scope.check(["192.0.2.8/29"], ["192.0.2.12/32"])
 
 
-def test_runner_waits_for_egress_on_its_current_namespace(tmp_path: Path) -> None:
+def test_runner_waits_for_egress_on_its_current_namespace(tmp_path):
     marker = tmp_path / "ready"
     assert not runner.egress_ready(marker)
 

@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 from sqlalchemy import Connection, Engine, insert, select, update
 
-from pen16.db import notifications
+from pen16.db import NotificationKind, NotificationStatus, notifications
 
 log = logging.getLogger(__name__)
 
@@ -12,7 +12,7 @@ GIVE_UP_AFTER = timedelta(hours=24)
 MAX_BACKOFF = timedelta(hours=1)
 
 
-def enqueue(conn: Connection, kind: str, title: str, body: str) -> None:
+def enqueue(conn: Connection, kind: NotificationKind, title: str, body: str) -> None:
     """Queue a notification in the caller's transaction, so it exists exactly when its change does."""
     conn.execute(insert(notifications).values(kind=kind, title=title, body=body))
 
@@ -24,7 +24,8 @@ def deliver_due(engine: Engine, client: httpx.Client, url: str, token: str, clic
             row = conn.execute(
                 select(notifications)
                 .where(
-                    notifications.c.status == "pending", notifications.c.next_attempt_at <= datetime.now(UTC)
+                    notifications.c.status == NotificationStatus.PENDING,
+                    notifications.c.next_attempt_at <= datetime.now(UTC),
                 )
                 .order_by(notifications.c.id)
                 .limit(1)
@@ -35,10 +36,14 @@ def deliver_due(engine: Engine, client: httpx.Client, url: str, token: str, clic
             error, permanent = _post(client, url, token, click, row.kind, row.title, row.body)
             attempts = row.attempts + 1
             if error is None:
-                values = {"status": "delivered", "delivered_at": datetime.now(UTC), "attempts": attempts}
+                values = {
+                    "status": NotificationStatus.DELIVERED,
+                    "delivered_at": datetime.now(UTC),
+                    "attempts": attempts,
+                }
             elif permanent or datetime.now(UTC) - row.created_at > GIVE_UP_AFTER:
                 log.warning("notification %s failed for good: %s", row.id, error)
-                values = {"status": "failed", "attempts": attempts, "last_error": error}
+                values = {"status": NotificationStatus.FAILED, "attempts": attempts, "last_error": error}
             else:
                 delay = min(timedelta(minutes=2**attempts), MAX_BACKOFF)
                 values = {
@@ -53,7 +58,7 @@ def _post(
     client: httpx.Client, url: str, token: str, click: str, kind: str, title: str, body: str
 ) -> tuple[str | None, bool]:
     """Returns (error, permanent). ntfy takes the title and link as headers, the message as the body."""
-    headers = {"Title": title, "Tags": "rotating_light" if kind == "finding" else "warning"}
+    headers = {"Title": title, "Tags": "rotating_light" if kind == NotificationKind.FINDING else "warning"}
     if click:
         headers["Click"] = click
     if token:

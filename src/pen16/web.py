@@ -3,6 +3,7 @@
 import json
 import os
 from datetime import UTC, datetime, timedelta
+from importlib.resources import files
 from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import urlsplit
@@ -10,11 +11,16 @@ from urllib.parse import urlsplit
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import Connection, Engine, func, select
+from sqlalchemy import ColumnElement, Connection, Engine, func, select
 
 from pen16 import backups, compliance, config, db, evidence, exposure, jobs
 from pen16.config import Config
 from pen16.db import (
+    FindingStatus,
+    JobStatus,
+    NotificationStatus,
+    ObservationState,
+    TokenKind,
     assets,
     bindings,
     compliance_scans,
@@ -27,7 +33,7 @@ from pen16.db import (
 )
 
 STALE = timedelta(hours=48)
-templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
+templates = Jinja2Templates(directory=str(files("pen16") / "templates"))
 
 
 def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
@@ -41,7 +47,7 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
             raise HTTPException(403, "cross-site form post")
         return login
 
-    Owner = Annotated[str, Depends(owner)]
+    Owner = Annotated[str, Depends(owner)]  # noqa: N806  # a type alias, named like one
     app = FastAPI(title="pen16", docs_url=None, redoc_url=None, openapi_url=None)
 
     @app.get("/", response_class=HTMLResponse)
@@ -58,7 +64,7 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
 
     @app.post("/findings/expect")
     def expect(
-        login: Owner, finding: Annotated[list[int], Form()], reason: Annotated[str, Form()]
+        _login: Owner, finding: Annotated[list[int], Form()], reason: Annotated[str, Form()]
     ) -> RedirectResponse:
         with engine.begin() as conn:
             exposure.expect(conn, finding, reason)
@@ -66,7 +72,7 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
 
     @app.post("/expected/remove")
     def unexpect(
-        login: Owner,
+        _login: Owner,
         asset_id: Annotated[str, Form()],
         protocol: Annotated[str, Form()],
         port: Annotated[int, Form()],
@@ -78,7 +84,7 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
 
     @app.post("/assets/name")
     def name_asset(
-        login: Owner, provisional_id: Annotated[str, Form()], asset_id: Annotated[str, Form()]
+        _login: Owner, provisional_id: Annotated[str, Form()], asset_id: Annotated[str, Form()]
     ) -> RedirectResponse:
         try:
             with engine.begin() as conn:
@@ -89,7 +95,7 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
 
     @app.post("/compliance/waive")
     def waive(
-        login: Owner,
+        _login: Owner,
         asset_id: Annotated[str, Form()],
         rule_id: Annotated[str, Form()],
         reason: Annotated[str, Form()],
@@ -103,14 +109,14 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
 
     @app.post("/compliance/unwaive")
     def unwaive(
-        login: Owner, asset_id: Annotated[str, Form()], rule_id: Annotated[str, Form()]
+        _login: Owner, asset_id: Annotated[str, Form()], rule_id: Annotated[str, Form()]
     ) -> RedirectResponse:
         with engine.begin() as conn:
             compliance.unwaive(conn, asset_id, rule_id)
         return _back("#compliance")
 
     @app.get("/compliance/{scan_id}/checklist.cklb")
-    def checklist(login: Owner, scan_id: int) -> Response:
+    def checklist(_login: Owner, scan_id: int) -> Response:
         try:
             with engine.connect() as conn:
                 name, document = compliance.checklist(conn, scan_id)
@@ -121,7 +127,7 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
         )
 
     @app.get("/compliance/{scan_id}/playbook.yml")
-    def playbook(login: Owner, scan_id: int) -> Response:
+    def playbook(_login: Owner, scan_id: int) -> Response:
         with engine.connect() as conn:
             scan = conn.execute(select(compliance_scans).where(compliance_scans.c.id == scan_id)).first()
         if scan is None or scan.playbook_digest is None:
@@ -138,13 +144,15 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
 
 def _dashboard(conn: Connection) -> dict[str, Any]:
     now = datetime.now(UTC)
-    last_success = conn.scalar(select(func.max(db.jobs.c.finished_at)).where(db.jobs.c.status == "succeeded"))
+    last_success = conn.scalar(
+        select(func.max(db.jobs.c.finished_at)).where(db.jobs.c.status == JobStatus.SUCCEEDED)
+    )
     latest = conn.execute(select(db.jobs).order_by(db.jobs.c.id.desc()).limit(1)).first()
     seen = observations.alias("seen")
     open_findings = conn.execute(
         select(findings, seen.c.address, seen.c.service, seen.c.product, seen.c.version, seen.c.observed_at)
         .join(seen, seen.c.id == findings.c.last_observation_id)
-        .where(findings.c.status == "open")
+        .where(findings.c.status == FindingStatus.OPEN)
         .order_by(findings.c.opened_at.desc())
     ).all()
     latest_state = (
@@ -171,7 +179,7 @@ def _dashboard(conn: Connection) -> dict[str, Any]:
             & (expected.c.port == latest_state.c.port)
             & (expected.c.vantage == latest_state.c.vantage),
         )
-        .where(latest_state.c.state == "open")
+        .where(latest_state.c.state == ObservationState.OPEN)
         .order_by(latest_state.c.asset_id, latest_state.c.protocol, latest_state.c.port)
     ).all()
     last_backup = backups.latest(conn)
@@ -194,9 +202,11 @@ def _dashboard(conn: Connection) -> dict[str, Any]:
         "stale": last_success is None or now - last_success > STALE,
         "latest": latest,
         "next_run": conn.scalar(select(func.min(schedules.c.next_run_at)).where(schedules.c.enabled)),
-        "runner_seen": conn.scalar(select(func.max(tokens.c.last_used_at)).where(tokens.c.kind == "runner")),
-        "pending": _count(conn, notifications.c.status == "pending"),
-        "failed": _count(conn, notifications.c.status == "failed"),
+        "runner_seen": conn.scalar(
+            select(func.max(tokens.c.last_used_at)).where(tokens.c.kind == TokenKind.RUNNER)
+        ),
+        "pending": _count(conn, notifications.c.status == NotificationStatus.PENDING),
+        "failed": _count(conn, notifications.c.status == NotificationStatus.FAILED),
         "findings": open_findings,
         "exposed": exposed,
         "expected": conn.execute(select(expected_services).order_by(expected_services.c.asset_id)).all(),
@@ -210,7 +220,7 @@ def _dashboard(conn: Connection) -> dict[str, Any]:
     }
 
 
-def _count(conn: Connection, condition: Any) -> int:
+def _count(conn: Connection, condition: ColumnElement[bool]) -> int:
     return int(conn.scalar(select(func.count()).select_from(notifications).where(condition)) or 0)
 
 

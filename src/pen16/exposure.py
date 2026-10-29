@@ -5,7 +5,15 @@ from datetime import datetime
 from sqlalchemy import Connection, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 
-from pen16.db import assets, bindings, expected_services, findings, observations
+from pen16.db import (
+    FindingStatus,
+    ObservationState,
+    assets,
+    bindings,
+    expected_services,
+    findings,
+    observations,
+)
 from pen16.nmap import PARSER_VERSION, Port, Scan
 
 UNEXPECTED_EXPOSURE = "unexpected-exposure"
@@ -20,7 +28,7 @@ class Finding:
     vantage: str
 
 
-def ingest(conn: Connection, scan: Scan, vantage: str, closures: bool = True) -> list[Finding]:
+def ingest(conn: Connection, scan: Scan, vantage: str, *, closures: bool = True) -> list[Finding]:
     """Record a scan's observations, open findings for unexpected open ports, and resolve closed ones.
 
     Returns the findings this scan newly opened or reopened: the ones worth an alert. Run it inside one
@@ -32,7 +40,7 @@ def ingest(conn: Connection, scan: Scan, vantage: str, closures: bool = True) ->
     for port in scan.ports:
         asset_id = _asset_for(conn, port.address)
         observation_id = _observe(conn, scan, port, asset_id, vantage)
-        if observation_id is None or port.state != "open":
+        if observation_id is None or port.state != ObservationState.OPEN:
             continue
         if _expected(conn, asset_id, port.protocol, port.port, vantage):
             continue
@@ -58,8 +66,8 @@ def expect(conn: Connection, finding_ids: list[int], reason: str) -> None:
         )
     conn.execute(
         update(findings)
-        .where(findings.c.id.in_(finding_ids), findings.c.status == "open")
-        .values(status="resolved", resolved_at=func.now(), resolution=f"expected: {reason}")
+        .where(findings.c.id.in_(finding_ids), findings.c.status == FindingStatus.OPEN)
+        .values(status=FindingStatus.RESOLVED, resolved_at=func.now(), resolution=f"expected: {reason}")
     )
 
 
@@ -159,13 +167,13 @@ def _open(
                 protocol=port.protocol,
                 port=port.port,
                 vantage=vantage,
-                status="open",
+                status=FindingStatus.OPEN,
                 opened_at=observed_at,
                 last_observation_id=observation_id,
             )
         )
         return True
-    if existing.status == "open":
+    if existing.status == FindingStatus.OPEN:
         conn.execute(update(findings).where(*key).values(last_observation_id=observation_id))
         return False
     if existing.resolved_at is not None and existing.resolved_at >= observed_at:
@@ -173,7 +181,9 @@ def _open(
     conn.execute(
         update(findings)
         .where(*key)
-        .values(status="open", resolved_at=None, resolution=None, last_observation_id=observation_id)
+        .values(
+            status=FindingStatus.OPEN, resolved_at=None, resolution=None, last_observation_id=observation_id
+        )
     )
     return True
 
@@ -188,7 +198,7 @@ def _close(conn: Connection, scan: Scan, vantage: str) -> None:
         .join(last_open, last_open.c.id == findings.c.last_observation_id)
         .where(
             findings.c.kind == UNEXPECTED_EXPOSURE,
-            findings.c.status == "open",
+            findings.c.status == FindingStatus.OPEN,
             findings.c.vantage == vantage,
             last_open.c.observed_at < scan.finished_at,
         )
@@ -198,12 +208,12 @@ def _close(conn: Connection, scan: Scan, vantage: str) -> None:
         bound = conn.scalars(select(bindings.c.address).where(bindings.c.asset_id == finding.asset_id))
         addresses = [str(address) for address in bound]
         if not addresses or not all(
-            address in up and scan.state(address, finding.protocol, finding.port) == "closed"
+            address in up and scan.state(address, finding.protocol, finding.port) == ObservationState.CLOSED
             for address in addresses
         ):
             continue
         for address in addresses:
-            closed = Port(address, finding.protocol, finding.port, "closed", None, None, None)
+            closed = Port(address, finding.protocol, finding.port, ObservationState.CLOSED, None, None, None)
             _observe(conn, scan, closed, finding.asset_id, vantage)
         closed_id = conn.scalar(
             select(observations.c.id).where(
@@ -218,7 +228,7 @@ def _close(conn: Connection, scan: Scan, vantage: str) -> None:
             update(findings)
             .where(findings.c.id == finding.id)
             .values(
-                status="resolved",
+                status=FindingStatus.RESOLVED,
                 resolved_at=scan.finished_at,
                 resolution="closed",
                 last_observation_id=closed_id,
