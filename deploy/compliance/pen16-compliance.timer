@@ -1,0 +1,11 @@
+# Weekly, at a quiet hour. Persistent catches up after a host was off at the scheduled time.
+[Unit]
+Description=Weekly compliance evaluation for pen16
+
+[Timer]
+OnCalendar=Sun 04:00
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

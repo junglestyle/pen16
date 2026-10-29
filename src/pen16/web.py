@@ -1,20 +1,23 @@
 """The owner dashboard. tailscale serve puts it on the tailnet and names the visitor in a header."""
 
+import json
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import Connection, Engine, func, select
 
-from pen16 import backups, config, db, exposure, jobs
+from pen16 import backups, compliance, config, db, evidence, exposure, jobs
 from pen16.config import Config
 from pen16.db import (
     assets,
     bindings,
+    compliance_scans,
     expected_services,
     findings,
     notifications,
@@ -27,7 +30,7 @@ STALE = timedelta(hours=48)
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 
-def create(engine: Engine, settings: Config) -> FastAPI:
+def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
     def owner(request: Request) -> str:
         """Allow only the configured Tailscale login. The web port is bound to localhost for tailscale serve,
         so these headers can't come from anywhere else on the network."""
@@ -84,6 +87,52 @@ def create(engine: Engine, settings: Config) -> FastAPI:
             raise HTTPException(400, str(error)) from error
         return _back()
 
+    @app.post("/compliance/waive")
+    def waive(
+        login: Owner,
+        asset_id: Annotated[str, Form()],
+        rule_id: Annotated[str, Form()],
+        reason: Annotated[str, Form()],
+    ) -> RedirectResponse:
+        try:
+            with engine.begin() as conn:
+                compliance.waive(conn, asset_id, rule_id, reason)
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from error
+        return _back("#compliance")
+
+    @app.post("/compliance/unwaive")
+    def unwaive(
+        login: Owner, asset_id: Annotated[str, Form()], rule_id: Annotated[str, Form()]
+    ) -> RedirectResponse:
+        with engine.begin() as conn:
+            compliance.unwaive(conn, asset_id, rule_id)
+        return _back("#compliance")
+
+    @app.get("/compliance/{scan_id}/checklist.cklb")
+    def checklist(login: Owner, scan_id: int) -> Response:
+        try:
+            with engine.connect() as conn:
+                name, document = compliance.checklist(conn, scan_id)
+        except LookupError as error:
+            raise HTTPException(404, str(error)) from error
+        return Response(
+            json.dumps(document, indent=2), media_type="application/json", headers=_download(name)
+        )
+
+    @app.get("/compliance/{scan_id}/playbook.yml")
+    def playbook(login: Owner, scan_id: int) -> Response:
+        with engine.connect() as conn:
+            scan = conn.execute(select(compliance_scans).where(compliance_scans.c.id == scan_id)).first()
+        if scan is None or scan.playbook_digest is None:
+            raise HTTPException(404, "no playbook for this result")
+        name = f"{scan.asset_id}-remediation-{scan.finished_at:%Y%m%d}.yml"
+        return Response(
+            evidence.read(evidence_dir, scan.playbook_digest, ".yml.gz"),
+            media_type="text/plain; charset=utf-8",
+            headers=_download(name),
+        )
+
     return app
 
 
@@ -126,7 +175,18 @@ def _dashboard(conn: Connection) -> dict[str, Any]:
         .order_by(latest_state.c.asset_id, latest_state.c.protocol, latest_state.c.port)
     ).all()
     last_backup = backups.latest(conn)
+    results = compliance.latest(conn)
     return {
+        "compliance": [
+            {
+                "scan": scan,
+                "rate": compliance.pass_rate(scan.passed, scan.failed),
+                "stale": now - scan.received_at > compliance.STALE,
+                "failing": compliance.failing(conn, scan.id),
+                "checklist": compliance.matching_stig(conn, scan.id) is not None,
+            }
+            for scan in results
+        ],
         "now": now,
         "last_backup": last_backup,
         "backup_stale": last_backup is None or now - last_backup > backups.STALE,
@@ -161,9 +221,15 @@ def _same_origin(request: Request) -> bool:
     return origin is None or urlsplit(origin).netloc == request.headers.get("Host")
 
 
-def _back() -> RedirectResponse:
-    return RedirectResponse("/", status_code=303)
+def _back(anchor: str = "") -> RedirectResponse:
+    return RedirectResponse(f"/{anchor}", status_code=303)
+
+
+def _download(name: str) -> dict[str, str]:
+    return {"Content-Disposition": f'attachment; filename="{name}"'}
 
 
 def app() -> FastAPI:
-    return create(db.connect(), config.load())
+    return create(
+        db.connect(), config.load(), Path(os.environ.get("PEN16_EVIDENCE_DIR", "/var/lib/pen16/evidence"))
+    )

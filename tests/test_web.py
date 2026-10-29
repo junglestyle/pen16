@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, insert, select
 
@@ -10,9 +12,9 @@ from tests.conftest import LAB_SCAN
 OWNER = {"Tailscale-User-Login": "owner@example.com"}
 
 
-def dashboard(engine: Engine, scope: Scope) -> TestClient:
+def dashboard(engine: Engine, scope: Scope, evidence_dir: Path = Path("/nonexistent")) -> TestClient:
     settings = Config(scope=scope, owner_login="owner@example.com", dashboard_url="")
-    return TestClient(web.create(engine, settings), base_url="https://pen16.example.ts.net")
+    return TestClient(web.create(engine, settings, evidence_dir), base_url="https://pen16.example.ts.net")
 
 
 def scanned(engine: Engine, raw: bytes = LAB_SCAN.read_bytes()) -> None:

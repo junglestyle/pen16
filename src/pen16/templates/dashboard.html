@@ -13,6 +13,8 @@
 body { background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, sans-serif; margin: 0 auto; max-width: 62rem; padding: 1rem; }
 h1 { font-size: 1.3rem; margin: 0 0 1rem; }
 h2 { font-size: 1.05rem; margin: 1.6rem 0 .5rem; }
+h3 { font-size: 1rem; margin: 1.2rem 0 .4rem; }
+a { color: inherit; }
 table { border-collapse: collapse; width: 100%; }
 th, td { border-bottom: 1px solid var(--line); padding: .35rem .5rem .35rem 0; text-align: left; vertical-align: top; }
 th { color: var(--muted); font-weight: 500; }
@@ -53,6 +55,12 @@ form.inline { display: inline; }
   <dd>{% if next_run %}{{ next_run.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}no schedule enabled{% endif %}</dd>
   <dt>Runner last seen</dt>
   <dd>{% if runner_seen %}{{ runner_seen.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}<span class="bad">never</span>{% endif %}</dd>
+  <dt>Compliance</dt>
+  <dd>
+    {% set stale_hosts = compliance|selectattr('stale')|list %}
+    {% if compliance %}{{ compliance|length }} result{{ 's' if compliance|length != 1 }}{% if stale_hosts %}, <span class="bad">{{ stale_hosts|length }} stale</span>{% endif %}
+    {% else %}<span class="muted">no host has reported</span>{% endif %}
+  </dd>
   <dt>Alerts</dt>
   <dd>{{ pending }} queued{% if failed %}, <span class="bad">{{ failed }} failed to send</span>{% endif %}</dd>
 </dl>
@@ -99,6 +107,59 @@ form.inline { display: inline; }
 </table></div>
 {% else %}
 <p class="muted">No open services observed yet.</p>
+{% endif %}
+
+<h2 id="compliance">Compliance</h2>
+{% if compliance %}
+{% for c in compliance %}
+<h3>{{ c.scan.asset_id }} <span class="muted">· {{ c.scan.profile_title }}</span></h3>
+<dl>
+  <dt>Pass rate</dt>
+  <dd>{{ c.rate }} <span class="muted">({{ c.scan.passed }} passed, {{ c.scan.failed }} failing)</span></dd>
+  <dt>Evaluated</dt>
+  <dd class="{{ 'bad' if c.stale else '' }}">{{ c.scan.finished_at.strftime('%Y-%m-%d %H:%M UTC') }}{% if c.stale %} (stale){% endif %}</dd>
+  <dt>Content</dt>
+  <dd class="muted">{{ c.scan.benchmark_id }} {{ c.scan.benchmark_version }} · {{ c.scan.tool_version }}</dd>
+  <dt>Downloads</dt>
+  <dd>
+    {% if c.checklist %}<a href="/compliance/{{ c.scan.id }}/checklist.cklb">STIG checklist</a>{% else %}<span class="muted">no matching STIG imported</span>{% endif %}
+    · {% if c.scan.playbook_digest %}<a href="/compliance/{{ c.scan.id }}/playbook.yml">remediation playbook</a>{% else %}<span class="muted">no playbook</span>{% endif %}
+  </dd>
+</dl>
+{% if c.failing %}
+<div class="scroll"><table>
+  <tr><th>Severity</th><th>Rule</th><th>STIG ID</th><th>Waiver</th></tr>
+  {% for r in c.failing %}
+  <tr>
+    <td class="{{ 'bad' if r.severity == 'high' and not r.waiver else '' }}">{{ r.severity }}{% if r.result != 'fail' %} <span class="muted">({{ r.result }})</span>{% endif %}</td>
+    <td>{{ r.title }}<br><span class="muted">{{ r.rule_id|replace('xccdf_org.ssgproject.content_rule_', '') }}</span></td>
+    <td>{{ r.stig_ids|join(', ') }}</td>
+    <td>
+      {% if r.waiver %}
+      {{ r.waiver }}
+      <form class="inline" method="post" action="/compliance/unwaive">
+        <input type="hidden" name="asset_id" value="{{ c.scan.asset_id }}">
+        <input type="hidden" name="rule_id" value="{{ r.rule_id }}">
+        <button>Remove</button>
+      </form>
+      {% else %}
+      <form class="inline" method="post" action="/compliance/waive">
+        <input type="hidden" name="asset_id" value="{{ c.scan.asset_id }}">
+        <input type="hidden" name="rule_id" value="{{ r.rule_id }}">
+        <input type="text" name="reason" required aria-label="reason to waive {{ r.title }}" placeholder="why it fails on purpose">
+        <button>Waive</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% else %}
+<p class="ok">Every evaluated rule passes.</p>
+{% endif %}
+{% endfor %}
+{% else %}
+<p class="muted">No host has sent a compliance result yet.</p>
 {% endif %}
 
 <h2>Expected services</h2>

@@ -1,0 +1,379 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<?xml-stylesheet type='text/xsl' href='STIG_unclass.xsl'?><Benchmark xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:cpe="http://cpe.mitre.org/language/2.0" xmlns:xhtml="http://www.w3.org/1999/xhtml" xmlns:dsig="http://www.w3.org/2000/09/xmldsig#" xmlns="http://checklists.nist.gov/xccdf/1.1" xsi:schemaLocation="http://checklists.nist.gov/xccdf/1.1 http://nvd.nist.gov/schema/xccdf-1.1.4.xsd http://cpe.mitre.org/dictionary/2.0 http://cpe.mitre.org/files/cpe-dictionary_2.1.xsd" id="RHEL_9_STIG" xml:lang="en"><status date="2026-05-20">accepted</status><title>Red Hat Enterprise Linux 9 Security Technical Implementation Guide</title><description>This Security Technical Implementation Guide is published as a tool to improve the security of Department of Defense (DOD) information systems. The requirements are derived from the National Institute of Standards and Technology (NIST) 800-53 and related documents. Comments or proposed revisions to this document should be sent via email to the following address: disa.stig_spt@mail.mil.</description><notice id="terms-of-use" xml:lang="en"/><front-matter xml:lang="en"/><rear-matter xml:lang="en"/><reference href="https://cyber.mil"><dc:publisher>DISA</dc:publisher><dc:source>STIG.DOD.MIL</dc:source></reference><plain-text id="release-info">Release: 9 Benchmark Date: 01 Jul 2026</plain-text><plain-text id="generator">3.5.2</plain-text><plain-text id="conventionsVersion">1.10.0</plain-text><version>2</version><Profile id="MAC-1_Classified"><title>I - Mission Critical Classified</title><description>&lt;ProfileDescription&gt;&lt;/ProfileDescription&gt;</description><select idref="V-257777" selected="true"/><select idref="V-257778" selected="true"/><select idref="V-257779" selected="true"/><select idref="V-257796" selected="true"/><select idref="V-257819" selected="true"/><select idref="V-257820" selected="true"/><select idref="V-257821" selected="true"/><select idref="V-257822" selected="true"/><select idref="V-257826" selected="true"/><select idref="V-257831" selected="true"/><select idref="V-257889" selected="true"/><select idref="V-257910" selected="true"/><select idref="V-257934" selected="true"/><select idref="V-257948" selected="true"/><select idref="V-257955" selected="true"/><select idref="V-257985" selected="true"/><select idref="V-258072" selected="true"/><select idref="V-258075" selected="true"/><select idref="V-258088" selected="true"/><select idref="V-258234" selected="true"/><select idref="V-258241" selected="true"/></Profile><Profile id="MAC-1_Public"><title>I - Mission Critical Public</title><description>&lt;ProfileDescription&gt;&lt;/ProfileDescription&gt;</description><select idref="V-257777" selected="true"/><select idref="V-257778" selected="true"/><select idref="V-257779" selected="true"/><select idref="V-257796" selected="true"/><select idref="V-257819" selected="true"/><select idref="V-257820" selected="true"/><select idref="V-257821" selected="true"/><select idref="V-257822" selected="true"/><select idref="V-257826" selected="true"/><select idref="V-257831" selected="true"/><select idref="V-257889" selected="true"/><select idref="V-257910" selected="true"/><select idref="V-257934" selected="true"/><select idref="V-257948" selected="true"/><select idref="V-257955" selected="true"/><select idref="V-257985" selected="true"/><select idref="V-258072" selected="true"/><select idref="V-258075" selected="true"/><select idref="V-258088" selected="true"/><select idref="V-258234" selected="true"/><select idref="V-258241" selected="true"/></Profile><Profile id="MAC-1_Sensitive"><title>I - Mission Critical Sensitive</title><description>&lt;ProfileDescription&gt;&lt;/ProfileDescription&gt;</description><select idref="V-257777" selected="true"/><select idref="V-257778" selected="true"/><select idref="V-257779" selected="true"/><select idref="V-257796" selected="true"/><select idref="V-257819" selected="true"/><select idref="V-257820" selected="true"/><select idref="V-257821" selected="true"/><select idref="V-257822" selected="true"/><select idref="V-257826" selected="true"/><select idref="V-257831" selected="true"/><select idref="V-257889" selected="true"/><select idref="V-257910" selected="true"/><select idref="V-257934" selected="true"/><select idref="V-257948" selected="true"/><select idref="V-257955" selected="true"/><select idref="V-257985" selected="true"/><select idref="V-258072" selected="true"/><select idref="V-258075" selected="true"/><select idref="V-258088" selected="true"/><select idref="V-258234" selected="true"/><select idref="V-258241" selected="true"/></Profile><Profile id="MAC-2_Classified"><title>II - Mission Support Classified</title><description>&lt;ProfileDescription&gt;&lt;/ProfileDescription&gt;</description><select idref="V-257777" selected="true"/><select idref="V-257778" selected="true"/><select idref="V-257779" selected="true"/><select idref="V-257796" selected="true"/><select idref="V-257819" selected="true"/><select idref="V-257820" selected="true"/><select idref="V-257821" selected="true"/><select idref="V-257822" selected="true"/><select idref="V-257826" selected="true"/><select idref="V-257831" selected="true"/><select idref="V-257889" selected="true"/><select idref="V-257910" selected="true"/><select idref="V-257934" selected="true"/><select idref="V-257948" selected="true"/><select idref="V-257955" selected="true"/><select idref="V-257985" selected="true"/><select idref="V-258072" selected="true"/><select idref="V-258075" selected="true"/><select idref="V-258088" selected="true"/><select idref="V-258234" selected="true"/><select idref="V-258241" selected="true"/></Profile><Profile id="MAC-2_Public"><title>II - Mission Support Public</title><description>&lt;ProfileDescription&gt;&lt;/ProfileDescription&gt;</description><select idref="V-257777" selected="true"/><select idref="V-257778" selected="true"/><select idref="V-257779" selected="true"/><select idref="V-257796" selected="true"/><select idref="V-257819" selected="true"/><select idref="V-257820" selected="true"/><select idref="V-257821" selected="true"/><select idref="V-257822" selected="true"/><select idref="V-257826" selected="true"/><select idref="V-257831" selected="true"/><select idref="V-257889" selected="true"/><select idref="V-257910" selected="true"/><select idref="V-257934" selected="true"/><select idref="V-257948" selected="true"/><select idref="V-257955" selected="true"/><select idref="V-257985" selected="true"/><select idref="V-258072" selected="true"/><select idref="V-258075" selected="true"/><select idref="V-258088" selected="true"/><select idref="V-258234" selected="true"/><select idref="V-258241" selected="true"/></Profile><Profile id="MAC-2_Sensitive"><title>II - Mission Support Sensitive</title><description>&lt;ProfileDescription&gt;&lt;/ProfileDescription&gt;</description><select idref="V-257777" selected="true"/><select idref="V-257778" selected="true"/><select idref="V-257779" selected="true"/><select idref="V-257796" selected="true"/><select idref="V-257819" selected="true"/><select idref="V-257820" selected="true"/><select idref="V-257821" selected="true"/><select idref="V-257822" selected="true"/><select idref="V-257826" selected="true"/><select idref="V-257831" selected="true"/><select idref="V-257889" selected="true"/><select idref="V-257910" selected="true"/><select idref="V-257934" selected="true"/><select idref="V-257948" selected="true"/><select idref="V-257955" selected="true"/><select idref="V-257985" selected="true"/><select idref="V-258072" selected="true"/><select idref="V-258075" selected="true"/><select idref="V-258088" selected="true"/><select idref="V-258234" selected="true"/><select idref="V-258241" selected="true"/></Profile><Profile id="MAC-3_Classified"><title>III - Administrative Classified</title><description>&lt;ProfileDescription&gt;&lt;/ProfileDescription&gt;</description><select idref="V-257777" selected="true"/><select idref="V-257778" selected="true"/><select idref="V-257779" selected="true"/><select idref="V-257796" selected="true"/><select idref="V-257819" selected="true"/><select idref="V-257820" selected="true"/><select idref="V-257821" selected="true"/><select idref="V-257822" selected="true"/><select idref="V-257826" selected="true"/><select idref="V-257831" selected="true"/><select idref="V-257889" selected="true"/><select idref="V-257910" selected="true"/><select idref="V-257934" selected="true"/><select idref="V-257948" selected="true"/><select idref="V-257955" selected="true"/><select idref="V-257985" selected="true"/><select idref="V-258072" selected="true"/><select idref="V-258075" selected="true"/><select idref="V-258088" selected="true"/><select idref="V-258234" selected="true"/><select idref="V-258241" selected="true"/></Profile><Profile id="MAC-3_Public"><title>III - Administrative Public</title><description>&lt;ProfileDescription&gt;&lt;/ProfileDescription&gt;</description><select idref="V-257777" selected="true"/><select idref="V-257778" selected="true"/><select idref="V-257779" selected="true"/><select idref="V-257796" selected="true"/><select idref="V-257819" selected="true"/><select idref="V-257820" selected="true"/><select idref="V-257821" selected="true"/><select idref="V-257822" selected="true"/><select idref="V-257826" selected="true"/><select idref="V-257831" selected="true"/><select idref="V-257889" selected="true"/><select idref="V-257910" selected="true"/><select idref="V-257934" selected="true"/><select idref="V-257948" selected="true"/><select idref="V-257955" selected="true"/><select idref="V-257985" selected="true"/><select idref="V-258072" selected="true"/><select idref="V-258075" selected="true"/><select idref="V-258088" selected="true"/><select idref="V-258234" selected="true"/><select idref="V-258241" selected="true"/></Profile><Profile id="MAC-3_Sensitive"><title>III - Administrative Sensitive</title><description>&lt;ProfileDescription&gt;&lt;/ProfileDescription&gt;</description><select idref="V-257777" selected="true"/><select idref="V-257778" selected="true"/><select idref="V-257779" selected="true"/><select idref="V-257796" selected="true"/><select idref="V-257819" selected="true"/><select idref="V-257820" selected="true"/><select idref="V-257821" selected="true"/><select idref="V-257822" selected="true"/><select idref="V-257826" selected="true"/><select idref="V-257831" selected="true"/><select idref="V-257889" selected="true"/><select idref="V-257910" selected="true"/><select idref="V-257934" selected="true"/><select idref="V-257948" selected="true"/><select idref="V-257955" selected="true"/><select idref="V-257985" selected="true"/><select idref="V-258072" selected="true"/><select idref="V-258075" selected="true"/><select idref="V-258088" selected="true"/><select idref="V-258234" selected="true"/><select idref="V-258241" selected="true"/></Profile><Group id="V-257777"><title>SRG-OS-000480-GPOS-00227</title><description>&lt;GroupDescription&gt;&lt;/GroupDescription&gt;</description><Rule id="SV-257777r1155676_rule" weight="10.0" severity="high"><version>RHEL-09-211010</version><title>RHEL 9 must be a vendor-supported release.</title><description>&lt;VulnDiscussion&gt;An operating system release is considered "supported" if the vendor continues to provide security patches for the product. With an unsupported release, it will not be possible to resolve security issues discovered in the system software.
+
+End Of Life dates for Red Hat Linux 9 releases are as follows:
+Current end of Full Support for Red Hat Linux 9 is 31 May 2027.
+Current end of Maintenance Support for Red Hat Linux 9 is 31 May 3032.
+Current end of Extended Life Cycle Support (ELS) for Red Hat Linux 9 is 31 May 2035.&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;&lt;FalseNegatives&gt;&lt;/FalseNegatives&gt;&lt;Documentable&gt;false&lt;/Documentable&gt;&lt;Mitigations&gt;&lt;/Mitigations&gt;&lt;SeverityOverrideGuidance&gt;&lt;/SeverityOverrideGuidance&gt;&lt;PotentialImpacts&gt;&lt;/PotentialImpacts&gt;&lt;ThirdPartyTools&gt;&lt;/ThirdPartyTools&gt;&lt;MitigationControl&gt;&lt;/MitigationControl&gt;&lt;Responsibility&gt;&lt;/Responsibility&gt;&lt;IAControls&gt;&lt;/IAControls&gt;</description><reference><dc:title>DPMS Target Red Hat Enterprise Linux 9</dc:title><dc:publisher>DISA</dc:publisher><dc:type>DPMS Target</dc:type><dc:subject>Red Hat Enterprise Linux 9</dc:subject><dc:identifier>5551</dc:identifier></reference><ident system="http://cyber.mil/cci">CCI-000366</ident><fixtext fixref="F-61442r925317_fix">Upgrade to a supported version of RHEL 9.</fixtext><fix id="F-61442r925317_fix"/><check system="C-61518r1155675_chk"><check-content-ref href="Red_Hat_Enterprise_Linux_9_STIG.xml" name="M"/><check-content>Verify the version or RHEL 9 is vendor supported with the following command:
+
+$ cat /etc/redhat-release 
+
+Red Hat Enterprise Linux release 9.6 (Plow)
+
+If the installed version of RHEL 9 is not supported, this is a finding.</check-content></check></Rule></Group><Group id="V-257778"><title>SRG-OS-000480-GPOS-00227</title><description>&lt;GroupDescription&gt;&lt;/GroupDescription&gt;</description><Rule id="SV-257778r1134892_rule" weight="10.0" severity="medium"><version>RHEL-09-211015</version><title>RHEL 9 vendor packaged system security patches and updates must be installed and up to date.</title><description>&lt;VulnDiscussion&gt;Installing software updates is a fundamental mitigation against the exploitation of publicly known vulnerabilities. If the most recent security patches and updates are not installed, unauthorized users may take advantage of weaknesses in the unpatched software. The lack of prompt attention to patching could result in a system compromise.&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;&lt;FalseNegatives&gt;&lt;/FalseNegatives&gt;&lt;Documentable&gt;false&lt;/Documentable&gt;&lt;Mitigations&gt;&lt;/Mitigations&gt;&lt;SeverityOverrideGuidance&gt;&lt;/SeverityOverrideGuidance&gt;&lt;PotentialImpacts&gt;&lt;/PotentialImpacts&gt;&lt;ThirdPartyTools&gt;&lt;/ThirdPartyTools&gt;&lt;MitigationControl&gt;&lt;/MitigationControl&gt;&lt;Responsibility&gt;&lt;/Responsibility&gt;&lt;IAControls&gt;&lt;/IAControls&gt;</description><reference><dc:title>DPMS Target Red Hat Enterprise Linux 9</dc:title><dc:publisher>DISA</dc:publisher><dc:type>DPMS Target</dc:type><dc:subject>Red Hat Enterprise Linux 9</dc:subject><dc:identifier>5551</dc:identifier></reference><ident system="http://cyber.mil/cci">CCI-000366</ident><fixtext fixref="F-61443r925320_fix">Install RHEL 9 security patches and updates at the organizationally defined frequency. If system updates are installed via a centralized repository that is configured on the system, all updates can be installed with the following command:
+
+$ sudo dnf update</fixtext><fix id="F-61443r925320_fix"/><check system="C-61519r1134891_chk"><check-content-ref href="Red_Hat_Enterprise_Linux_9_STIG.xml" name="M"/><check-content>Verify RHEL 9 security patches and updates are installed and up to date. Updates are required to be applied with a frequency determined by organizational policy.
+
+Obtain the list of available package security updates from Red Hat. The URL for updates is https://access.redhat.com/errata-search/. It is important to note that updates provided by Red Hat may not be present on the system if the underlying packages are not installed.
+
+Check that the available package security updates have been installed on the system with the following command:
+
+$ sudo dnf history list | more
+
+    ID | Command line | Date and time | Action(s) | Altered    
+-------------------------------------------------------------------------------    
+   70 | install aide | 2023-03-05 10:58 | Install | 1    
+   69 | update -y | 2023-03-04 14:34 | Update | 18 EE    
+   68 | install vlc | 2023-02-21 17:12 | Install | 21   
+   67 | update -y | 2023-02-21 17:04 | Update | 7 EE 
+
+Typical update frequency may be overridden by Information Assurance Vulnerability Alert (IAVA) notifications from CYBERCOM.
+
+If the system is in noncompliance with the organizational patching policy, this is a finding.</check-content></check></Rule></Group><Group id="V-257779"><title>SRG-OS-000023-GPOS-00006</title><description>&lt;GroupDescription&gt;&lt;/GroupDescription&gt;</description><Rule id="SV-257779r958390_rule" weight="10.0" severity="medium"><version>RHEL-09-211020</version><title>RHEL 9 must display the Standard Mandatory DOD Notice and Consent Banner before granting local or remote access to the system via a command line user logon.</title><description>&lt;VulnDiscussion&gt;Display of a standardized and approved use notification before granting access to the operating system ensures privacy and security notification verbiage used is consistent with applicable federal laws, Executive Orders, directives, policies, regulations, standards, and guidance.
+
+System use notifications are required only for access via login interfaces with human users and are not required when such human interfaces do not exist.
+
+Satisfies: SRG-OS-000023-GPOS-00006, SRG-OS-000228-GPOS-00088&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;&lt;FalseNegatives&gt;&lt;/FalseNegatives&gt;&lt;Documentable&gt;false&lt;/Documentable&gt;&lt;Mitigations&gt;&lt;/Mitigations&gt;&lt;SeverityOverrideGuidance&gt;&lt;/SeverityOverrideGuidance&gt;&lt;PotentialImpacts&gt;&lt;/PotentialImpacts&gt;&lt;ThirdPartyTools&gt;&lt;/ThirdPartyTools&gt;&lt;MitigationControl&gt;&lt;/MitigationControl&gt;&lt;Responsibility&gt;&lt;/Responsibility&gt;&lt;IAControls&gt;&lt;/IAControls&gt;</description><reference><dc:title>DPMS Target Red Hat Enterprise Linux 9</dc:title><dc:publisher>DISA</dc:publisher><dc:type>DPMS Target</dc:type><dc:subject>Red Hat Enterprise Linux 9</dc:subject><dc:identifier>5551</dc:identifier></reference><ident system="http://cyber.mil/cci">CCI-000048</ident><ident system="http://cyber.mil/cci">CCI-001384</ident><ident system="http://cyber.mil/cci">CCI-001385</ident><ident system="http://cyber.mil/cci">CCI-001386</ident><ident system="http://cyber.mil/cci">CCI-001387</ident><ident system="http://cyber.mil/cci">CCI-001388</ident><fixtext fixref="F-61444r925323_fix">Configure RHEL 9 to display the Standard Mandatory DOD Notice and Consent Banner before granting access to the system via command line logon.
+
+Edit the "/etc/issue" file to replace the default text with the Standard Mandatory DOD Notice and Consent Banner. The DOD-required text is:
+
+"You are accessing a U.S. Government (USG) Information System (IS) that is provided for USG-authorized use only.
+
+By using this IS (which includes any device attached to this IS), you consent to the following conditions:
+
+-The USG routinely intercepts and monitors communications on this IS for purposes including, but not limited to, penetration testing, COMSEC monitoring, network operations and defense, personnel misconduct (PM), law enforcement (LE), and counterintelligence (CI) investigations.
+
+-At any time, the USG may inspect and seize data stored on this IS.
+
+-Communications using, or data stored on, this IS are not private, are subject to routine monitoring, interception, and search, and may be disclosed or used for any USG-authorized purpose.
+
+-This IS includes security measures (e.g., authentication and access controls) to protect USG interests -- not for your personal benefit or privacy.
+
+-Notwithstanding the above, using this IS does not constitute consent to PM, LE or CI investigative searching or monitoring of the content of privileged communications, or work product, related to personal representation or services by attorneys, psychotherapists, or clergy, and their assistants. Such communications and work product are private and confidential. See User Agreement for details."</fixtext><fix id="F-61444r925323_fix"/><check system="C-61520r925322_chk"><check-content-ref href="Red_Hat_Enterprise_Linux_9_STIG.xml" name="M"/><check-content>Verify RHEL 9 displays the Standard Mandatory DOD Notice and Consent Banner before granting access to the operating system via a command line user logon.
+
+Check that a banner is displayed at the command line login screen with the following command:
+
+$ sudo cat /etc/issue
+
+If the banner is set correctly it will return the following text:
+
+"You are accessing a U.S. Government (USG) Information System (IS) that is provided for USG-authorized use only.
+
+By using this IS (which includes any device attached to this IS), you consent to the following conditions:
+
+-The USG routinely intercepts and monitors communications on this IS for purposes including, but not limited to, penetration testing, COMSEC monitoring, network operations and defense, personnel misconduct (PM), law enforcement (LE), and counterintelligence (CI) investigations.
+
+-At any time, the USG may inspect and seize data stored on this IS.
+
+-Communications using, or data stored on, this IS are not private, are subject to routine monitoring, interception, and search, and may be disclosed or used for any USG-authorized purpose.
+
+-This IS includes security measures (e.g., authentication and access controls) to protect USG interests--not for your personal benefit or privacy.
+
+-Notwithstanding the above, using this IS does not constitute consent to PM, LE or CI investigative searching or monitoring of the content of privileged communications, or work product, related to personal representation or services by attorneys, psychotherapists, or clergy, and their assistants. Such communications and work product are private and confidential. See User Agreement for details."
+
+If the banner text does not match the Standard Mandatory DOD Notice and Consent Banner exactly, or the line is commented out, this is a finding.</check-content></check></Rule></Group><Group id="V-257796"><title>SRG-OS-000037-GPOS-00015</title><description>&lt;GroupDescription&gt;&lt;/GroupDescription&gt;</description><Rule id="SV-257796r1044847_rule" weight="10.0" severity="low"><version>RHEL-09-212055</version><title>RHEL 9 must enable auditing of processes that start prior to the audit daemon.</title><description>&lt;VulnDiscussion&gt;Without the capability to generate audit records, it would be difficult to establish, correlate, and investigate the events relating to an incident or identify those responsible for one.
+
+If auditing is enabled late in the startup process, the actions of some startup processes may not be audited. Some audit systems also maintain state information only available if auditing is enabled before a given process is created.
+
+Satisfies: SRG-OS-000037-GPOS-00015, SRG-OS-000042-GPOS-00020, SRG-OS-000062-GPOS-00031, SRG-OS-000392-GPOS-00172, SRG-OS-000462-GPOS-00206, SRG-OS-000471-GPOS-00215, SRG-OS-000473-GPOS-00218, SRG-OS-000254-GPOS-00095&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;&lt;FalseNegatives&gt;&lt;/FalseNegatives&gt;&lt;Documentable&gt;false&lt;/Documentable&gt;&lt;Mitigations&gt;&lt;/Mitigations&gt;&lt;SeverityOverrideGuidance&gt;&lt;/SeverityOverrideGuidance&gt;&lt;PotentialImpacts&gt;&lt;/PotentialImpacts&gt;&lt;ThirdPartyTools&gt;&lt;/ThirdPartyTools&gt;&lt;MitigationControl&gt;&lt;/MitigationControl&gt;&lt;Responsibility&gt;&lt;/Responsibility&gt;&lt;IAControls&gt;&lt;/IAControls&gt;</description><reference><dc:title>DPMS Target Red Hat Enterprise Linux 9</dc:title><dc:publisher>DISA</dc:publisher><dc:type>DPMS Target</dc:type><dc:subject>Red Hat Enterprise Linux 9</dc:subject><dc:identifier>5551</dc:identifier></reference><ident system="http://cyber.mil/cci">CCI-000130</ident><ident system="http://cyber.mil/cci">CCI-000135</ident><ident system="http://cyber.mil/cci">CCI-000169</ident><ident system="http://cyber.mil/cci">CCI-000172</ident><ident system="http://cyber.mil/cci">CCI-001464</ident><ident system="http://cyber.mil/cci">CCI-002884</ident><fixtext fixref="F-61461r925374_fix">Enable auditing of processes that start prior to the audit daemon with the following command:
+
+$ sudo grubby --update-kernel=ALL --args="audit=1"
+
+Add or modify the following line in "/etc/default/grub" to ensure the configuration survives kernel updates:
+
+GRUB_CMDLINE_LINUX="audit=1"</fixtext><fix id="F-61461r925374_fix"/><check system="C-61537r1044846_chk"><check-content-ref href="Red_Hat_Enterprise_Linux_9_STIG.xml" name="M"/><check-content>Verify that GRUB 2 is configured to enable auditing of processes that start prior to the audit daemon with the following commands:
+
+Check that the current GRUB 2 configuration enables auditing:
+
+$ sudo grubby --info=ALL | grep args | grep -v 'audit=1'
+
+If any output is returned, this is a finding.
+
+Check that auditing is enabled by default to persist in kernel updates: 
+
+$ grep audit /etc/default/grub
+
+GRUB_CMDLINE_LINUX="audit=1"
+
+If "audit" is not set to "1", is missing, or is commented out, this is a finding.</check-content></check></Rule></Group><Group id="V-257819"><title>SRG-OS-000366-GPOS-00153</title><description>&lt;GroupDescription&gt;&lt;/GroupDescription&gt;</description><Rule id="SV-257819r1015075_rule" weight="10.0" severity="medium"><version>RHEL-09-214010</version><title>RHEL 9 must ensure cryptographic verification of vendor software packages.</title><description>&lt;VulnDiscussion&gt;Cryptographic verification of vendor software packages ensures that all software packages are obtained from a valid source and protects against spoofing that could lead to installation of malware on the system. Red Hat cryptographically signs all software packages, which includes updates, with a GPG key to verify that they are valid.&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;&lt;FalseNegatives&gt;&lt;/FalseNegatives&gt;&lt;Documentable&gt;false&lt;/Documentable&gt;&lt;Mitigations&gt;&lt;/Mitigations&gt;&lt;SeverityOverrideGuidance&gt;&lt;/SeverityOverrideGuidance&gt;&lt;PotentialImpacts&gt;&lt;/PotentialImpacts&gt;&lt;ThirdPartyTools&gt;&lt;/ThirdPartyTools&gt;&lt;MitigationControl&gt;&lt;/MitigationControl&gt;&lt;Responsibility&gt;&lt;/Responsibility&gt;&lt;IAControls&gt;&lt;/IAControls&gt;</description><reference><dc:title>DPMS Target Red Hat Enterprise Linux 9</dc:title><dc:publisher>DISA</dc:publisher><dc:type>DPMS Target</dc:type><dc:subject>Red Hat Enterprise Linux 9</dc:subject><dc:identifier>5551</dc:identifier></reference><ident system="http://cyber.mil/cci">CCI-003992</ident><ident system="http://cyber.mil/cci">CCI-001749</ident><fixtext fixref="F-61484r925443_fix">Install Red Hat package-signing keys on the system and verify their fingerprints match vendor values.
+
+Insert RHEL 9 installation disc or attach RHEL 9 installation image to the system. Mount the disc or image to make the contents accessible inside the system.
+
+Assuming the mounted location is "/media/cdrom", use the following command to copy Red Hat GPG key file onto the system:
+
+$ sudo cp /media/cdrom/RPM-GPG-KEY-redhat-release /etc/pki/rpm-gpg/
+	 
+Import Red Hat GPG keys from key file into system keyring:
+
+$ sudo rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release
+	 
+Using the steps listed in the Check Text, confirm the newly imported keys show as installed on the system and verify their fingerprints match vendor values.</fixtext><fix id="F-61484r925443_fix"/><check system="C-61560r925442_chk"><check-content-ref href="Red_Hat_Enterprise_Linux_9_STIG.xml" name="M"/><check-content>Confirm Red Hat package-signing keys are installed on the system and verify their fingerprints match vendor values.
+
+Note: For RHEL 9 software packages, Red Hat uses GPG keys labeled "release key 2" and "auxiliary key 3". The keys are defined in key file "/etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release" by default.
+
+List Red Hat GPG keys installed on the system:
+
+$ sudo rpm -q --queryformat "%{SUMMARY}\n" gpg-pubkey | grep -i "red hat"
+
+Red Hat, Inc. (release key 2) &lt;security@redhat.com&gt; public key
+Red Hat, Inc. (auxiliary key 3) &lt;security@redhat.com&gt; public key
+
+If Red Hat GPG keys "release key 2" and "auxiliary key 3" are not installed, this is a finding.
+
+List key fingerprints of installed Red Hat GPG keys:
+
+$ sudo gpg -q --keyid-format short --with-fingerprint /etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release
+
+If key file "/etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release" is missing, this is a finding.
+
+Example output:
+
+pub   rsa4096/FD431D51 2009-10-22 [SC]
+      Key fingerprint = 567E 347A D004 4ADE 55BA  8A5F 199E 2F91 FD43 1D51
+uid                   Red Hat, Inc. (release key 2) &lt;security@redhat.com&gt;
+pub   rsa4096/5A6340B3 2022-03-09 [SC]
+      Key fingerprint = 7E46 2425 8C40 6535 D56D  6F13 5054 E4A4 5A63 40B3
+uid                   Red Hat, Inc. (auxiliary key 3) &lt;security@redhat.com&gt;
+
+Compare key fingerprints of installed Red Hat GPG keys with fingerprints listed for RHEL 9 on Red Hat "Product Signing Keys" webpage at https://access.redhat.com/security/team/key.
+
+If key fingerprints do not match, this is a finding.</check-content></check></Rule></Group><Group id="V-257820"><title>SRG-OS-000366-GPOS-00153</title><description>&lt;GroupDescription&gt;&lt;/GroupDescription&gt;</description><Rule id="SV-257820r1044878_rule" weight="10.0" severity="high"><version>RHEL-09-214015</version><title>RHEL 9 must check the GPG signature of software packages originating from external software repositories before installation.</title><description>&lt;VulnDiscussion&gt;Changes to any software components can have significant effects on the overall security of the operating system. This requirement ensures the software has not been tampered with and that it has been provided by a trusted vendor.
+
+All software packages must be signed with a cryptographic key recognized and approved by the organization.
+
+Verifying the authenticity of software prior to installation validates the integrity of the software package received from a vendor. This verifies the software has not been tampered with and that it has been provided by a trusted vendor.&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;&lt;FalseNegatives&gt;&lt;/FalseNegatives&gt;&lt;Documentable&gt;false&lt;/Documentable&gt;&lt;Mitigations&gt;&lt;/Mitigations&gt;&lt;SeverityOverrideGuidance&gt;&lt;/SeverityOverrideGuidance&gt;&lt;PotentialImpacts&gt;&lt;/PotentialImpacts&gt;&lt;ThirdPartyTools&gt;&lt;/ThirdPartyTools&gt;&lt;MitigationControl&gt;&lt;/MitigationControl&gt;&lt;Responsibility&gt;&lt;/Responsibility&gt;&lt;IAControls&gt;&lt;/IAControls&gt;</description><reference><dc:title>DPMS Target Red Hat Enterprise Linux 9</dc:title><dc:publisher>DISA</dc:publisher><dc:type>DPMS Target</dc:type><dc:subject>Red Hat Enterprise Linux 9</dc:subject><dc:identifier>5551</dc:identifier></reference><ident system="http://cyber.mil/cci">CCI-003992</ident><ident system="http://cyber.mil/cci">CCI-001749</ident><fixtext fixref="F-61485r925446_fix">Configure dnf to always check the GPG signature of software packages originating from external software repositories before installation.
+
+Add or update the following line in the [main] section of the /etc/dnf/dnf.conf file:
+
+gpgcheck=1</fixtext><fix id="F-61485r925446_fix"/><check system="C-61561r1044877_chk"><check-content-ref href="Red_Hat_Enterprise_Linux_9_STIG.xml" name="M"/><check-content>Verify that dnf always checks the GPG signature of software packages originating from external software repositories before installation:
+
+$ grep -w gpgcheck /etc/dnf/dnf.conf
+
+gpgcheck=1
+
+If "gpgcheck" is not set to "1", or if the option is missing or commented out, ask the system administrator how the GPG signatures of software packages are being verified.
+
+If there is no process to verify GPG signatures that is approved by the organization, this is a finding.</check-content></check></Rule></Group><Group id="V-257821"><title>SRG-OS-000366-GPOS-00153</title><description>&lt;GroupDescription&gt;&lt;/GroupDescription&gt;</description><Rule id="SV-257821r1015077_rule" weight="10.0" severity="high"><version>RHEL-09-214020</version><title>RHEL 9 must check the GPG signature of locally installed software packages before installation.</title><description>&lt;VulnDiscussion&gt;Changes to any software components can have significant effects on the overall security of the operating system. This requirement ensures the software has not been tampered with and that it has been provided by a trusted vendor.
+
+All software packages must be signed with a cryptographic key recognized and approved by the organization.
+
+Verifying the authenticity of software prior to installation validates the integrity of the software package received from a vendor. This verifies the software has not been tampered with and that it has been provided by a trusted vendor.&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;&lt;FalseNegatives&gt;&lt;/FalseNegatives&gt;&lt;Documentable&gt;false&lt;/Documentable&gt;&lt;Mitigations&gt;&lt;/Mitigations&gt;&lt;SeverityOverrideGuidance&gt;&lt;/SeverityOverrideGuidance&gt;&lt;PotentialImpacts&gt;&lt;/PotentialImpacts&gt;&lt;ThirdPartyTools&gt;&lt;/ThirdPartyTools&gt;&lt;MitigationControl&gt;&lt;/MitigationControl&gt;&lt;Responsibility&gt;&lt;/Responsibility&gt;&lt;IAControls&gt;&lt;/IAControls&gt;</description><reference><dc:title>DPMS Target Red Hat Enterprise Linux 9</dc:title><dc:publisher>DISA</dc:publisher><dc:type>DPMS Target</dc:type><dc:subject>Red Hat Enterprise Linux 9</dc:subject><dc:identifier>5551</dc:identifier></reference><ident system="http://cyber.mil/cci">CCI-003992</ident><ident system="http://cyber.mil/cci">CCI-001749</ident><fixtext fixref="F-61486r925449_fix">Configure dnf to always check the GPG signature of local software packages before installation.
+
+Add or update the following line in the [main] section of the /etc/dnf/dnf.conf file:
+
+localpkg_gpgcheck=1</fixtext><fix id="F-61486r925449_fix"/><check system="C-61562r925448_chk"><check-content-ref href="Red_Hat_Enterprise_Linux_9_STIG.xml" name="M"/><check-content>Verify that dnf always checks the GPG signature of locally installed software packages before installation:
+
+$ grep localpkg_gpgcheck /etc/dnf/dnf.conf 
+
+localpkg_gpgcheck=1 
+
+If "localpkg_gpgcheck" is not set to "1", or if the option is missing or commented out, ask the system administrator how the GPG signatures of local software packages are being verified.
+
+If there is no process to verify GPG signatures that is approved by the organization, this is a finding.</check-content></check></Rule></Group><Group id="V-257822"><title>SRG-OS-000366-GPOS-00153</title><description>&lt;GroupDescription&gt;&lt;/GroupDescription&gt;</description><Rule id="SV-257822r1155615_rule" weight="10.0" severity="high"><version>RHEL-09-214025</version><title>RHEL 9 must have GPG signature verification enabled for all software repositories.</title><description>&lt;VulnDiscussion&gt;Changes to any software components can have significant effects on the overall security of the operating system. This requirement ensures the software has not been tampered with and that it has been provided by a trusted vendor.
+
+All software packages must be signed with a cryptographic key recognized and approved by the organization.
+
+Verifying the authenticity of software prior to installation validates the integrity of the software package received from a vendor. This verifies the software has not been tampered with and that it has been provided by a trusted vendor.&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;&lt;FalseNegatives&gt;&lt;/FalseNegatives&gt;&lt;Documentable&gt;false&lt;/Documentable&gt;&lt;Mitigations&gt;&lt;/Mitigations&gt;&lt;SeverityOverrideGuidance&gt;&lt;/SeverityOverrideGuidance&gt;&lt;PotentialImpacts&gt;&lt;/PotentialImpacts&gt;&lt;ThirdPartyTools&gt;&lt;/ThirdPartyTools&gt;&lt;MitigationControl&gt;&lt;/MitigationControl&gt;&lt;Responsibility&gt;&lt;/Responsibility&gt;&lt;IAControls&gt;&lt;/IAControls&gt;</description><reference><dc:title>DPMS Target Red Hat Enterprise Linux 9</dc:title><dc:publisher>DISA</dc:publisher><dc:type>DPMS Target</dc:type><dc:subject>Red Hat Enterprise Linux 9</dc:subject><dc:identifier>5551</dc:identifier></reference><ident system="http://cyber.mil/cci">CCI-003992</ident><ident system="http://cyber.mil/cci">CCI-001749</ident><fixtext fixref="F-61487r925452_fix">Configure all software repositories defined in "/etc/yum.repos.d/" to have "gpgcheck" enabled:
+
+$ sudo sed -i 's/gpgcheck\s*=.*/gpgcheck=1/g' /etc/yum.repos.d/*</fixtext><fix id="F-61487r925452_fix"/><check system="C-61563r1155614_chk"><check-content-ref href="Red_Hat_Enterprise_Linux_9_STIG.xml" name="M"/><check-content>Verify all software repositories defined in "/etc/yum.repos.d/" have been configured with "gpgcheck" enabled:
+
+$ grep -w gpgcheck /etc/yum.repos.d/*.repo | more
+
+/etc/yum.repos.d/redhat.repo:gpgcheck = 1
+
+For all listed repos, if "gpgcheck" is not set to "1", or if the option is missing or commented out, ask the system administrator how the GPG signatures of local software packages are being verified.
+
+If there is no process to verify GPG signatures that is approved by the organization, this is a finding.</check-content></check></Rule></Group><Group id="V-257826"><title>SRG-OS-000074-GPOS-00042</title><description>&lt;GroupDescription&gt;&lt;/GroupDescription&gt;</description><Rule id="SV-257826r1208770_rule" weight="10.0" severity="high"><version>RHEL-09-215015</version><title>RHEL 9 must not have a File Transfer Protocol (FTP) server package installed.</title><description>&lt;VulnDiscussion&gt;The FTP service provides an unencrypted remote access that does not provide for the confidentiality and integrity of user passwords or the remote session. If a privileged user were to log on using this service, the privileged user password could be compromised. SSH or other encrypted file transfer methods must be used in place of this service.
+
+Removing the "vsftpd" package decreases the risk of accidental activation.
+
+If FTP is required for operational support (such as transmission of router configurations), its use must be documented with the information systems security manager (ISSM), restricted to only authorized personnel, and have access control rules established.
+
+Satisfies: SRG-OS-000074-GPOS-00042, SRG-OS-000095-GPOS-00049, SRG-OS-000480-GPOS-00227&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;&lt;FalseNegatives&gt;&lt;/FalseNegatives&gt;&lt;Documentable&gt;false&lt;/Documentable&gt;&lt;Mitigations&gt;&lt;/Mitigations&gt;&lt;SeverityOverrideGuidance&gt;&lt;/SeverityOverrideGuidance&gt;&lt;PotentialImpacts&gt;&lt;/PotentialImpacts&gt;&lt;ThirdPartyTools&gt;&lt;/ThirdPartyTools&gt;&lt;MitigationControl&gt;&lt;/MitigationControl&gt;&lt;Responsibility&gt;&lt;/Responsibility&gt;&lt;IAControls&gt;&lt;/IAControls&gt;</description><reference><dc:title>DPMS Target Red Hat Enterprise Linux 9</dc:title><dc:publisher>DISA</dc:publisher><dc:type>DPMS Target</dc:type><dc:subject>Red Hat Enterprise Linux 9</dc:subject><dc:identifier>5551</dc:identifier></reference><ident system="http://cyber.mil/cci">CCI-000197</ident><ident system="http://cyber.mil/cci">CCI-000381</ident><fixtext fixref="F-61491r1208478_fix">Remove the vsftpd package with the following command:
+
+$ sudo dnf remove vsftpd</fixtext><fix id="F-61491r1208478_fix"/><check system="C-61567r1208477_chk"><check-content-ref href="Red_Hat_Enterprise_Linux_9_STIG.xml" name="M"/><check-content>Verify RHEL 9 does not have an FTP server package installed with the following command:
+
+$ sudo dnf list --installed | grep vsftpd
+
+If the "vsftpd" package is installed, this is a finding.</check-content></check></Rule></Group><Group id="V-257831"><title>SRG-OS-000095-GPOS-00049</title><description>&lt;GroupDescription&gt;&lt;/GroupDescription&gt;</description><Rule id="SV-257831r1044898_rule" weight="10.0" severity="medium"><version>RHEL-09-215040</version><title>RHEL 9 must not have the telnet-server package installed.</title><description>&lt;VulnDiscussion&gt;It is detrimental for operating systems to provide, or install by default, functionality exceeding requirements or mission objectives. These unnecessary capabilities are often overlooked and therefore, may remain unsecure. They increase the risk to the platform by providing additional attack vectors.
+
+The telnet service provides an unencrypted remote access service, which does not provide for the confidentiality and integrity of user passwords or the remote session. If a privileged user were to login using this service, the privileged user password could be compromised.
+
+Removing the "telnet-server" package decreases the risk of accidental (or intentional) activation of the telnet service.&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;&lt;FalseNegatives&gt;&lt;/FalseNegatives&gt;&lt;Documentable&gt;false&lt;/Documentable&gt;&lt;Mitigations&gt;&lt;/Mitigations&gt;&lt;SeverityOverrideGuidance&gt;&lt;/SeverityOverrideGuidance&gt;&lt;PotentialImpacts&gt;&lt;/PotentialImpacts&gt;&lt;ThirdPartyTools&gt;&lt;/ThirdPartyTools&gt;&lt;MitigationControl&gt;&lt;/MitigationControl&gt;&lt;Responsibility&gt;&lt;/Responsibility&gt;&lt;IAControls&gt;&lt;/IAControls&gt;</description><reference><dc:title>DPMS Target Red Hat Enterprise Linux 9</dc:title><dc:publisher>DISA</dc:publisher><dc:type>DPMS Target</dc:type><dc:subject>Red Hat Enterprise Linux 9</dc:subject><dc:identifier>5551</dc:identifier></reference><ident system="http://cyber.mil/cci">CCI-000381</ident><fixtext fixref="F-61496r925479_fix">Remove the telnet-server package with the following command:
+
+$ sudo dnf remove telnet-server</fixtext><fix id="F-61496r925479_fix"/><check system="C-61572r1044897_chk"><check-content-ref href="Red_Hat_Enterprise_Linux_9_STIG.xml" name="M"/><check-content>Verify that the telnet-server package is not installed with the following command:
+
+$ dnf list --installed telnet-server
+
+Error: No matching Packages to list
+
+If the "telnet-server" package is installed, this is a finding.</check-content></check></Rule></Group><Group id="V-257889"><title>SRG-OS-000480-GPOS-00227</title><description>&lt;GroupDescription&gt;&lt;/GroupDescription&gt;</description><Rule id="SV-257889r1184302_rule" weight="10.0" severity="medium"><version>RHEL-09-232045</version><title>All RHEL 9 local initialization files must have mode 0740 or less permissive.</title><description>&lt;VulnDiscussion&gt;Local initialization files are used to configure the user's shell environment upon logon. Malicious modification of these files could compromise accounts upon logon.&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;&lt;FalseNegatives&gt;&lt;/FalseNegatives&gt;&lt;Documentable&gt;false&lt;/Documentable&gt;&lt;Mitigations&gt;&lt;/Mitigations&gt;&lt;SeverityOverrideGuidance&gt;&lt;/SeverityOverrideGuidance&gt;&lt;PotentialImpacts&gt;&lt;/PotentialImpacts&gt;&lt;ThirdPartyTools&gt;&lt;/ThirdPartyTools&gt;&lt;MitigationControl&gt;&lt;/MitigationControl&gt;&lt;Responsibility&gt;&lt;/Responsibility&gt;&lt;IAControls&gt;&lt;/IAControls&gt;</description><reference><dc:title>DPMS Target Red Hat Enterprise Linux 9</dc:title><dc:publisher>DISA</dc:publisher><dc:type>DPMS Target</dc:type><dc:subject>Red Hat Enterprise Linux 9</dc:subject><dc:identifier>5551</dc:identifier></reference><ident system="http://cyber.mil/cci">CCI-000366</ident><fixtext fixref="F-61554r1184301_fix">Set the mode of the local initialization files to "0740" with the following command:
+
+Note: The example will be for the disauser user, who has a home directory of "/home/disauser".
+
+$ sudo chmod 0740 /home/disauser/.&lt;INIT_FILE&gt;</fixtext><fix id="F-61554r1184301_fix"/><check system="C-61630r1184300_chk"><check-content-ref href="Red_Hat_Enterprise_Linux_9_STIG.xml" name="M"/><check-content>Verify all local initialization files have a mode of "0740" or less permissive with the following command:
+	
+Note: The example will be for the "disauser" user, who has a home directory of "/home/disauser".
+	
+$ sudo find /home /root -maxdepth 2 -type f -name ".*" -perm /037 -ls
+
+755 /home/disauser/.somepermissivefile
+	
+If any local initialization files are returned, this indicates a mode more permissive than "0740", and this is a finding.</check-content></check></Rule></Group><Group id="V-257910"><title>SRG-OS-000480-GPOS-00227</title><description>&lt;GroupDescription&gt;&lt;/GroupDescription&gt;</description><Rule id="SV-257910r991589_rule" weight="10.0" severity="medium"><version>RHEL-09-232150</version><title>RHEL 9 /etc/shadow file must be owned by root.</title><description>&lt;VulnDiscussion&gt;The "/etc/shadow" file contains the list of local system accounts and stores password hashes. Protection of this file is critical for system security. Failure to give ownership of this file to root provides the designated owner with access to sensitive information, which could weaken the system security posture.&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;&lt;FalseNegatives&gt;&lt;/FalseNegatives&gt;&lt;Documentable&gt;false&lt;/Documentable&gt;&lt;Mitigations&gt;&lt;/Mitigations&gt;&lt;SeverityOverrideGuidance&gt;&lt;/SeverityOverrideGuidance&gt;&lt;PotentialImpacts&gt;&lt;/PotentialImpacts&gt;&lt;ThirdPartyTools&gt;&lt;/ThirdPartyTools&gt;&lt;MitigationControl&gt;&lt;/MitigationControl&gt;&lt;Responsibility&gt;&lt;/Responsibility&gt;&lt;IAControls&gt;&lt;/IAControls&gt;</description><reference><dc:title>DPMS Target Red Hat Enterprise Linux 9</dc:title><dc:publisher>DISA</dc:publisher><dc:type>DPMS Target</dc:type><dc:subject>Red Hat Enterprise Linux 9</dc:subject><dc:identifier>5551</dc:identifier></reference><ident system="http://cyber.mil/cci">CCI-000366</ident><fixtext fixref="F-61575r925716_fix">Change the owner of the file /etc/shadow to root by running the following command:
+
+$ sudo chown root /etc/shadow</fixtext><fix id="F-61575r925716_fix"/><check system="C-61651r925715_chk"><check-content-ref href="Red_Hat_Enterprise_Linux_9_STIG.xml" name="M"/><check-content>Verify the ownership of the "/etc/shadow" file with the following command:
+
+$ sudo stat -c "%U %n" /etc/shadow
+
+root /etc/shadow
+
+If "/etc/shadow" file does not have an owner of "root", this is a finding.</check-content></check></Rule></Group><Group id="V-257934"><title>SRG-OS-000480-GPOS-00227</title><description>&lt;GroupDescription&gt;&lt;/GroupDescription&gt;</description><Rule id="SV-257934r991589_rule" weight="10.0" severity="medium"><version>RHEL-09-232270</version><title>RHEL 9 /etc/shadow file must have mode 0000 to prevent unauthorized access.</title><description>&lt;VulnDiscussion&gt;The "/etc/shadow" file contains the list of local system accounts and stores password hashes. Protection of this file is critical for system security. Failure to give ownership of this file to root provides the designated owner with access to sensitive information, which could weaken the system security posture.&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;&lt;FalseNegatives&gt;&lt;/FalseNegatives&gt;&lt;Documentable&gt;false&lt;/Documentable&gt;&lt;Mitigations&gt;&lt;/Mitigations&gt;&lt;SeverityOverrideGuidance&gt;&lt;/SeverityOverrideGuidance&gt;&lt;PotentialImpacts&gt;&lt;/PotentialImpacts&gt;&lt;ThirdPartyTools&gt;&lt;/ThirdPartyTools&gt;&lt;MitigationControl&gt;&lt;/MitigationControl&gt;&lt;Responsibility&gt;&lt;/Responsibility&gt;&lt;IAControls&gt;&lt;/IAControls&gt;</description><reference><dc:title>DPMS Target Red Hat Enterprise Linux 9</dc:title><dc:publisher>DISA</dc:publisher><dc:type>DPMS Target</dc:type><dc:subject>Red Hat Enterprise Linux 9</dc:subject><dc:identifier>5551</dc:identifier></reference><ident system="http://cyber.mil/cci">CCI-000366</ident><fixtext fixref="F-61599r925788_fix">Change the mode of the file "/etc/shadow" to "0000" by running the following command:
+
+$ sudo chmod 0000 /etc/shadow</fixtext><fix id="F-61599r925788_fix"/><check system="C-61675r925787_chk"><check-content-ref href="Red_Hat_Enterprise_Linux_9_STIG.xml" name="M"/><check-content>Verify that the "/etc/shadow" file has mode "0000" with the following command:
+
+$ sudo stat -c "%a %n" /etc/shadow
+
+0 /etc/shadow
+
+If a value of "0" is not returned, this is a finding.</check-content></check></Rule></Group><Group id="V-257948"><title>SRG-OS-000480-GPOS-00227</title><description>&lt;GroupDescription&gt;&lt;/GroupDescription&gt;</description><Rule id="SV-257948r1045004_rule" weight="10.0" severity="medium"><version>RHEL-09-252035</version><title>RHEL 9 systems using Domain Name Servers (DNS) resolution must have at least two name servers configured.</title><description>&lt;VulnDiscussion&gt;To provide availability for name resolution services, multiple redundant name servers are mandated. A failure in name resolution could lead to the failure of security functions requiring name resolution, which may include time synchronization, centralized authentication, and remote system logging.&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;&lt;FalseNegatives&gt;&lt;/FalseNegatives&gt;&lt;Documentable&gt;false&lt;/Documentable&gt;&lt;Mitigations&gt;&lt;/Mitigations&gt;&lt;SeverityOverrideGuidance&gt;&lt;/SeverityOverrideGuidance&gt;&lt;PotentialImpacts&gt;&lt;/PotentialImpacts&gt;&lt;ThirdPartyTools&gt;&lt;/ThirdPartyTools&gt;&lt;MitigationControl&gt;&lt;/MitigationControl&gt;&lt;Responsibility&gt;&lt;/Responsibility&gt;&lt;IAControls&gt;&lt;/IAControls&gt;</description><reference><dc:title>DPMS Target Red Hat Enterprise Linux 9</dc:title><dc:publisher>DISA</dc:publisher><dc:type>DPMS Target</dc:type><dc:subject>Red Hat Enterprise Linux 9</dc:subject><dc:identifier>5551</dc:identifier></reference><ident system="http://cyber.mil/cci">CCI-000366</ident><fixtext fixref="F-61613r1045003_fix">Configure the operating system to use two or more name servers for DNS resolution based on the DNS mode of the system.
+	
+If the NetworkManager DNS mode is set to "none", add the following lines to "/etc/resolv.conf":
+	
+nameserver [name server 1]
+nameserver [name server 2]
+	
+Replace [name server 1] and [name server 2] with the IPs of two different DNS resolvers.
+	
+If the NetworkManager DNS mode is set to "default", add two DNS servers to a NetworkManager connection using the following command:
+	
+$ nmcli connection modify [connection name] ipv4.dns [name server 1],[name server 2]
+	
+Replace [name server 1] and [name server 2] with the IPs of two different DNS resolvers. Replace [connection name] with a valid NetworkManager connection name on the system. Replace ipv4 with ipv6 if IPv6 DNS servers are used.</fixtext><fix id="F-61613r1045003_fix"/><check system="C-61689r1045002_chk"><check-content-ref href="Red_Hat_Enterprise_Linux_9_STIG.xml" name="M"/><check-content>Note: If the system is running in a cloud platform and the cloud provider gives a single, highly available IP address for DNS configuration, this control is Not Applicable.
+
+Verify the name servers used by the system with the following command:
+
+$ grep nameserver /etc/resolv.conf
+
+nameserver 192.168.1.2
+nameserver 192.168.1.3
+
+If fewer than two lines are returned that are not commented out, this is a finding.</check-content></check></Rule></Group><Group id="V-257955"><title>SRG-OS-000480-GPOS-00227</title><description>&lt;GroupDescription&gt;&lt;/GroupDescription&gt;</description><Rule id="SV-257955r991589_rule" weight="10.0" severity="high"><version>RHEL-09-252070</version><title>There must be no shosts.equiv files on RHEL 9.</title><description>&lt;VulnDiscussion&gt;The shosts.equiv files are used to configure host-based authentication for the system via SSH. Host-based authentication is not sufficient for preventing unauthorized access to the system, as it does not require interactive identification and authentication of a connection request, or for the use of two-factor authentication.&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;&lt;FalseNegatives&gt;&lt;/FalseNegatives&gt;&lt;Documentable&gt;false&lt;/Documentable&gt;&lt;Mitigations&gt;&lt;/Mitigations&gt;&lt;SeverityOverrideGuidance&gt;&lt;/SeverityOverrideGuidance&gt;&lt;PotentialImpacts&gt;&lt;/PotentialImpacts&gt;&lt;ThirdPartyTools&gt;&lt;/ThirdPartyTools&gt;&lt;MitigationControl&gt;&lt;/MitigationControl&gt;&lt;Responsibility&gt;&lt;/Responsibility&gt;&lt;IAControls&gt;&lt;/IAControls&gt;</description><reference><dc:title>DPMS Target Red Hat Enterprise Linux 9</dc:title><dc:publisher>DISA</dc:publisher><dc:type>DPMS Target</dc:type><dc:subject>Red Hat Enterprise Linux 9</dc:subject><dc:identifier>5551</dc:identifier></reference><ident system="http://cyber.mil/cci">CCI-000366</ident><fixtext fixref="F-61620r925851_fix">Remove any found "shosts.equiv" files from the system.
+
+$ sudo rm /[path]/[to]/[file]/shosts.equiv</fixtext><fix id="F-61620r925851_fix"/><check system="C-61696r925850_chk"><check-content-ref href="Red_Hat_Enterprise_Linux_9_STIG.xml" name="M"/><check-content>Verify there are no "shosts.equiv" files on RHEL 9 with the following command:
+
+$ sudo find / -name shosts.equiv
+
+If a "shosts.equiv" file is found, this is a finding.</check-content></check></Rule></Group><Group id="V-257985"><title>SRG-OS-000109-GPOS-00056</title><description>&lt;GroupDescription&gt;&lt;/GroupDescription&gt;</description><Rule id="SV-257985r1069364_rule" weight="10.0" severity="medium"><version>RHEL-09-255045</version><title>RHEL 9 must not permit direct logons to the root account using remote access via SSH.</title><description>&lt;VulnDiscussion&gt;Even though the communications channel may be encrypted, an additional layer of security is gained by extending the policy of not logging directly on as root. In addition, logging in with a user-specific account provides individual accountability of actions performed on the system and also helps to minimize direct attack attempts on root's password.
+
+Satisfies: SRG-OS-000109-GPOS-00056, SRG-OS-000480-GPOS-00227&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;&lt;FalseNegatives&gt;&lt;/FalseNegatives&gt;&lt;Documentable&gt;false&lt;/Documentable&gt;&lt;Mitigations&gt;&lt;/Mitigations&gt;&lt;SeverityOverrideGuidance&gt;&lt;/SeverityOverrideGuidance&gt;&lt;PotentialImpacts&gt;&lt;/PotentialImpacts&gt;&lt;ThirdPartyTools&gt;&lt;/ThirdPartyTools&gt;&lt;MitigationControl&gt;&lt;/MitigationControl&gt;&lt;Responsibility&gt;&lt;/Responsibility&gt;&lt;IAControls&gt;&lt;/IAControls&gt;</description><reference><dc:title>DPMS Target Red Hat Enterprise Linux 9</dc:title><dc:publisher>DISA</dc:publisher><dc:type>DPMS Target</dc:type><dc:subject>Red Hat Enterprise Linux 9</dc:subject><dc:identifier>5551</dc:identifier></reference><ident system="http://cyber.mil/cci">CCI-004045</ident><ident system="http://cyber.mil/cci">CCI-000770</ident><fixtext fixref="F-61650r1045027_fix">To configure the system to prevent SSH users from logging on directly as root add or modify the following line in "/etc/ssh/sshd_config" or in a file in "/etc/ssh/sshd_config.d".
+
+PermitRootLogin no
+
+Restart the SSH daemon for the settings to take effect:
+
+$ sudo systemctl restart sshd.service</fixtext><fix id="F-61650r1045027_fix"/><check system="C-61726r1069363_chk"><check-content-ref href="Red_Hat_Enterprise_Linux_9_STIG.xml" name="M"/><check-content>Verify RHEL 9 remote access using SSH prevents users from logging on directly as "root" with the following command:
+
+$ sudo /usr/sbin/sshd -dd 2&gt;&amp;1 | awk '/filename/ {print $4}' | tr -d '\r' | tr '\n' ' ' | xargs sudo grep -iH '^\s*permitrootlogin'
+
+PermitRootLogin no
+
+If the "PermitRootLogin" keyword is set to any value other than "no", is missing, or is commented out, this is a finding.</check-content></check></Rule></Group><Group id="V-258072"><title>SRG-OS-000480-GPOS-00228</title><description>&lt;GroupDescription&gt;&lt;/GroupDescription&gt;</description><Rule id="SV-258072r1184320_rule" weight="10.0" severity="medium"><version>RHEL-09-412055</version><title>RHEL 9 must define default permissions for the bash shell.</title><description>&lt;VulnDiscussion&gt;The umask controls the default access mode assigned to newly created files. A umask of 077 limits new files to mode 600 or less permissive. Although umask can be represented as a four-digit number, the first digit representing special access modes is typically ignored or required to be "0". This requirement applies to the globally configured system defaults and the local interactive user defaults for each account on the system.
+
+Satisfies: SRG-OS-000480-GPOS-00228, SRG-OS-000480-GPOS-00227&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;&lt;FalseNegatives&gt;&lt;/FalseNegatives&gt;&lt;Documentable&gt;false&lt;/Documentable&gt;&lt;Mitigations&gt;&lt;/Mitigations&gt;&lt;SeverityOverrideGuidance&gt;&lt;/SeverityOverrideGuidance&gt;&lt;PotentialImpacts&gt;&lt;/PotentialImpacts&gt;&lt;ThirdPartyTools&gt;&lt;/ThirdPartyTools&gt;&lt;MitigationControl&gt;&lt;/MitigationControl&gt;&lt;Responsibility&gt;&lt;/Responsibility&gt;&lt;IAControls&gt;&lt;/IAControls&gt;</description><reference><dc:title>DPMS Target Red Hat Enterprise Linux 9</dc:title><dc:publisher>DISA</dc:publisher><dc:type>DPMS Target</dc:type><dc:subject>Red Hat Enterprise Linux 9</dc:subject><dc:identifier>5551</dc:identifier></reference><ident system="http://cyber.mil/cci">CCI-000366</ident><fixtext fixref="F-61737r926202_fix">Configure RHEL 9 to define default permissions for all authenticated users using the bash shell.
+
+Add or edit the lines for the "umask" parameter in the "/etc/bashrc" file to "077":
+
+umask 077</fixtext><fix id="F-61737r926202_fix"/><check system="C-61813r1184319_chk"><check-content-ref href="Red_Hat_Enterprise_Linux_9_STIG.xml" name="M"/><check-content>Verify the "umask" setting is configured correctly in the "/etc/bashrc" file with the following command:
+
+Note: If the value of the "umask" parameter is set to "000" in the "/etc/bashrc" file, the Severity is raised to a CAT I.
+
+$ grep umask /etc/bashrc 
+
+[ `umask` -eq 0 ] &amp;&amp; umask 077  
+
+If the value for the "umask" parameter is not "077", or the "umask" parameter is missing or is commented out, this is a finding.</check-content></check></Rule></Group><Group id="V-258075"><title>SRG-OS-000480-GPOS-00228</title><description>&lt;GroupDescription&gt;&lt;/GroupDescription&gt;</description><Rule id="SV-258075r1184324_rule" weight="10.0" severity="medium"><version>RHEL-09-412070</version><title>RHEL 9 must define default permissions for the system default profile.</title><description>&lt;VulnDiscussion&gt;The umask controls the default access mode assigned to newly created files. A umask of 077 limits new files to mode 600 or less permissive. Although umask can be represented as a four-digit number, the first digit representing special access modes is typically ignored or required to be "0". This requirement applies to the globally configured system defaults and the local interactive user defaults for each account on the system.
+
+Satisfies: SRG-OS-000480-GPOS-00228, SRG-OS-000480-GPOS-00227&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;&lt;FalseNegatives&gt;&lt;/FalseNegatives&gt;&lt;Documentable&gt;false&lt;/Documentable&gt;&lt;Mitigations&gt;&lt;/Mitigations&gt;&lt;SeverityOverrideGuidance&gt;&lt;/SeverityOverrideGuidance&gt;&lt;PotentialImpacts&gt;&lt;/PotentialImpacts&gt;&lt;ThirdPartyTools&gt;&lt;/ThirdPartyTools&gt;&lt;MitigationControl&gt;&lt;/MitigationControl&gt;&lt;Responsibility&gt;&lt;/Responsibility&gt;&lt;IAControls&gt;&lt;/IAControls&gt;</description><reference><dc:title>DPMS Target Red Hat Enterprise Linux 9</dc:title><dc:publisher>DISA</dc:publisher><dc:type>DPMS Target</dc:type><dc:subject>Red Hat Enterprise Linux 9</dc:subject><dc:identifier>5551</dc:identifier></reference><ident system="http://cyber.mil/cci">CCI-000366</ident><fixtext fixref="F-61740r926211_fix">Configure RHEL 9 to define default permissions for all authenticated users in such a way that the user can only read and modify their own files.
+
+Add or edit the lines for the "umask" parameter in the "/etc/profile" file to "077":
+
+umask 077</fixtext><fix id="F-61740r926211_fix"/><check system="C-61816r1184323_chk"><check-content-ref href="Red_Hat_Enterprise_Linux_9_STIG.xml" name="M"/><check-content>Verify the "umask" setting is configured correctly in the "/etc/profile" file with the following command:
+
+Note: If the value of the "umask" parameter is set to "000" in the "/etc/profile" file, the Severity is raised to a CAT I.
+
+$ grep umask /etc/profile 
+
+umask 077
+
+If the value for the "umask" parameter is not "077", or the "umask" parameter is missing or is commented out, this is a finding.</check-content></check></Rule></Group><Group id="V-258088"><title>SRG-OS-000373-GPOS-00156</title><description>&lt;GroupDescription&gt;&lt;/GroupDescription&gt;</description><Rule id="SV-258088r1155643_rule" weight="10.0" severity="medium"><version>RHEL-09-432035</version><title>RHEL 9 must restrict the use of the "su" command.</title><description>&lt;VulnDiscussion&gt;The "su" program allows to run commands with a substitute user and group ID. It is commonly used to run commands as the root user. Limiting access to such commands is considered a good security practice.
+
+Satisfies: SRG-OS-000373-GPOS-00156, SRG-OS-000312-GPOS-00123&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;&lt;FalseNegatives&gt;&lt;/FalseNegatives&gt;&lt;Documentable&gt;false&lt;/Documentable&gt;&lt;Mitigations&gt;&lt;/Mitigations&gt;&lt;SeverityOverrideGuidance&gt;&lt;/SeverityOverrideGuidance&gt;&lt;PotentialImpacts&gt;&lt;/PotentialImpacts&gt;&lt;ThirdPartyTools&gt;&lt;/ThirdPartyTools&gt;&lt;MitigationControl&gt;&lt;/MitigationControl&gt;&lt;Responsibility&gt;&lt;/Responsibility&gt;&lt;IAControls&gt;&lt;/IAControls&gt;</description><reference><dc:title>DPMS Target Red Hat Enterprise Linux 9</dc:title><dc:publisher>DISA</dc:publisher><dc:type>DPMS Target</dc:type><dc:subject>Red Hat Enterprise Linux 9</dc:subject><dc:identifier>5551</dc:identifier></reference><ident system="http://cyber.mil/cci">CCI-004895</ident><ident system="http://cyber.mil/cci">CCI-002165</ident><ident system="http://cyber.mil/cci">CCI-002038</ident><fixtext fixref="F-61753r926250_fix">Configure RHEL 9 to require users to be in the "wheel" group to run "su" command.
+
+In file "/etc/pam.d/su", uncomment the following line:
+
+"#auth    required    pam_wheel.so use_uid"
+
+$ sed '/^[[:space:]]*#[[:space:]]*auth[[:space:]]\+required[[:space:]]\+pam_wheel\.so[[:space:]]\+use_uid$/s/^[[:space:]]*#//' -i /etc/pam.d/su
+
+If necessary, create a "wheel" group and add administrative users to the group.</fixtext><fix id="F-61753r926250_fix"/><check system="C-61829r1155642_chk"><check-content-ref href="Red_Hat_Enterprise_Linux_9_STIG.xml" name="M"/><check-content>Verify RHEL 9 includes users who require privilege escalation to be members of the "wheel" group with the following command:
+
+$ sudo grep pam_wheel /etc/pam.d/su 
+
+auth             required        pam_wheel.so use_uid 
+
+If a line for "pam_wheel.so" does not exist, or the line is commented out, this is a finding.</check-content></check></Rule></Group><Group id="V-258234"><title>SRG-OS-000396-GPOS-00176</title><description>&lt;GroupDescription&gt;&lt;/GroupDescription&gt;</description><Rule id="SV-258234r1184292_rule" weight="10.0" severity="high"><version>RHEL-09-215100</version><title>RHEL 9 must have the crypto-policies package installed.</title><description>&lt;VulnDiscussion&gt;Centralized cryptographic policies simplify applying secure ciphers across an operating system and the applications that run on that operating system. Use of weak or untested encryption algorithms undermines the purposes of using encryption to protect data.
+
+Satisfies: SRG-OS-000396-GPOS-00176, SRG-OS-000393-GPOS-00173, SRG-OS-000394-GPOS-00174&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;&lt;FalseNegatives&gt;&lt;/FalseNegatives&gt;&lt;Documentable&gt;false&lt;/Documentable&gt;&lt;Mitigations&gt;&lt;/Mitigations&gt;&lt;SeverityOverrideGuidance&gt;&lt;/SeverityOverrideGuidance&gt;&lt;PotentialImpacts&gt;&lt;/PotentialImpacts&gt;&lt;ThirdPartyTools&gt;&lt;/ThirdPartyTools&gt;&lt;MitigationControl&gt;&lt;/MitigationControl&gt;&lt;Responsibility&gt;&lt;/Responsibility&gt;&lt;IAControls&gt;&lt;/IAControls&gt;</description><reference><dc:title>DPMS Target Red Hat Enterprise Linux 9</dc:title><dc:publisher>DISA</dc:publisher><dc:type>DPMS Target</dc:type><dc:subject>Red Hat Enterprise Linux 9</dc:subject><dc:identifier>5551</dc:identifier></reference><ident system="http://cyber.mil/cci">CCI-002450</ident><ident system="http://cyber.mil/cci">CCI-002890</ident><ident system="http://cyber.mil/cci">CCI-003123</ident><fixtext fixref="F-61899r1051249_fix">Install the crypto-policies package (if the package is not already installed) with the following command:
+
+$ sudo dnf -y install crypto-policies</fixtext><fix id="F-61899r1051249_fix"/><check system="C-61975r1051248_chk"><check-content-ref href="Red_Hat_Enterprise_Linux_9_STIG.xml" name="M"/><check-content>Verify that the RHEL 9 crypto-policies package is installed with the following command:
+
+$ dnf list --installed crypto-policies
+
+Example output:
+
+crypto-policies.noarch          20240828-2.git626aa59.el9_5
+
+If the crypto-policies package is not installed, this is a finding.</check-content></check></Rule></Group><Group id="V-258241"><title>SRG-OS-000396-GPOS-00176</title><description>&lt;GroupDescription&gt;&lt;/GroupDescription&gt;</description><Rule id="SV-258241r1184293_rule" weight="10.0" severity="high"><version>RHEL-09-215105</version><title>RHEL 9 must implement a FIPS 140-3-compliant systemwide cryptographic policy.</title><description>&lt;VulnDiscussion&gt;Centralized cryptographic policies simplify applying secure ciphers across an operating system and the applications that run on that operating system. Use of weak or untested encryption algorithms undermines the purposes of using encryption to protect data.
+
+Satisfies: SRG-OS-000396-GPOS-00176, SRG-OS-000393-GPOS-00173, SRG-OS-000394-GPOS-00174&lt;/VulnDiscussion&gt;&lt;FalsePositives&gt;&lt;/FalsePositives&gt;&lt;FalseNegatives&gt;&lt;/FalseNegatives&gt;&lt;Documentable&gt;false&lt;/Documentable&gt;&lt;Mitigations&gt;&lt;/Mitigations&gt;&lt;SeverityOverrideGuidance&gt;&lt;/SeverityOverrideGuidance&gt;&lt;PotentialImpacts&gt;&lt;/PotentialImpacts&gt;&lt;ThirdPartyTools&gt;&lt;/ThirdPartyTools&gt;&lt;MitigationControl&gt;&lt;/MitigationControl&gt;&lt;Responsibility&gt;&lt;/Responsibility&gt;&lt;IAControls&gt;&lt;/IAControls&gt;</description><reference><dc:title>DPMS Target Red Hat Enterprise Linux 9</dc:title><dc:publisher>DISA</dc:publisher><dc:type>DPMS Target</dc:type><dc:subject>Red Hat Enterprise Linux 9</dc:subject><dc:identifier>5551</dc:identifier></reference><ident system="http://cyber.mil/cci">CCI-002450</ident><ident system="http://cyber.mil/cci">CCI-002890</ident><ident system="http://cyber.mil/cci">CCI-003123</ident><fixtext fixref="F-61906r1106301_fix">Configure RHEL 9 to use a FIPS 140-3-compliant systemwide cryptographic policy.
+
+Create a subpolicy for enhancements to the base systemwide crypto-policy by creating the file /etc/crypto-policies/policies/modules/STIG.pmod with the following content:
+
+# Define ciphers and MACs for OpenSSH and libssh
+cipher@SSH=AES-256-GCM AES-256-CTR AES-128-GCM AES-128-CTR
+mac@SSH=HMAC-SHA2-512 HMAC-SHA2-256
+
+Apply the policy enhancements to the FIPS systemwide cryptographic policy level with the following command:
+
+$ sudo update-crypto-policies --set FIPS:STIG
+
+Note: If additional subpolicies are being employed, they must be added to the update-crypto-policies command.
+
+To make the cryptographic settings effective for already running services and applications, restart the system:
+
+$ sudo reboot</fixtext><fix id="F-61906r1106301_fix"/><check system="C-61982r1106300_chk"><check-content-ref href="Red_Hat_Enterprise_Linux_9_STIG.xml" name="M"/><check-content>Verify RHEL 9 is set to use a FIPS 140-3-compliant systemwide cryptographic policy with the following command:
+
+$ update-crypto-policies --show
+
+FIPS
+
+If the systemwide crypto policy is not set to "FIPS", this is a finding.
+
+Note: If subpolicies have been configured, they could be listed in a colon-separated list starting with "FIPS" as follows FIPS:&lt;SUBPOLICY-NAME&gt;. This is not a finding.
+
+Note: Subpolicies like AD-SUPPORT must be configured according to the latest guidance from the operating system vendor.
+
+Verify the current minimum crypto-policy configuration with the following commands:
+
+$ grep -E 'rsa_size|hash' /etc/crypto-policies/state/CURRENT.pol
+
+hash = SHA2-256 SHA2-384 SHA2-512 SHA2-224 SHA3-256 SHA3-384 SHA3-512 SHAKE-256
+min_rsa_size = 2048
+
+If the "hash" values do not include at least the following FIPS 140-3-compliant algorithms "SHA2-256 SHA2-384 SHA2-512 SHA2-224 SHA3-256 SHA3-384 SHA3-512 SHAKE-256", this is a finding.
+
+If there are algorithms that include "SHA1" or a hash value less than "224" this is a finding.
+
+If the "min_rsa_size" is not set to a value of at least "2048", this is a finding.
+
+If these commands do not return any output, this is a finding.</check-content></check></Rule></Group></Benchmark>

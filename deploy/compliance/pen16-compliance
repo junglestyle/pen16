@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Evaluate this host against its SCAP content and push each result to pen16's compliance intake, with the
+# Ansible playbook OpenSCAP generates from the result's failures. pen16 never connects to the host: this
+# script is the only thing that sends anything.
+#
+# /etc/pen16-compliance holds, all written by the deployment:
+#   intake-url    the intake's tailnet URL, such as https://pen16.example.ts.net:8444
+#   auth-header   "Authorization: Bearer <this host's compliance token>", mode 0600
+#   scans         one evaluation per line: <data stream> <profile ID> [tailoring file]
+#
+# Each evaluation's ARF and playbook stay under /var/lib/pen16-compliance/<data stream name>/ until the next
+# run, so the owner can fetch the playbook from the host as well as from the dashboard.
+set -euo pipefail
+
+conf=${PEN16_COMPLIANCE_CONF:-/etc/pen16-compliance}
+state=${PEN16_COMPLIANCE_STATE:-/var/lib/pen16-compliance}
+url=$(<"$conf/intake-url")
+failed=0
+
+while read -r datastream profile tailoring; do
+	[[ -z "$datastream" || "$datastream" == \#* ]] && continue
+	work="$state/$(basename "$datastream" .xml)"
+	mkdir -p "$work"
+	rm -f "$work"/arf.xml* "$work"/remediation.yml*
+	args=(xccdf eval --profile "$profile" --results-arf "$work/arf.xml")
+	[[ -n "$tailoring" ]] && args+=(--tailoring-file "$tailoring")
+	status=0
+	oscap "${args[@]}" "$datastream" > "$work/oscap.log" 2>&1 || status=$?
+	# 0: every rule passed. 2: at least one failed, which is a result like any other. Anything else is an error.
+	if ((status != 0 && status != 2)); then
+		echo "oscap exited $status on $datastream; see $work/oscap.log" >&2
+		failed=1
+		continue
+	fi
+	oscap xccdf generate fix --fix-type ansible --output "$work/remediation.yml" "$work/arf.xml"
+	gzip -k "$work/arf.xml" "$work/remediation.yml"
+	if ! curl --fail-with-body --silent --show-error --max-time 300 --retry 5 --retry-connrefused \
+		--header @"$conf/auth-header" \
+		--form "result=@$work/arf.xml.gz" --form "playbook=@$work/remediation.yml.gz" \
+		"$url/compliance/v1/results"; then
+		echo "pen16 refused or didn't take the result for $datastream" >&2
+		failed=1
+	fi
+	echo
+done < "$conf/scans"
+
+exit "$failed"

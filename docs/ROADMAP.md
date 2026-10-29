@@ -7,7 +7,8 @@ that isn't ready yet waits here for its slice rather than becoming a stub in the
 
 Three releases: M1 is v0.1, the dashboard and internal monitoring loop. M2 adds advisory awareness and M3 the
 outside view; they can ship in either order, and together they complete v1. Nothing after M1 starts until the pilot
-has run, and recurring chores it turns up are removed before any integration is added.
+has run, and recurring chores it turns up are removed before any integration is added. Host compliance is the
+exception: the owner moved it ahead of the pilot, and it runs alongside M1's remaining slices.
 
 ## M1: dashboard and internal monitoring (v0.1)
 
@@ -122,6 +123,39 @@ evidence, in the deployment repository.
 
 Also show scope containment, filtered and unavailable results staying open, cancellation and deadlines, denied
 assistant actions, notification failure, and restored evidence and settings.
+
+## Compliance
+
+### C1. Compliance results on the dashboard
+
+Delivers FR-14, FR-15 and FR-16. A host's weekly OpenSCAP result arrives at the intake with its own token. The
+dashboard shows each host's benchmark, profile, content version and pass rate, its failing rules by severity with
+STIG IDs, waivers with reasons, and hosts that have stopped reporting. The first result and every pass-to-fail
+regression alert once. Each result offers its STIG Viewer checklist and its remediation playbook.
+
+Done when: the RHEL 9 STIG fixture shows a pass rate and failing rules; a second upload where one rule regresses
+alerts with that rule; waiving it leaves it listed as failing with the reason, and the checklist shows the reason
+and the vulnerability shared by two rules as open.
+
+### C2. Hosts report on their own
+
+Delivers the deployment half of FR-14. The deployment installs OpenSCAP, the pinned content, the host's profile,
+its tailoring file and its token, and enables the weekly timer. Tailoring records every deselected rule and changed
+value with a reason, and a small custom benchmark, composed into its own data stream, checks what the upstream
+content doesn't, such as container runtime and tailnet settings. The owner fetches a host's playbook, runs it in
+check mode, applies it, and the next result shows the fix.
+
+Done when: two of the owner's hosts report on schedule; one fix applied from the generated playbook shows as a
+pass the following week.
+
+### C3. pen16 on a STIG-hardened host
+
+pen16's own host moves to an operating system with a DISA STIG profile and evaluates itself against it. Rules the
+container runtime, SELinux, FIPS mode or application whitelisting can't meet are tailored out with a justification
+each, which the checklist carries as comments.
+
+Done when: pen16 runs on the hardened host with backups and scans unchanged, and its own checklist shows every open
+vulnerability either fixed or justified.
 
 ## M2: advisory awareness
 

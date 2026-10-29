@@ -55,6 +55,21 @@ services:
     command: [web, --host, 0.0.0.0, --port, "8080"]
     ports:
       - 127.0.0.1:8080:8080
+    volumes:
+      - /etc/pen16/pen16.toml:/etc/pen16/pen16.toml:ro
+      - /var/lib/pen16/evidence:/var/lib/pen16/evidence:ro
+    networks: [core]
+
+  # Hosts push compliance results here. tailscale serve puts it on its own tailnet port; it takes compliance
+  # tokens only and serves nothing else.
+  intake:
+    <<: *core
+    command: [intake, --host, 0.0.0.0, --port, "8444"]
+    ports:
+      - 127.0.0.1:8444:8444
+    volumes:
+      - /etc/pen16/pen16.toml:/etc/pen16/pen16.toml:ro
+      - /var/lib/pen16/evidence:/var/lib/pen16/evidence
     networks: [core]
 
   listener:

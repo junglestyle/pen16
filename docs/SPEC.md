@@ -11,6 +11,7 @@ The threats are accidental exposure, vulnerable or forgotten services, opportuni
 | Monitoring health | Last successful scans, notifications, backups, and later feeds/probe |
 | Exposure | Reachable services and unexpected exposure by vantage |
 | Recent changes | New, removed, or changed services and versions |
+| Compliance | Each host's benchmark, profile, pass rate, and failing rules by severity, with waivers, stale hosts, a STIG checklist, and a remediation playbook |
 | Needs attention | Open findings, with accepted risks available separately |
 | Relevant advisories (M2) | Potentially affected software, match reasons, and sources |
 | Trends (M2) | Open findings and time to resolve over time |
@@ -32,16 +33,19 @@ Counts link to assets and findings. Show observation time, vantage, coverage, an
 - **FR-11** Provide Compose, Ansible, migrations, fictional configuration, and offline validation. Automate backups, host security updates, TLS renewal, and retention. Application and tool upgrades are a deliberate pin bump and playbook run. Demonstrate restore and measure resource use and owner interventions.
 - **FR-12** M2 fetches KEV and selected advisories daily, with optional NVD enrichment. Match explicit product identifiers/aliases and versions; show potentially affected assets, unmatched services, source freshness, and non-CVE watchlist items. Alert on relevant high/critical or known-exploited issues. Feeds never start scans or resolve findings; advisory resolution is an owner decision.
 - **FR-13** M3 adds one external IPv4/TCP probe with independent internet egress, restricted transport, DDNS checks, and heartbeat alerts. Keep internal and external evidence separate.
+- **FR-14** Hosts evaluate pinned SCAP content with OpenSCAP weekly and push the ARF to pen16 over the tailnet with their own token; pen16 holds no credentials on them. Record benchmark, profile, content version, and every rule's result with its severity and STIG, SRG, CCI and NIST 800-53 references, and keep the ARF as evidence. A stale or duplicate upload changes nothing.
+- **FR-15** Show each host's pass rate and failing rules. A waiver covers one rule on one host, needs a reason, and keeps the rule visible as failing. Alert once on a host's first result, whenever an unwaived rule goes from pass to fail, and when a host hasn't reported in 10 days.
+- **FR-16** Export a STIG Viewer checklist (CKLB) for a result that matches an imported DISA STIG: every rule of the STIG, its status from the SCAP rules that check it or not reviewed, and waiver reasons as comments. Serve the Ansible playbook the host generated from its own failures. The owner runs remediation; pen16 never changes a host.
 
 ## Limits
 
-The owner, deployment host, and probe observations are trusted. Coverage depends on inventory, feeds, scan intervals, and vantage; a gateway check can miss downstream failures. Filtered ports can reflect packet loss. pen16 cannot establish that software is patched or prevent compromise. Enterprise tenancy, compliance certification, intrusion prevention, exploitation, and autonomous remediation are outside scope. Whole-host loss needs an independent monitor.
+The owner, deployment host, and probe observations are trusted. Coverage depends on inventory, feeds, scan intervals, and vantage; a gateway check can miss downstream failures. Filtered ports can reflect packet loss. pen16 cannot establish that software is patched or prevent compromise. Compliance results are what a host reports about itself, so a compromised host can report a pass. A checklist holds only the STIG rules the SCAP content automates; manual checks stay for the owner. Enterprise tenancy, compliance certification or authorization packages, intrusion prevention, exploitation, and autonomous remediation are outside scope. Whole-host loss needs an independent monitor.
 
 ## Build order
 
 The [roadmap](ROADMAP.md) orders the work in slices and names the requirements each delivers. M1 is v0.1: the
-dashboard and internal monitoring loop, FR-1 to FR-11. M2 is FR-12 and M3 is FR-13; they can follow M1 in either
-order, and together they complete v1.
+dashboard and internal monitoring loop, FR-1 to FR-11. Compliance, FR-14 to FR-16, is its own track and ships
+before M2. M2 is FR-12 and M3 is FR-13; they can follow M1 in either order, and together they complete v1.
 
 ## After the pilot
 
@@ -58,3 +62,4 @@ Deferred requirements. Each gets its own slice in the [roadmap](ROADMAP.md) once
 - Remediation loop: an assistant client drafts mitigations and manual tests from the read API; pen16 verifies with scan requests.
 - Advisory digest and news/RSS feeds.
 - Approved remediation actions.
+- macOS compliance from the macOS Security Compliance Project's STIG baseline.
