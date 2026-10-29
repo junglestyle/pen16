@@ -63,21 +63,72 @@ an org rule, it says so, and it wins.
 
 Where pen16 doesn't follow the org standards yet. These are debt to pay down, not overrides: each one should go.
 
-- Tooling: it builds with `uv_build`, not hatchling, and mypy checks `tests` too.
-- The `Dockerfile` installs uv with `pip`.
-- Typing: the four `# type: ignore[type-arg]` in `jobs.py` don't say why they're safe.
-- `web.py` loads its templates from `Path(__file__).parent`, not `importlib.resources`.
+- Versions and pins: no dependency in `pyproject.toml` has a lower bound.
+- Versions and pins: every CI job runs on `ubuntu-latest`, which names no release, so the `nmap` the `lab` job installs
+  (`check.yml:27`) isn't pinned to one.
+- Versions and pins: `pyproject.toml` has no `[tool.uv] required-version`, so CI's `setup-uv` (`check.yml:21`)
+  installs the newest uv.
 - Structure: `tokens.revoke` has no caller.
+- Config: nothing here sets `PEN16_EVIDENCE_DIR`, `PEN16_RUNNER_TOKEN_FILE`, `PEN16_EGRESS_MARKER`,
+  `PEN16_RUNNER_SCOPE`, `PEN16_BACKUP_DIR`, `PEN16_COMPLIANCE_CONF` or `PEN16_COMPLIANCE_STATE`, so each always
+  takes its default path.
+- Running it: CI's `image` job isn't in `make check`, and nothing here says so.
 - Privacy: `examples/` has no env file. `db.py` and `worker.py` read `PEN16_DATABASE_URL`, `PEN16_NTFY_URL` and
   `PEN16_NTFY_TOKEN`, and no example or doc names them.
-- SQL: surrogate keys are `BIGSERIAL`, SQLAlchemy's default for a `BigInteger` primary key, not identity columns.
-- Data modeling: statuses and kinds are literals with a `CHECK`, not `StrEnum`s.
-- Testing: the code doesn't refuse a non-local test database, and the test fixture downgrades whatever
-  `PEN16_DATABASE_URL` names.
-- Errors: a missing `PEN16_DATABASE_URL` raises `RuntimeError`, not `SystemExit`.
-- Dependencies: no dependency has a lower bound.
-- Running it: CI's `image` job isn't in `make check`, and nothing here says so.
+- Docs: no doc names `PEN16_CONFIG`, `PEN16_EVIDENCE_DIR`, `PEN16_LISTENER_URL`, `PEN16_RUNNER_TOKEN_FILE` or
+  `PEN16_EGRESS_MARKER`, which the code reads.
+- Docs: [SPEC.md](SPEC.md) opens with what pen16 is, not the problem, its requirements are one flat series
+  (`**FR-1**`–`FR-16`) under one heading with no name after each ID, and it has no Unknowns or Open questions
+  section.
+- Docs: [ROADMAP.md](ROADMAP.md) is arranged by milestones (M1, C1, M2) with a "Shipped" section, and its slices
+  have no `Status:` or `Delivers:` line.
+- Docs: the shipped slices "Owner dashboard over Tailscale" and "Verified nightly backups" (`ROADMAP.md:24-28`) have
+  no done-when.
+- Docs: slice C3 (`ROADMAP.md:151`) names no spec requirement, and slice 9 (`ROADMAP.md:107`) names "M1's
+  demonstration" instead of the part of FR-11 it delivers.
+- Docs: the deferred requirements under the spec's "After the pilot" (`SPEC.md:50`) have no slices; the roadmap's
+  "After the pilot" (`ROADMAP.md:205`) holds them back until the pilot has run.
+- Prose: `ROADMAP.md:10` says "the owner moved it ahead of the pilot", an approval trail.
+- Containers: the `Dockerfile` installs uv with `pip` (line 8), not `COPY --from=ghcr.io/astral-sh/uv:<version>`.
 - Containers: `worker` and `runner` don't handle SIGTERM and don't run with `init: true`.
 - Containers: `deploy/compose.yaml` sets no `logging:`.
-- Shell: `make check` doesn't run shellcheck, which reports two findings in `lab/egress.sh:63`; `deploy/pen16-egress`
-  has no `.sh` name, so a `'*.sh'` glob would miss it.
+- Containers: `worker`, `web`, `intake` and `listener` need `db` but wait only for `migrate`
+  (`deploy/compose.yaml:20`), not for `db` with `condition: service_healthy`.
+- Python tooling: it builds with `uv_build`, not hatchling, and mypy checks `tests` too, whose functions are
+  annotated.
+- Python tooling: CI never runs `uv sync --frozen`; `make lint` checks the lock with `uv lock --check`, then
+  `uv run` syncs from it.
+- Python layout: `web.py` loads its templates from `Path(__file__).parent`, not `importlib.resources`.
+- Python typing: the four `# type: ignore[type-arg]` in `jobs.py` don't say why they're safe.
+- Python typing: `compliance.latest`, `failing` and `_regressions` return driver rows as `list[Any]`, which go on to
+  `web.py` and the template unparsed, and `web._count` takes a SQL expression as `Any`.
+- Python data modeling: no closed set is a `StrEnum`. The code and the dashboard template compare and branch on all
+  eight `CHECK`ed sets as string literals (`exposure.py`, `jobs.py`, `notify.py`, `backups.py`, `compliance.py`,
+  `arf.py`, `web.py`), `cli.py:33` parses `--kind` against a literal `choices` list, and no test asserts any of them
+  against its column's `CHECK`.
+- Python errors: its exceptions are `OutOfScope`, `StaleJob`, `StaleResult` and `ScanFailed`, not `<Thing>Error`.
+- Python errors: messages don't quote the bad value with `!r`, as in `scope.py:33`, `exposure.py:88`, `jobs.py:155`
+  and `nmap.py:69`.
+- Python errors: a missing `PEN16_DATABASE_URL` raises `RuntimeError` (`db.py:266`), a missing `PEN16_LISTENER_URL`
+  `KeyError` (`runner.py:49`), and a missing config file or `networks` a traceback (`config.py:20-24`), not
+  `SystemExit`.
+- Python testing: the code doesn't refuse a non-local test database, runs share `pen16_test` instead of each creating
+  its own, and the test fixture downgrades whatever `PEN16_DATABASE_URL` names.
+- Python testing: without Postgres the tests error instead of skipping with a reason, and `make test` doesn't pass
+  `-rs`.
+- Python testing: `arf-rhel9-stig.xml` is a real OpenSCAP evaluation of a UBI 9 filesystem, trimmed
+  (`conftest.py:15`), not a synthetic fixture.
+- Python testing: test files are named one per module (`test_backups.py`, `test_exposure.py`, `test_jobs.py`,
+  `test_notify.py` and the rest), not for the behavior they cover.
+- Python dependencies: `uv_build` is capped `<0.12` (`pyproject.toml:30`) with no comment naming a break.
+- Shell: `deploy/pen16-egress:42` writes `$marker.tmp` without `mktemp` or a `trap` that removes it.
+- Shell: `deploy/pen16-egress` sets up the runner's egress policy, and its header doesn't say it's safe to re-run.
+- Shell: `deploy/pen16-backup:60` puts the basename of `PEN16_EVIDENCE_DIR` into a `sed` program unchecked.
+- Shell: `make check` doesn't run shellcheck, which reports two findings in `lab/egress.sh:63`;
+  `deploy/pen16-egress`, `deploy/pen16-backup` and `deploy/compliance/pen16-compliance` have no `.sh` name, so a
+  `'*.sh'` glob would miss them.
+- SQL: closed sets with no `CHECK`: `findings.kind`, `stig_rules.severity`, `jobs.profile` and `schedules.profile`,
+  and `protocol` and `vantage` in `observations`, `findings` and `expected_services`. Each of the eight `CHECK`s is
+  written again in `db.py`, and `arf.SEVERITIES`, `nmap.STATES` and `cli.py`'s `--kind` choices copy theirs; no test
+  checks any copy against its `CHECK`.
+- SQL: surrogate keys are `BIGSERIAL`, SQLAlchemy's default for a `BigInteger` primary key, not identity columns.
