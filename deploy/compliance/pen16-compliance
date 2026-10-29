@@ -8,8 +8,8 @@
 #   auth-header   "Authorization: Bearer <this host's compliance token>", mode 0600
 #   scans         one evaluation per line: <data stream> <profile ID> [tailoring file]
 #
-# Each evaluation's ARF and playbook stay under /var/lib/pen16-compliance/<data stream name>/ until the next
-# run, so the owner can fetch the playbook from the host as well as from the dashboard.
+# Each evaluation's ARF and playbook stay under /var/lib/pen16-compliance/<data stream>.<profile>/ until the
+# next run, so the owner can fetch the playbook from the host as well as from the dashboard.
 set -euo pipefail
 
 conf=${PEN16_COMPLIANCE_CONF:-/etc/pen16-compliance}
@@ -19,7 +19,8 @@ failed=0
 
 while read -r datastream profile tailoring; do
 	[[ -z "$datastream" || "$datastream" == \#* ]] && continue
-	work="$state/$(basename "$datastream" .xml)"
+	# One directory per data stream and profile, such as ssg-debian13-ds.cis_level1_server.
+	work="$state/$(basename "$datastream" .xml).${profile##*_profile_}"
 	mkdir -p "$work"
 	rm -f "$work"/arf.xml* "$work"/results.xml "$work"/remediation.yml*
 	tailor=()
