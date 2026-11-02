@@ -10,6 +10,7 @@ from sqlalchemy import (
     Engine,
     ForeignKey,
     Identity,
+    Index,
     Integer,
     MetaData,
     PrimaryKeyConstraint,
@@ -18,6 +19,7 @@ from sqlalchemy import (
     UniqueConstraint,
     create_engine,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, INET
 
@@ -33,6 +35,11 @@ class ObservationState(StrEnum):
 class FindingStatus(StrEnum):
     OPEN = "open"
     RESOLVED = "resolved"
+
+
+class DecisionKind(StrEnum):
+    ACCEPTED_RISK = "accepted-risk"
+    FALSE_POSITIVE = "false-positive"
 
 
 class JobStatus(StrEnum):
@@ -148,6 +155,27 @@ findings = Table(
     Column("last_observation_id", BigInteger, ForeignKey("observations.id"), nullable=False),
     _one_of("status", FindingStatus, "finding_status"),
     UniqueConstraint("kind", "asset_id", "protocol", "port", "vantage"),
+)
+
+# The owner's decision about one finding: its risk is accepted, or it's a false positive. It records the service
+# it was decided on, and a scan that sees a materially different one withdraws it. A finding has at most one
+# active decision; withdrawn ones stay as its history.
+decisions = Table(
+    "decisions",
+    metadata,
+    Column("id", BigInteger, Identity(always=True), primary_key=True),
+    Column("finding_id", BigInteger, ForeignKey("findings.id"), nullable=False),
+    Column("kind", Text, nullable=False),
+    Column("reason", Text, nullable=False),
+    Column("decided_by", Text, nullable=False),
+    Column("decided_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("service", Text),
+    Column("product", Text),
+    Column("version", Text),
+    Column("withdrawn_at", DateTime(timezone=True)),
+    Column("withdrawal", Text),
+    _one_of("kind", DecisionKind, "decision_kind"),
+    Index("decisions_one_active", "finding_id", unique=True, postgresql_where=text("withdrawn_at IS NULL")),
 )
 
 schedules = Table(

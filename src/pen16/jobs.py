@@ -109,7 +109,7 @@ def complete(conn: Connection, job_id: int, runner: str, scan: Scan, scope: Scop
     silent = [str(network.gateway) for network in scope.networks if str(network.gateway) not in up]
     opened = exposure.ingest(conn, scan, vantage="internal", closures=not silent)
     if opened:
-        lines = [f"{f.asset_id} {f.port}/{f.protocol}" for f in opened]
+        lines = [f"{f.asset_id} {f.port}/{f.protocol}" + (f": {f.why}" if f.why else "") for f in opened]
         notify.enqueue(
             conn, NotificationKind.FINDING, f"{len(opened)} unexpected service(s)", "\n".join(lines)
         )

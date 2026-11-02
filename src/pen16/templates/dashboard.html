@@ -82,19 +82,75 @@ form.inline { display: inline; }
     <td><input type="checkbox" name="finding" value="{{ f.id }}" id="f{{ f.id }}" aria-label="select {{ f.asset_id }} {{ f.port }}/{{ f.protocol }}"></td>
     <td><label for="f{{ f.id }}">{{ f.asset_id }}</label><br><span class="muted">{{ f.address }}</span></td>
     <td>{{ f.port }}/{{ f.protocol }}</td>
-    <td>{{ f.service or '' }} <span class="muted">{{ f.product or '' }} {{ f.version or '' }}</span></td>
+    <td>{{ f.service or '' }} <span class="muted">{{ f.product or '' }} {{ f.version or '' }}</span>
+      {% if f.withdrawal %}<br><span class="bad">Decision withdrawn: {{ f.withdrawal }}</span>{% endif %}</td>
     <td>{{ f.opened_at.strftime('%Y-%m-%d') }}</td>
   </tr>
   {% endfor %}
 </table></div>
 <p>
   <label for="reason">Reason</label>
-  <input type="text" id="reason" name="reason" required placeholder="why these are meant to be open">
-  <button>Mark selected expected</button>
+  <input type="text" id="reason" name="reason" required placeholder="why, for the selected findings">
 </p>
+<p>
+  <button>Mark expected</button>
+  <button formaction="/findings/decide" name="kind" value="{{ DecisionKind.ACCEPTED_RISK }}">Accept risk</button>
+  <button formaction="/findings/decide" name="kind" value="{{ DecisionKind.FALSE_POSITIVE }}">False positive</button>
+  <button formaction="/findings/resolve">Resolve</button>
+</p>
+<p class="muted">Accepting a risk or marking a false positive needs a named device, and lasts until a scan sees a
+  different service or version. Resolve is for findings that are gone; a port still open comes back on the next
+  scan.</p>
 </form>
 {% else %}
 <p class="muted">Nothing unexpected is open.</p>
+{% endif %}
+
+<h2>Accepted risks and false positives ({{ decided|length }})</h2>
+{% if decided %}
+<div class="scroll"><table>
+  <tr><th>Asset</th><th>Port</th><th>Service</th><th>Decision</th><th></th></tr>
+  {% for d in decided %}
+  <tr>
+    <td>{{ d.asset_id }}<br><span class="muted">{{ d.address }}</span></td>
+    <td>{{ d.port }}/{{ d.protocol }}{% if d.status == FindingStatus.RESOLVED %} <span class="muted">(resolved)</span>{% endif %}</td>
+    <td>{{ d.service or '' }} <span class="muted">{{ d.product or '' }} {{ d.version or '' }}</span></td>
+    <td>{{ 'Accepted risk' if d.decision_kind == DecisionKind.ACCEPTED_RISK else 'False positive' }}: {{ d.reason }}
+      <br><span class="muted">{{ d.decided_at.strftime('%Y-%m-%d') }}</span></td>
+    <td>
+      <form class="inline" method="post" action="/decisions/withdraw">
+        <input type="hidden" name="decision" value="{{ d.decision_id }}">
+        <button>Withdraw</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% else %}
+<p class="muted">None.</p>
+{% endif %}
+
+{% if resolved %}
+<details>
+<summary>Recently resolved ({{ resolved|length }})</summary>
+<div class="scroll"><table>
+  <tr><th>Asset</th><th>Port</th><th>Service</th><th>Resolved</th><th></th></tr>
+  {% for r in resolved %}
+  <tr>
+    <td>{{ r.asset_id }}</td>
+    <td>{{ r.port }}/{{ r.protocol }}</td>
+    <td>{{ r.service or '' }} <span class="muted">{{ r.product or '' }} {{ r.version or '' }}</span></td>
+    <td>{{ r.resolved_at.strftime('%Y-%m-%d') }}<br><span class="muted">{{ r.resolution }}</span></td>
+    <td>
+      <form class="inline" method="post" action="/findings/reopen">
+        <input type="hidden" name="finding" value="{{ r.id }}">
+        <button>Reopen</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table></div>
+</details>
 {% endif %}
 
 <h2>Exposure</h2>

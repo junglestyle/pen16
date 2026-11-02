@@ -5,7 +5,7 @@ from sqlalchemy import insert, select
 
 from pen16 import exposure, nmap, web
 from pen16.config import Config
-from pen16.db import expected_services, findings
+from pen16.db import assets, bindings, decisions, expected_services, findings
 from tests.conftest import LAB_SCAN
 
 OWNER = {"Tailscale-User-Login": "owner@example.com"}
@@ -78,3 +78,46 @@ def test_scan_output_is_escaped(committed, lab_scope):
     assert "<script>" not in page
     assert "&lt;script&gt;x" in page
     assert "<b>ok</b>" not in page
+
+
+def test_accepting_a_risk_from_the_dashboard(committed, lab_scope):
+    with committed.begin() as conn:
+        conn.execute(insert(assets).values(id="fileserver", provisional=False))
+        conn.execute(insert(bindings).values(address="192.0.2.10", asset_id="fileserver"))
+    scanned(committed)
+    client = dashboard(committed, lab_scope)
+    post = {"headers": {**OWNER, "Origin": "https://pen16.example.ts.net"}, "follow_redirects": False}
+    with committed.connect() as conn:
+        web_app = conn.scalar(select(findings.c.id).where(findings.c.port == 8080))
+
+    response = client.post(
+        "/findings/decide",
+        data={"finding": [str(web_app)], "kind": "accepted-risk", "reason": "lab tool"},
+        **post,
+    )
+
+    assert response.status_code == 303
+    page = client.get("/", headers=OWNER).text
+    assert "Accepted risks and false positives (1)" in page
+    assert "Accepted risk: lab tool" in page
+
+    with committed.connect() as conn:
+        decision = conn.scalar(select(decisions.c.id))
+    client.post("/decisions/withdraw", data={"decision": str(decision)}, **post)
+    page = client.get("/", headers=OWNER).text
+    assert "Accepted risks and false positives (0)" in page
+    assert "Decision withdrawn: withdrawn by owner@example.com" in page
+
+
+def test_a_decision_on_an_unnamed_device_is_refused(committed, lab_scope):
+    scanned(committed)
+    with committed.connect() as conn:
+        web_app = conn.scalar(select(findings.c.id).where(findings.c.port == 8080))
+
+    response = dashboard(committed, lab_scope).post(
+        "/findings/decide",
+        data={"finding": [str(web_app)], "kind": "accepted-risk", "reason": "fine"},
+        headers={**OWNER, "Origin": "https://pen16.example.ts.net"},
+    )
+
+    assert response.status_code == 400

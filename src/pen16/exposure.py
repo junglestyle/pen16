@@ -6,10 +6,12 @@ from sqlalchemy import Connection, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 
 from pen16.db import (
+    DecisionKind,
     FindingStatus,
     ObservationState,
     assets,
     bindings,
+    decisions,
     expected_services,
     findings,
     observations,
@@ -26,15 +28,18 @@ class Finding:
     protocol: str
     port: int
     vantage: str
+    # Why it needs attention again, when a scan withdrew the owner's decision about it.
+    why: str | None = None
 
 
 def ingest(conn: Connection, scan: Scan, vantage: str, *, closures: bool = True) -> list[Finding]:
     """Record a scan's observations, open findings for unexpected open ports, and resolve closed ones.
 
-    Returns the findings this scan newly opened or reopened: the ones worth an alert. Run it inside one
-    transaction, so the observations and finding changes land together. Re-ingesting the same evidence
-    changes nothing. closures=False records everything but resolves nothing, for scans whose negative
-    results can't be trusted, such as when the gateway didn't answer.
+    Returns the findings this scan newly opened or reopened, and those whose decision it withdrew: the ones
+    worth an alert. A finding the owner decided about stays quiet while the service matches what they decided
+    on. Run it inside one transaction, so the observations and finding changes land together. Re-ingesting the
+    same evidence changes nothing. closures=False records everything but resolves nothing, for scans whose
+    negative results can't be trusted, such as when the gateway didn't answer.
     """
     opened = []
     for port in scan.ports:
@@ -44,7 +49,16 @@ def ingest(conn: Connection, scan: Scan, vantage: str, *, closures: bool = True)
             continue
         if _expected(conn, asset_id, port.protocol, port.port, vantage):
             continue
-        if _open(conn, asset_id, port, vantage, scan.finished_at, observation_id):
+        finding_id, alert = _open(conn, asset_id, port, vantage, scan.finished_at, observation_id)
+        decision = _active_decision(conn, finding_id)
+        if decision is not None:
+            change = _material_change(decision, port)
+            if change is None:
+                continue
+            withdraw(conn, decision.id, change)
+            why = f"{_NAMES[decision.kind]} withdrawn: {change}"
+            opened.append(Finding(asset_id, port.protocol, port.port, vantage, why))
+        elif alert:
             opened.append(Finding(asset_id, port.protocol, port.port, vantage))
     if closures:
         _close(conn, scan, vantage)
@@ -68,6 +82,86 @@ def expect(conn: Connection, finding_ids: list[int], reason: str) -> None:
         update(findings)
         .where(findings.c.id.in_(finding_ids), findings.c.status == FindingStatus.OPEN)
         .values(status=FindingStatus.RESOLVED, resolved_at=func.now(), resolution=f"expected: {reason}")
+    )
+
+
+_NAMES = {DecisionKind.ACCEPTED_RISK: "accepted risk", DecisionKind.FALSE_POSITIVE: "false positive"}
+
+
+def decide(
+    conn: Connection, finding_ids: list[int], kind: DecisionKind, reason: str, decided_by: str
+) -> None:
+    """Accept the risk of these open findings, or mark them false positives, for the service seen now.
+
+    They leave Needs attention and stop alerting until a scan sees a materially different service. Only named
+    assets take decisions: a provisional asset is just an address, and a decision on it would pass to whatever
+    device takes that address next.
+    """
+    if not reason.strip():
+        raise ValueError("a decision needs a reason")
+    seen = observations.alias("seen")
+    rows = conn.execute(
+        select(
+            findings.c.id,
+            findings.c.asset_id,
+            assets.c.provisional,
+            seen.c.service,
+            seen.c.product,
+            seen.c.version,
+        )
+        .join(assets, assets.c.id == findings.c.asset_id)
+        .join(seen, seen.c.id == findings.c.last_observation_id)
+        .where(findings.c.id.in_(finding_ids), findings.c.status == FindingStatus.OPEN)
+    ).all()
+    unnamed = sorted({row.asset_id for row in rows if row.provisional})
+    if unnamed:
+        raise ValueError(f"name {', '.join(map(repr, unnamed))} first: decisions need a named device")
+    for row in rows:
+        active = _active_decision(conn, row.id)
+        if active is not None:
+            withdraw(conn, active.id, "replaced by a new decision")
+        conn.execute(
+            insert(decisions).values(
+                finding_id=row.id,
+                kind=kind,
+                reason=reason.strip(),
+                decided_by=decided_by,
+                service=row.service,
+                product=row.product,
+                version=row.version,
+            )
+        )
+
+
+def withdraw(conn: Connection, decision_id: int, why: str) -> None:
+    """End a decision. Its finding, if still open, is back in Needs attention."""
+    conn.execute(
+        update(decisions)
+        .where(decisions.c.id == decision_id, decisions.c.withdrawn_at.is_(None))
+        .values(withdrawn_at=func.now(), withdrawal=why)
+    )
+
+
+def resolve(conn: Connection, finding_ids: list[int], reason: str) -> None:
+    """Resolve open findings by hand, such as a filtered port or a device that's gone. A scan that sees the
+    port open again reopens it."""
+    if not reason.strip():
+        raise ValueError("resolving by hand needs a reason")
+    conn.execute(
+        update(findings)
+        .where(findings.c.id.in_(finding_ids), findings.c.status == FindingStatus.OPEN)
+        .values(
+            status=FindingStatus.RESOLVED, resolved_at=func.now(), resolution=f"by hand: {reason.strip()}"
+        )
+    )
+
+
+def reopen(conn: Connection, finding_id: int) -> None:
+    """Put a resolved finding back in Needs attention."""
+    conn.execute(
+        update(findings)
+        .where(findings.c.id == finding_id, findings.c.status == FindingStatus.RESOLVED)
+        .values(status=FindingStatus.OPEN, resolved_at=None, resolution=None)
     )
 
 
@@ -150,9 +244,44 @@ def _expected(conn: Connection, asset_id: str, protocol: str, port: int, vantage
     )
 
 
+@dataclass(frozen=True)
+class _Decision:
+    id: int
+    kind: DecisionKind
+    service: str | None
+    product: str | None
+    version: str | None
+
+
+def _active_decision(conn: Connection, finding_id: int) -> _Decision | None:
+    row = conn.execute(
+        select(
+            decisions.c.id, decisions.c.kind, decisions.c.service, decisions.c.product, decisions.c.version
+        ).where(decisions.c.finding_id == finding_id, decisions.c.withdrawn_at.is_(None))
+    ).first()
+    if row is None:
+        return None
+    return _Decision(row.id, DecisionKind(row.kind), row.service, row.product, row.version)
+
+
+def _material_change(decision: _Decision, port: Port) -> str | None:
+    """What differs between the service a decision was made on and the one seen now, or None.
+
+    A field the scan didn't report isn't a change: a scan without version detection says nothing about the
+    version.
+    """
+    changes = []
+    for field in ("service", "product", "version"):
+        was, now = getattr(decision, field), getattr(port, field)
+        if now is not None and now != was:
+            changes.append(f"{field} changed from {was!r} to {now!r}" if was else f"{field} {now!r} appeared")
+    return "; ".join(changes) or None
+
+
 def _open(
     conn: Connection, asset_id: str, port: Port, vantage: str, observed_at: datetime, observation_id: int
-) -> bool:
+) -> tuple[int, bool]:
+    """Open, keep open, or reopen this service's finding. Returns its ID and whether that's news."""
     key = (
         findings.c.kind == UNEXPECTED_EXPOSURE,
         findings.c.asset_id == asset_id,
@@ -160,10 +289,13 @@ def _open(
         findings.c.port == port.port,
         findings.c.vantage == vantage,
     )
-    existing = conn.execute(select(findings.c.status, findings.c.resolved_at).where(*key)).first()
+    existing = conn.execute(
+        select(findings.c.id, findings.c.status, findings.c.resolved_at).where(*key)
+    ).first()
     if existing is None:
-        conn.execute(
-            insert(findings).values(
+        finding_id: int = conn.scalar(
+            insert(findings)
+            .values(
                 kind=UNEXPECTED_EXPOSURE,
                 asset_id=asset_id,
                 protocol=port.protocol,
@@ -173,13 +305,14 @@ def _open(
                 opened_at=observed_at,
                 last_observation_id=observation_id,
             )
+            .returning(findings.c.id)
         )
-        return True
+        return finding_id, True
     if existing.status == FindingStatus.OPEN:
         conn.execute(update(findings).where(*key).values(last_observation_id=observation_id))
-        return False
+        return existing.id, False
     if existing.resolved_at is not None and existing.resolved_at >= observed_at:
-        return False
+        return existing.id, False
     conn.execute(
         update(findings)
         .where(*key)
@@ -187,7 +320,7 @@ def _open(
             status=FindingStatus.OPEN, resolved_at=None, resolution=None, last_observation_id=observation_id
         )
     )
-    return True
+    return existing.id, True
 
 
 def _close(conn: Connection, scan: Scan, vantage: str) -> None:
