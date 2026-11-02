@@ -75,6 +75,10 @@ services:
     volumes:
       - /etc/pen16/pen16.toml:/etc/pen16/pen16.toml:ro
       - /var/lib/pen16/evidence:/var/lib/pen16/evidence
+    # Uploads past 1 MB spool to /tmp while they're parsed, and the image is read-only. Sized for the largest
+    # upload the intake takes (evidence.MAX_COMPRESSED, 50 MB) with the playbook beside it.
+    tmpfs:
+      - /tmp:size=64m,mode=1777
     networks: [core]
 
   listener:

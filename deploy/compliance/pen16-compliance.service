@@ -16,3 +16,7 @@ PrivateTmp=true
 NoNewPrivileges=true
 Nice=10
 IOSchedulingClass=idle
+# A profile that walks every file can grow oscap past the host's memory. The cap ends that evaluation instead
+# of the host's other work, and the script goes on to the next one and exits non-zero.
+MemoryMax=4G
+OOMPolicy=continue
