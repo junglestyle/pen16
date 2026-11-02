@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import ColumnElement, Connection, Engine, func, select
 
@@ -53,6 +54,9 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
 
     Owner = Annotated[str, Depends(owner)]  # noqa: N806  # a type alias, named like one
     app = FastAPI(title="pen16", docs_url=None, redoc_url=None, openapi_url=None)
+    # The logo and the web app manifest, for a browser tab or a phone's home screen. They hold nothing about the
+    # network, so they skip the owner check; everything else needs it.
+    app.mount("/static", StaticFiles(directory=str(files("pen16") / "static")), name="static")
 
     @app.get("/", response_class=HTMLResponse)
     def dashboard(request: Request, login: Owner) -> HTMLResponse:

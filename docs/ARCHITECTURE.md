@@ -23,7 +23,7 @@ Compliance is push-only. Each host evaluates pinned SCAP content with `oscap` on
 
 ## API permissions
 
-The dashboard and versioned API share application services. The dashboard is reachable only over Tailscale; `tailscale serve` passes the Tailscale identity, and pen16 allows the configured owner login. There are no passwords.
+The dashboard and versioned API share application services. The dashboard is reachable only over Tailscale; `tailscale serve` passes the Tailscale identity, and pen16 allows the configured owner login. There are no passwords. The one exception is `/static`, the logo and web app manifest a browser tab or a phone's home screen uses, which holds nothing about the network and is served to anyone on the tailnet.
 
 | Credential | Authority |
 | --- | --- |

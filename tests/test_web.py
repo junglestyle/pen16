@@ -30,6 +30,9 @@ def test_only_the_owner_gets_in(committed, lab_scope):
     assert client.get("/").status_code == 403
     assert client.get("/", headers={"Tailscale-User-Login": "guest@example.com"}).status_code == 403
     assert client.get("/", headers=OWNER).status_code == 200
+    # The logo and manifest are the only things served without the owner check.
+    assert client.get("/static/manifest.webmanifest").status_code == 200
+    assert client.get("/static/../web.py").status_code == 404
 
 
 def test_cross_site_post_is_refused(committed, lab_scope):
