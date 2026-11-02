@@ -1,8 +1,8 @@
 .PHONY: check standards lint test db lab image sync-standards
 SHELL := bash
 ORG = https://github.com/junglestyle/.github
-# Tests drop and recreate the schema, so they get their own database, never PEN16_DATABASE_URL.
-TEST_DATABASE_URL = postgresql+psycopg://pen16:pen16@localhost:5432/pen16_test
+# Each test run creates and drops its own database through this localhost admin URL (make db's Postgres).
+TEST_ADMIN_URL = postgresql+psycopg://pen16:pen16@localhost:5432/postgres
 
 check: lint test
 
@@ -13,14 +13,14 @@ standards:
 
 lint:
 	uv lock --check
+	uv sync --frozen
 	uv run ruff format --check
 	uv run ruff check
 	uv run mypy
 	{ git ls-files '*.sh'; git ls-files | xargs grep -l '^#!/usr/bin/env bash'; } | sort -u | xargs shellcheck
 
 test:
-	PEN16_DATABASE_URL=$(TEST_DATABASE_URL) uv run pytest
-	PEN16_DATABASE_URL=$(TEST_DATABASE_URL) uv run alembic check
+	PEN16_TEST_ADMIN_URL=$(TEST_ADMIN_URL) uv run pytest -rs
 
 lab:
 	lab/egress.sh

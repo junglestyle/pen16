@@ -90,10 +90,12 @@ def name_asset(conn: Connection, provisional_id: str, asset_id: str) -> None:
     wrongly inherit.
     """
     if not ASSET_ID.fullmatch(asset_id) or asset_id.startswith("new-"):
-        raise ValueError("asset IDs are lowercase letters, digits, and dashes, and don't start with new-")
+        raise ValueError(
+            f"{asset_id!r} isn't an asset ID: lowercase letters, digits, and dashes, not starting with new-"
+        )
     provisional = conn.scalar(select(assets.c.provisional).where(assets.c.id == provisional_id))
     if provisional is not True:
-        raise ValueError(f"{provisional_id} isn't a provisional asset")
+        raise ValueError(f"{provisional_id!r} isn't a provisional asset")
     conn.execute(insert(assets).values(id=asset_id, provisional=False).on_conflict_do_nothing())
     for table in (bindings, observations, findings, expected_services):
         conn.execute(update(table).where(table.c.asset_id == provisional_id).values(asset_id=asset_id))

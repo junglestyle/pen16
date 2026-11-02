@@ -20,6 +20,8 @@ from pen16.db import (
     JobStatus,
     NotificationStatus,
     ObservationState,
+    RuleResult,
+    Severity,
     TokenKind,
     assets,
     bindings,
@@ -34,6 +36,8 @@ from pen16.db import (
 
 STALE = timedelta(hours=48)
 templates = Jinja2Templates(directory=str(files("pen16") / "templates"))
+# The template compares states by name, not by quoted string.
+templates.env.globals.update(JobStatus=JobStatus, RuleResult=RuleResult, Severity=Severity)
 
 
 def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:

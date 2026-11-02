@@ -48,7 +48,7 @@ form.inline { display: inline; }
   </dd>
   <dt>Latest job</dt>
   <dd>
-    {% if latest %}#{{ latest.id }} {{ latest.status }}{% if latest.error %} <span class="{{ 'bad' if latest.status == 'failed' else 'muted' }}">({{ latest.error }})</span>{% endif %}
+    {% if latest %}#{{ latest.id }} {{ latest.status }}{% if latest.error %} <span class="{{ 'bad' if latest.status == JobStatus.FAILED else 'muted' }}">({{ latest.error }})</span>{% endif %}
     {% else %}none yet{% endif %}
   </dd>
   <dt>Next scheduled</dt>
@@ -131,7 +131,7 @@ form.inline { display: inline; }
   <tr><th>Severity</th><th>Rule</th><th>STIG ID</th><th>Waiver</th></tr>
   {% for r in c.failing %}
   <tr>
-    <td class="{{ 'bad' if r.severity == 'high' and not r.waiver else '' }}">{{ r.severity }}{% if r.result != 'fail' %} <span class="muted">({{ r.result }})</span>{% endif %}</td>
+    <td class="{{ 'bad' if r.severity == Severity.HIGH and not r.waiver else '' }}">{{ r.severity }}{% if r.result != RuleResult.FAIL %} <span class="muted">({{ r.result }})</span>{% endif %}</td>
     <td>{{ r.title }}<br><span class="muted">{{ r.rule_id|replace('xccdf_org.ssgproject.content_rule_', '') }}</span></td>
     <td>{{ r.stig_ids|join(', ') }}</td>
     <td>

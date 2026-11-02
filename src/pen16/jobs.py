@@ -165,7 +165,7 @@ def _running(conn: Connection, job_id: int, runner: str) -> Row[Any]:
         .with_for_update()
     ).first()
     if job is None:
-        raise StaleJobError(f"job {job_id} isn't running on runner {runner}")
+        raise StaleJobError(f"job {job_id} isn't running on runner {runner!r}")
     return job
 
 

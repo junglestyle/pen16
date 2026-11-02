@@ -8,11 +8,16 @@
 #
 #   pen16-egress apply   load the policy now if the runner's namespace lacks it
 #   pen16-egress watch   apply, then again on every runner start (the systemd unit runs this)
+#
+# Safe to re-run: apply leaves a runner whose namespace already has the policy alone.
 set -euo pipefail
 
 deploy=$(dirname "$(readlink -f "$0")")
 scope=${PEN16_RUNNER_SCOPE:-/etc/pen16/runner-scope.nft}
 marker=${PEN16_EGRESS_MARKER:-/run/pen16-egress/ready}
+# The marker's temporary file; global, so the EXIT trap still sees it after apply returns.
+tmp=
+trap 'rm -f "$tmp"' EXIT
 
 apply() {
 	local containers pid stamp interfaces
@@ -39,8 +44,10 @@ apply() {
 	fi
 	cat "$deploy/runner-egress.nft" "$deploy/runner-network.nft" "$scope" | nsenter --target "$pid" --net nft -D runner_if=eth0 -f -
 	mkdir -p "$(dirname "$marker")"
-	echo "$stamp" > "$marker.tmp"
-	mv "$marker.tmp" "$marker"
+	tmp=$(mktemp "$marker.XXXXXX")
+	echo "$stamp" > "$tmp"
+	chmod 644 "$tmp"
+	mv "$tmp" "$marker"
 	echo "pen16-egress: policy loaded for runner ${containers[0]:0:12} ($stamp)"
 }
 

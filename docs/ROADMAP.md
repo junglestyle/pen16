@@ -8,7 +8,7 @@ that isn't ready yet waits here for its slice rather than becoming a stub in the
 Three releases: M1 is v0.1, the dashboard and internal monitoring loop. M2 adds advisory awareness and M3 the
 outside view; they can ship in either order, and together they complete v1. Nothing after M1 starts until the pilot
 has run, and recurring chores it turns up are removed before any integration is added. Host compliance is the
-exception: the owner moved it ahead of the pilot, and it runs alongside M1's remaining slices.
+exception: it comes before the pilot and runs alongside M1's remaining slices.
 
 ## M1: dashboard and internal monitoring (v0.1)
 

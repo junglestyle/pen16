@@ -26,6 +26,9 @@ dev = [
     "ruff>=0.17",
 ]
 
+[tool.uv]
+required-version = "==0.13.1"
+
 [build-system]
 requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"

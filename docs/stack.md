@@ -42,7 +42,7 @@ The dashboard is only reachable over Tailscale, so it uses Tailscale identity fo
 
 ## ADR-006: SQLAlchemy Core and Alembic instead of SQL files
 
-The org default is raw SQL through psycopg and numbered `NNN_name.sql` migrations. pen16 declares its tables once, in `db.py`, and builds queries from them with SQLAlchemy Core: no ORM, no sessions, no mapped classes. That one declaration also drives Alembic, so `alembic check` in `make check` fails when the migrations and the tables the code queries drift apart, which plain SQL files can't catch. The locking and dedup the job queue needs (`FOR UPDATE SKIP LOCKED`, `DISTINCT ON`, `RETURNING`) compose as expressions instead of strings. Migrations are numbered Python files, applied once each and never edited after they ship, so the intent of the SQL-file rule carries over; the rule itself doesn't apply here.
+The org default is raw SQL through psycopg and numbered `NNN_name.sql` migrations. pen16 declares its tables once, in `db.py`, and builds queries from them with SQLAlchemy Core: no ORM, no sessions, no mapped classes. That one declaration also drives Alembic, so `alembic check`, which a test runs, fails when the migrations and the tables the code queries drift apart, which plain SQL files can't catch. The locking and dedup the job queue needs (`FOR UPDATE SKIP LOCKED`, `DISTINCT ON`, `RETURNING`) compose as expressions instead of strings. Migrations are numbered Python files, applied once each and never edited after they ship, so the intent of the SQL-file rule carries over; the rule itself doesn't apply here.
 
 ## ADR-007: FastAPI and uvicorn for the dashboard and listener
 

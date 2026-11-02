@@ -145,6 +145,7 @@ def test_scope_rejects_targets_outside_and_dropped_exclusions(lab_scope):
     lab_scope.check(["192.0.2.8/29"], ["192.0.2.12/32"])
 
 
+@pytest.mark.skipif(not Path("/proc/self/ns/net").exists(), reason="needs Linux network namespaces")
 def test_runner_waits_for_egress_on_its_current_namespace(tmp_path):
     marker = tmp_path / "ready"
     assert not runner.egress_ready(marker)
