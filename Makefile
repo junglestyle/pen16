@@ -1,4 +1,4 @@
-.PHONY: check standards lint test db lab image sync-standards
+.PHONY: check standards lint test db lab image icons sync-standards
 SHELL := bash
 ORG = https://github.com/junglestyle/.github
 # Each test run creates and drops its own database through this localhost admin URL (make db's Postgres).
@@ -28,6 +28,10 @@ lab:
 image:
 	docker build -t pen16:ci .
 	docker run --rm --entrypoint nmap pen16:ci --version
+
+# Rerender the app icons in src/pen16/static from docs/assets/pen16-icon-dark.svg; commit what changes.
+icons:
+	uvx --from resvg-py==0.5.0 python docs/assets/make-icons.py
 
 db:
 	docker compose -f compose.test.yaml up -d --wait

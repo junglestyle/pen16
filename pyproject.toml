@@ -78,6 +78,8 @@ ignore = [
     "SLF001",  # tests may reach into private helpers
     "INP001",  # tests/ isn't a package
 ]
+# A script make icons runs through uvx, not a module.
+"docs/assets/make-icons.py" = ["INP001"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
