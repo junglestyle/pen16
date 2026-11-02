@@ -68,7 +68,7 @@ def read(path: Path) -> Scan:
 def parse(raw: bytes) -> Scan:
     root = ElementTree.fromstring(raw)
     if root.tag != "nmaprun":
-        raise ValueError(f"expected nmaprun, got {root.tag}")
+        raise ValueError(f"expected nmaprun, got {root.tag!r}")
     finished = root.find("runstats/finished")
     if finished is None:
         raise ValueError("scan has no runstats/finished: nmap didn't complete")
@@ -91,7 +91,7 @@ def parse(raw: bytes) -> Scan:
             state = port.find("state")
             service = port.find("service")
             if state is None:
-                raise ValueError(f"port {port.get('portid')} on {address.get('addr')} has no state")
+                raise ValueError(f"port {port.get('portid')!r} on {address.get('addr')!r} has no state")
             ports.append(
                 Port(
                     address=address.attrib["addr"],

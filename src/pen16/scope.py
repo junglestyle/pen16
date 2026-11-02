@@ -30,11 +30,11 @@ class Scope:
         for target in targets:
             network = _network(target)
             if not any(network.subnet_of(allowed.cidr) for allowed in self.networks):
-                raise OutOfScopeError(f"{target} is outside every scope network")
+                raise OutOfScopeError(f"{target!r} is outside every scope network")
         kept = {_network(excluded) for excluded in exclude}
         for excluded in self.exclude:
             if excluded not in kept:
-                raise OutOfScopeError(f"exclusion {excluded} is missing")
+                raise OutOfScopeError(f"exclusion {str(excluded)!r} is missing")
 
 
 def parse(networks: list[dict[str, str]], exclude: list[str]) -> Scope:

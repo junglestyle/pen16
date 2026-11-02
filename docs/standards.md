@@ -66,10 +66,6 @@ an org rule, it says so, and it wins.
 
 Where pen16 doesn't follow the org standards yet. These are debt to pay down, not overrides: each one should go.
 
-- Versions and pins: every CI job runs on `ubuntu-latest`, which names no release, so the `nmap` the `lab` job installs
-  (`check.yml:27`) isn't pinned to one.
-- Versions and pins: `pyproject.toml` has no `[tool.uv] required-version`, so CI's `setup-uv` (`check.yml:21`)
-  installs the newest uv.
 - Config: nothing here sets `PEN16_EVIDENCE_DIR`, `PEN16_RUNNER_TOKEN_FILE`, `PEN16_EGRESS_MARKER`,
   `PEN16_RUNNER_SCOPE`, `PEN16_BACKUP_DIR`, `PEN16_COMPLIANCE_CONF` or `PEN16_COMPLIANCE_STATE`, so each always
   takes its default path.
@@ -84,28 +80,11 @@ Where pen16 doesn't follow the org standards yet. These are debt to pay down, no
   demonstration" instead of the part of FR-11 it delivers.
 - Docs: the deferred requirements under the spec's "After the pilot" (`SPEC.md:50`) have no slices; the roadmap's
   "After the pilot" (`ROADMAP.md:205`) holds them back until the pilot has run.
-- Prose: `ROADMAP.md:10` says "the owner moved it ahead of the pilot", an approval trail.
-- Containers: `worker`, `web`, `intake` and `listener` need `db` but wait only for `migrate`
-  (`deploy/compose.yaml:24`), not for `db` with `condition: service_healthy`.
-- Python tooling: CI never runs `uv sync --frozen`; `make lint` checks the lock with `uv lock --check`, then
-  `uv run` syncs from it.
 - Python typing: `compliance.latest`, `failing` and `_regressions` return driver rows as `list[Any]`, which go on to
   `web.py` and the template unparsed, and `web._count` takes a SQL expression as `Any`.
-- Python data modeling: the dashboard template compares a job's status and a rule's severity as quoted strings
-  (`templates/dashboard.html:51`, `:134`), not as the `JobStatus` and `Severity` values.
-- Python errors: messages don't quote the bad value with `!r`, as in `scope.py:33`, `exposure.py:96`, `jobs.py:168`
-  and `nmap.py:71`.
-- Python errors: a missing config file or `networks` key ends in a traceback (`config.py:20-24`), not `SystemExit`.
-- Python testing: runs share `pen16_test` instead of each creating its own database, and the test fixture downgrades
-  whatever local database `PEN16_DATABASE_URL` names.
-- Python testing: without Postgres the tests error instead of skipping with a reason, and `make test` doesn't pass
-  `-rs`.
 - Python testing: `arf-rhel9-stig.xml` is a real OpenSCAP evaluation of a UBI 9 filesystem, trimmed
-  (`conftest.py:15`), not a synthetic fixture.
+  (`conftest.py:19`), not a synthetic fixture.
 - Python testing: test files are named one per module (`test_backups.py`, `test_exposure.py`, `test_jobs.py`,
   `test_notify.py` and the rest), not for the behavior they cover.
-- Shell: `deploy/pen16-egress:42` writes `$marker.tmp` without `mktemp` or a `trap` that removes it.
-- Shell: `deploy/pen16-egress` sets up the runner's egress policy, and its header doesn't say it's safe to re-run.
-- Shell: `deploy/pen16-backup:60` puts the basename of `PEN16_EVIDENCE_DIR` into a `sed` program unchecked.
 - SQL: closed sets with no `CHECK`: `findings.kind`, `stig_rules.severity`, `jobs.profile` and `schedules.profile`,
   and `protocol` and `vantage` in `observations`, `findings` and `expected_services`.

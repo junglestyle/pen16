@@ -1,4 +1,4 @@
-# Throwaway Postgres for make check. Tests wipe it.
+# Throwaway Postgres for make check. Each test run creates its own database in it and drops it afterwards.
 name: pen16-test
 services:
   db:
@@ -6,7 +6,6 @@ services:
     environment:
       POSTGRES_USER: pen16
       POSTGRES_PASSWORD: pen16
-      POSTGRES_DB: pen16_test
     ports:
       - 127.0.0.1:5432:5432
     healthcheck:

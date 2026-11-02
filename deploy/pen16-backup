@@ -12,6 +12,11 @@ set -euo pipefail
 compose=(docker compose -f "$(dirname "$(readlink -f "$0")")/compose.yaml")
 dest=${PEN16_BACKUP_DIR:-/mnt/pen16-backup}
 evidence=${PEN16_EVIDENCE_DIR:-/var/lib/pen16/evidence}
+# Its basename goes into a sed program below.
+[[ "$(basename "$evidence")" =~ ^[A-Za-z0-9_-]+$ ]] || {
+	echo "pen16-backup: PEN16_EVIDENCE_DIR's last part may hold only letters, digits, _ and -: $evidence" >&2
+	exit 1
+}
 name=$(date -u +%F)
 scratch=pen16-backup-verify
 
