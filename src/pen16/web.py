@@ -12,11 +12,12 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import ColumnElement, Connection, Engine, func, select
+from sqlalchemy import ColumnElement, Connection, Engine, ScalarSelect, Text, cast, exists, func, select
 
-from pen16 import backups, compliance, config, db, evidence, exposure, jobs
+from pen16 import backups, compliance, config, db, evidence, exposure, jobs, neighbours
 from pen16.config import Config
 from pen16.db import (
+    DecisionKind,
     FindingStatus,
     JobStatus,
     NotificationStatus,
@@ -27,8 +28,10 @@ from pen16.db import (
     assets,
     bindings,
     compliance_scans,
+    decisions,
     expected_services,
     findings,
+    mac_sightings,
     notifications,
     observations,
     schedules,
@@ -38,7 +41,14 @@ from pen16.db import (
 STALE = timedelta(hours=48)
 templates = Jinja2Templates(directory=str(files("pen16") / "templates"))
 # The template compares states by name, not by quoted string.
-templates.env.globals.update(JobStatus=JobStatus, RuleResult=RuleResult, Severity=Severity)
+templates.env.globals.update(
+    DecisionKind=DecisionKind,
+    FindingStatus=FindingStatus,
+    JobStatus=JobStatus,
+    RuleResult=RuleResult,
+    Severity=Severity,
+    vendor=neighbours.vendor,
+)
 
 
 def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
@@ -76,6 +86,43 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
     ) -> RedirectResponse:
         with engine.begin() as conn:
             exposure.expect(conn, finding, reason)
+        return _back()
+
+    @app.post("/findings/decide")
+    def decide(
+        login: Owner,
+        finding: Annotated[list[int], Form()],
+        kind: Annotated[DecisionKind, Form()],
+        reason: Annotated[str, Form()],
+    ) -> RedirectResponse:
+        try:
+            with engine.begin() as conn:
+                exposure.decide(conn, finding, kind, reason, login)
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from error
+        return _back()
+
+    @app.post("/findings/resolve")
+    def resolve(
+        _login: Owner, finding: Annotated[list[int], Form()], reason: Annotated[str, Form()]
+    ) -> RedirectResponse:
+        try:
+            with engine.begin() as conn:
+                exposure.resolve(conn, finding, reason)
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from error
+        return _back()
+
+    @app.post("/findings/reopen")
+    def reopen(_login: Owner, finding: Annotated[int, Form()]) -> RedirectResponse:
+        with engine.begin() as conn:
+            exposure.reopen(conn, finding)
+        return _back()
+
+    @app.post("/decisions/withdraw")
+    def withdraw(login: Owner, decision: Annotated[int, Form()]) -> RedirectResponse:
+        with engine.begin() as conn:
+            exposure.withdraw(conn, decision, f"withdrawn by {login}")
         return _back()
 
     @app.post("/expected/remove")
@@ -157,11 +204,48 @@ def _dashboard(conn: Connection) -> dict[str, Any]:
     )
     latest = conn.execute(select(db.jobs).order_by(db.jobs.c.id.desc()).limit(1)).first()
     seen = observations.alias("seen")
+    service = (
+        seen.c.address,
+        _mac(seen.c.address).label("mac"),
+        seen.c.service,
+        seen.c.product,
+        seen.c.version,
+        seen.c.observed_at,
+    )
+    active = (decisions.c.finding_id == findings.c.id) & decisions.c.withdrawn_at.is_(None)
+    # The latest withdrawn decision, shown on a finding that's back in Needs attention.
+    withdrawn = (
+        select(decisions.c.withdrawal)
+        .where(decisions.c.finding_id == findings.c.id, decisions.c.withdrawn_at.is_not(None))
+        .order_by(decisions.c.withdrawn_at.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
     open_findings = conn.execute(
-        select(findings, seen.c.address, seen.c.service, seen.c.product, seen.c.version, seen.c.observed_at)
+        select(findings, *service, withdrawn.label("withdrawal"))
         .join(seen, seen.c.id == findings.c.last_observation_id)
-        .where(findings.c.status == FindingStatus.OPEN)
+        .where(findings.c.status == FindingStatus.OPEN, ~exists().where(active))
         .order_by(findings.c.opened_at.desc())
+    ).all()
+    decided = conn.execute(
+        select(
+            findings,
+            *service,
+            decisions.c.id.label("decision_id"),
+            decisions.c.kind.label("decision_kind"),
+            decisions.c.reason,
+            decisions.c.decided_at,
+        )
+        .join(seen, seen.c.id == findings.c.last_observation_id)
+        .join(decisions, active)
+        .order_by(findings.c.asset_id, findings.c.protocol, findings.c.port)
+    ).all()
+    resolved = conn.execute(
+        select(findings, *service)
+        .join(seen, seen.c.id == findings.c.last_observation_id)
+        .where(findings.c.status == FindingStatus.RESOLVED)
+        .order_by(findings.c.resolved_at.desc())
+        .limit(20)
     ).all()
     latest_state = (
         select(observations)
@@ -216,16 +300,33 @@ def _dashboard(conn: Connection) -> dict[str, Any]:
         "pending": _count(conn, notifications.c.status == NotificationStatus.PENDING),
         "failed": _count(conn, notifications.c.status == NotificationStatus.FAILED),
         "findings": open_findings,
+        "decided": decided,
+        "resolved": resolved,
         "exposed": exposed,
         "expected": conn.execute(select(expected_services).order_by(expected_services.c.asset_id)).all(),
+        # A provisional asset is one address, so one row each.
         "provisional": conn.execute(
-            select(assets.c.id, func.string_agg(func.host(bindings.c.address), ", ").label("addresses"))
+            select(
+                assets.c.id,
+                func.host(bindings.c.address).label("address"),
+                _mac(bindings.c.address).label("mac"),
+            )
             .join(bindings, bindings.c.asset_id == assets.c.id)
             .where(assets.c.provisional)
-            .group_by(assets.c.id)
-            .order_by(assets.c.id)
+            .order_by(bindings.c.address)
         ).all(),
     }
+
+
+def _mac(address: ColumnElement[Any]) -> ScalarSelect[str]:
+    """The MAC most recently seen at an address, if any scan saw one."""
+    return (
+        select(cast(mac_sightings.c.mac, Text))
+        .where(mac_sightings.c.address == address)
+        .order_by(mac_sightings.c.confirmed_at.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
 
 
 def _count(conn: Connection, condition: ColumnElement[bool]) -> int:

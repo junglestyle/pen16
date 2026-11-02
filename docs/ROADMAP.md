@@ -26,16 +26,15 @@ exception: it comes before the pilot and runs alongside M1's remaining slices.
   unnamed devices, with CSRF protection and escaped scan output.
 - **Verified nightly backups.** FR-11 in part. Each backup restores into a throwaway database before it counts, and
   a stale backup alerts once.
-
-### 1. Owner decisions
-
-Delivers the rest of FR-6 and FR-7's decisions. You can resolve or reopen a finding by hand, and accept a risk or
-mark a false positive for one asset, service and vantage, with a reason. Accepted risks leave "Needs attention" and
-get their own list. A material change (new version, new identity, new vantage) brings the decision back for
-attention and says why.
-
-Done when: accept the risk on one open port, watch it leave needs attention and stop alerting, change
-the service's version in the fixture, and watch it come back with the reason shown.
+- **Owner decisions.** The rest of FR-6, and FR-7's decisions. Resolve or reopen a finding by hand, with a reason;
+  accept a risk or mark a false positive for one asset, service and vantage, with a reason. Decided findings leave
+  "Needs attention" for their own list and stop alerting until a scan sees a different service, product or version,
+  which brings the decision back with what changed. Only named devices take decisions. Shown by the decision tests:
+  accept the risk on an open port, see it leave needs attention and stay quiet, change its version in the fixture,
+  and see it come back with the reason.
+- **MAC addresses for devices on the scanner's segment.** FR-2 and FR-4 in part. Each scan records the MAC
+  that answered at every up address, from the scanner host's neighbour table, and the dashboard shows it with its
+  maker, or that it's a private address. Shown by the MAC address tests and on the owner's network.
 
 ### 2. Assets, history and recent changes
 

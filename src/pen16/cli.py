@@ -49,7 +49,8 @@ def main() -> None:
         with db.connect().begin() as conn:
             opened = exposure.ingest(conn, scan, vantage="internal")
         for finding in opened:
-            print(f"unexpected {finding.asset_id} {finding.port}/{finding.protocol} ({finding.vantage})")
+            why = f": {finding.why}" if finding.why else ""
+            print(f"unexpected {finding.asset_id} {finding.port}/{finding.protocol} ({finding.vantage}){why}")
     elif args.command == "migrate":
         alembic = AlembicConfig()
         alembic.set_main_option("script_location", str(files("pen16") / "migrations"))

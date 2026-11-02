@@ -17,7 +17,9 @@ SERVICES = Path(__file__).parent / "fixtures" / "nmap-services"
 
 
 def runner_client(engine, scope, evidence):
-    app = listener.create(engine, Config(scope=scope, owner_login="", dashboard_url=""), evidence)
+    app = listener.create(
+        engine, Config(scope=scope, owner_login="", dashboard_url=""), evidence, evidence / "neighbours.json"
+    )
     with engine.begin() as conn:
         token = tokens.create(conn, "runner", "lab")
     return TestClient(app, headers={"Authorization": f"Bearer {token}"})

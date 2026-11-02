@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Writes the scanner host's IPv4 neighbour table to a file the listener reads, so a scan records each target's
+# MAC (pen16.neighbours). The runner reaches targets through the host's NAT, so nmap never sees a MAC, but the
+# host's kernel resolves one for every address on its own segment that it delivers a packet to.
+#
+#   pen16-neighbours snapshot   write the table now
+#   pen16-neighbours watch      snapshot, then again whenever the table changes (the systemd unit runs this)
+#
+# It only reads: it sends nothing and changes no table. Safe to re-run; each snapshot replaces the last whole.
+set -euo pipefail
+
+out=${PEN16_NEIGHBOURS:-/run/pen16-neighbours/neighbours.json}
+# The snapshot's temporary file; global, so the EXIT trap still sees it after snapshot returns.
+tmp=
+trap 'rm -f "$tmp"' EXIT
+
+snapshot() {
+	tmp=$(mktemp "$out.XXXXXX")
+	# -s adds "confirmed": seconds since the kernel last confirmed the MAC. taken_at turns that into a time.
+	printf '{"taken_at": %s, "neighbours": %s}\n' "$(date +%s)" "$(ip -j -s -4 neigh show)" > "$tmp"
+	chmod 644 "$tmp"
+	mv "$tmp" "$out"
+}
+
+case "${1:-}" in
+	snapshot) snapshot ;;
+	watch)
+		snapshot
+		# A scan changes hundreds of entries: wait for a second's quiet, but never more than five seconds,
+		# before writing again.
+		ip monitor neigh | while read -r _; do
+			start=$SECONDS
+			while (( SECONDS - start < 5 )) && read -r -t 1 _; do :; done
+			snapshot
+		done
+		;;
+	*) echo "usage: pen16-neighbours snapshot|watch" >&2; exit 2 ;;
+esac

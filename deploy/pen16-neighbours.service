@@ -1,0 +1,24 @@
+[Unit]
+Description=pen16 neighbour table for the listener
+Documentation=https://github.com/junglestyle/pen16/blob/main/docs/ARCHITECTURE.md#deployment-and-state-ownership
+Before=docker.service
+
+[Service]
+ExecStart=/opt/pen16/deploy/pen16-neighbours watch
+Restart=always
+RestartSec=5
+# It only reads the neighbour table over netlink and writes its own directory, which the listener mounts. The
+# directory outlives a restart, so the listener's mount keeps pointing at it.
+DynamicUser=true
+RuntimeDirectory=pen16-neighbours
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_NETLINK AF_UNIX
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

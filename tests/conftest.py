@@ -79,7 +79,7 @@ def committed(engine):
             text(
                 "TRUNCATE assets, bindings, expected_services, observations, findings, jobs, tokens, "
                 "notifications, backups, compliance_scans, compliance_rules, compliance_results, "
-                "compliance_waivers, stigs, stig_rules CASCADE"
+                "compliance_waivers, stigs, stig_rules, decisions, mac_sightings CASCADE"
             )
         )
 

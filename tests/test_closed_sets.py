@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy import text
 
 from pen16.db import (
+    DecisionKind,
     FindingStatus,
     JobStatus,
     NotificationKind,
@@ -19,6 +20,7 @@ from pen16.db import (
 CLOSED_SETS = [
     ("observation_state", ObservationState),
     ("finding_status", FindingStatus),
+    ("decision_kind", DecisionKind),
     ("job_status", JobStatus),
     ("token_kind", TokenKind),
     ("notification_kind", NotificationKind),
