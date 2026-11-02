@@ -1,8 +1,10 @@
 import logging
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import Connection, Row, func, insert, select, union, update
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 
 from pen16 import exposure, notify
 from pen16.db import (
@@ -11,9 +13,11 @@ from pen16.db import (
     ObservationState,
     expected_services,
     jobs,
+    mac_sightings,
     observations,
     schedules,
 )
+from pen16.neighbours import Neighbour
 from pen16.nmap import Scan
 from pen16.scope import Scope
 
@@ -102,10 +106,23 @@ def claim(conn: Connection, runner: str) -> Row[Any] | None:
     ).first()
 
 
-def complete(conn: Connection, job_id: int, runner: str, scan: Scan, scope: Scope) -> list[exposure.Finding]:
-    """Record a runner's scan, finding changes, alerts, and the job outcome in one transaction."""
+def complete(
+    conn: Connection, job_id: int, runner: str, scan: Scan, scope: Scope, neighbours: Mapping[str, Neighbour]
+) -> list[exposure.Finding]:
+    """Record a runner's scan, finding changes, alerts, and the job outcome in one transaction.
+
+    neighbours is the scanner host's neighbour table (pen16.neighbours). An up host gets the MAC there only if
+    the kernel confirmed it after this job started, so an entry left from before can't be pinned on this scan.
+    """
     job = _running(conn, job_id, runner)
     up = {host.address for host in scan.hosts if host.up}
+    seen = [
+        {"address": address, "mac": n.mac, "confirmed_at": n.confirmed_at, "evidence_digest": scan.digest}
+        for address in sorted(up)
+        if (n := neighbours.get(address)) is not None and n.confirmed_at >= job.started_at
+    ]
+    if seen:
+        conn.execute(postgresql_insert(mac_sightings).values(seen).on_conflict_do_nothing())
     silent = [str(network.gateway) for network in scope.networks if str(network.gateway) not in up]
     opened = exposure.ingest(conn, scan, vantage="internal", closures=not silent)
     if opened:

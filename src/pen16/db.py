@@ -21,7 +21,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, INET
+from sqlalchemy.dialects.postgresql import ARRAY, INET, MACADDR
 
 metadata = MetaData()
 
@@ -155,6 +155,17 @@ findings = Table(
     Column("last_observation_id", BigInteger, ForeignKey("observations.id"), nullable=False),
     _one_of("status", FindingStatus, "finding_status"),
     UniqueConstraint("kind", "asset_id", "protocol", "port", "vantage"),
+)
+
+# Which MAC answered at an address during a scan, from the scanner host's neighbour table (pen16.neighbours).
+mac_sightings = Table(
+    "mac_sightings",
+    metadata,
+    Column("address", INET, nullable=False),
+    Column("mac", MACADDR, nullable=False),
+    Column("confirmed_at", DateTime(timezone=True), nullable=False),
+    Column("evidence_digest", Text, nullable=False),
+    PrimaryKeyConstraint("evidence_digest", "address"),
 )
 
 # The owner's decision about one finding: its risk is accepted, or it's a false positive. It records the service

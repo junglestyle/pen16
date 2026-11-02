@@ -72,6 +72,7 @@ form.inline { display: inline; }
 </dl>
 <form method="post" action="/scan"><p><button>Scan now</button></p></form>
 
+{% macro mac(m) %}{% if m %}<br><span class="muted">{{ m }}{% if vendor(m) %} · {{ vendor(m) }}{% endif %}</span>{% endif %}{% endmacro %}
 <h2>Needs attention ({{ findings|length }})</h2>
 {% if findings %}
 <form method="post" action="/findings/expect">
@@ -80,7 +81,7 @@ form.inline { display: inline; }
   {% for f in findings %}
   <tr>
     <td><input type="checkbox" name="finding" value="{{ f.id }}" id="f{{ f.id }}" aria-label="select {{ f.asset_id }} {{ f.port }}/{{ f.protocol }}"></td>
-    <td><label for="f{{ f.id }}">{{ f.asset_id }}</label><br><span class="muted">{{ f.address }}</span></td>
+    <td><label for="f{{ f.id }}">{{ f.asset_id }}</label><br><span class="muted">{{ f.address }}</span>{{ mac(f.mac) }}</td>
     <td>{{ f.port }}/{{ f.protocol }}</td>
     <td>{{ f.service or '' }} <span class="muted">{{ f.product or '' }} {{ f.version or '' }}</span>
       {% if f.withdrawal %}<br><span class="bad">Decision withdrawn: {{ f.withdrawal }}</span>{% endif %}</td>
@@ -112,7 +113,7 @@ form.inline { display: inline; }
   <tr><th>Asset</th><th>Port</th><th>Service</th><th>Decision</th><th></th></tr>
   {% for d in decided %}
   <tr>
-    <td>{{ d.asset_id }}<br><span class="muted">{{ d.address }}</span></td>
+    <td>{{ d.asset_id }}<br><span class="muted">{{ d.address }}</span>{{ mac(d.mac) }}</td>
     <td>{{ d.port }}/{{ d.protocol }}{% if d.status == FindingStatus.RESOLVED %} <span class="muted">(resolved)</span>{% endif %}</td>
     <td>{{ d.service or '' }} <span class="muted">{{ d.product or '' }} {{ d.version or '' }}</span></td>
     <td>{{ 'Accepted risk' if d.decision_kind == DecisionKind.ACCEPTED_RISK else 'False positive' }}: {{ d.reason }}
@@ -255,11 +256,11 @@ form.inline { display: inline; }
   <tr><th>Address</th><th>Name it</th></tr>
   {% for a in provisional %}
   <tr>
-    <td>{{ a.addresses }}</td>
+    <td>{{ a.address }}{{ mac(a.mac) }}</td>
     <td>
       <form class="inline" method="post" action="/assets/name">
         <input type="hidden" name="provisional_id" value="{{ a.id }}">
-        <input type="text" name="asset_id" required pattern="[a-z0-9][a-z0-9\-]*" aria-label="name for {{ a.addresses }}" placeholder="e.g. nas">
+        <input type="text" name="asset_id" required pattern="[a-z0-9][a-z0-9\-]*" aria-label="name for {{ a.address }}" placeholder="e.g. nas">
         <button>Save</button>
       </form>
     </td>

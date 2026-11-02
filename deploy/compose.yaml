@@ -89,6 +89,8 @@ services:
     volumes:
       - /etc/pen16/pen16.toml:/etc/pen16/pen16.toml:ro
       - /var/lib/pen16/evidence:/var/lib/pen16/evidence
+      # The host's neighbour table, written by the pen16-neighbours service, for each target's MAC.
+      - /run/pen16-neighbours:/run/pen16-neighbours:ro
     networks:
       core: {}
       runner:

@@ -32,6 +32,9 @@ exception: it comes before the pilot and runs alongside M1's remaining slices.
   which brings the decision back with what changed. Only named devices take decisions. Shown by the decision tests:
   accept the risk on an open port, see it leave needs attention and stay quiet, change its version in the fixture,
   and see it come back with the reason.
+- **MAC addresses for devices on the scanner's segment.** FR-2 and FR-4 in part. Each scan records the MAC
+  that answered at every up address, from the scanner host's neighbour table, and the dashboard shows it with its
+  maker, or that it's a private address. Shown by the MAC address tests and on the owner's network.
 
 ### 2. Assets, history and recent changes
 

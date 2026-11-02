@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from pydantic import BaseModel
 from sqlalchemy import Engine
 
-from pen16 import config, db, evidence, jobs, nmap, tokens
+from pen16 import config, db, evidence, jobs, neighbours, nmap, tokens
 from pen16.config import Config
 from pen16.db import TokenKind
 
@@ -20,7 +20,7 @@ class Failure(BaseModel):
     error: str
 
 
-def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
+def create(engine: Engine, settings: Config, evidence_dir: Path, neighbours_file: Path) -> FastAPI:
     app = FastAPI(title="pen16 runner listener", docs_url=None, redoc_url=None)
 
     def runner(authorization: Annotated[str, Header()] = "") -> str:
@@ -63,9 +63,10 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
             _fail(engine, job_id, runner_id, f"unusable scan output: {type(error).__name__}")
             raise HTTPException(422, "unusable scan output") from error
         evidence.store(evidence_dir, raw, compressed)
+        seen = neighbours.read(neighbours_file)
         try:
             with engine.begin() as conn:
-                opened = jobs.complete(conn, job_id, runner_id, scan, settings.scope)
+                opened = jobs.complete(conn, job_id, runner_id, scan, settings.scope, seen)
         except jobs.StaleJobError as error:
             raise HTTPException(409, str(error)) from error
         log.info("job %s succeeded: %s hosts, %s new findings", job_id, len(scan.hosts), len(opened))
@@ -87,5 +88,8 @@ def _fail(engine: Engine, job_id: int, runner_id: str, error: str) -> None:
 
 def app() -> FastAPI:
     return create(
-        db.connect(), config.load(), Path(os.environ.get("PEN16_EVIDENCE_DIR", "/var/lib/pen16/evidence"))
+        db.connect(),
+        config.load(),
+        Path(os.environ.get("PEN16_EVIDENCE_DIR", "/var/lib/pen16/evidence")),
+        neighbours.path(),
     )

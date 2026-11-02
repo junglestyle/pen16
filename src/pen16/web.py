@@ -12,9 +12,9 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import ColumnElement, Connection, Engine, exists, func, select
+from sqlalchemy import ColumnElement, Connection, Engine, ScalarSelect, Text, cast, exists, func, select
 
-from pen16 import backups, compliance, config, db, evidence, exposure, jobs
+from pen16 import backups, compliance, config, db, evidence, exposure, jobs, neighbours
 from pen16.config import Config
 from pen16.db import (
     DecisionKind,
@@ -31,6 +31,7 @@ from pen16.db import (
     decisions,
     expected_services,
     findings,
+    mac_sightings,
     notifications,
     observations,
     schedules,
@@ -46,6 +47,7 @@ templates.env.globals.update(
     JobStatus=JobStatus,
     RuleResult=RuleResult,
     Severity=Severity,
+    vendor=neighbours.vendor,
 )
 
 
@@ -202,7 +204,14 @@ def _dashboard(conn: Connection) -> dict[str, Any]:
     )
     latest = conn.execute(select(db.jobs).order_by(db.jobs.c.id.desc()).limit(1)).first()
     seen = observations.alias("seen")
-    service = (seen.c.address, seen.c.service, seen.c.product, seen.c.version, seen.c.observed_at)
+    service = (
+        seen.c.address,
+        _mac(seen.c.address).label("mac"),
+        seen.c.service,
+        seen.c.product,
+        seen.c.version,
+        seen.c.observed_at,
+    )
     active = (decisions.c.finding_id == findings.c.id) & decisions.c.withdrawn_at.is_(None)
     # The latest withdrawn decision, shown on a finding that's back in Needs attention.
     withdrawn = (
@@ -295,14 +304,29 @@ def _dashboard(conn: Connection) -> dict[str, Any]:
         "resolved": resolved,
         "exposed": exposed,
         "expected": conn.execute(select(expected_services).order_by(expected_services.c.asset_id)).all(),
+        # A provisional asset is one address, so one row each.
         "provisional": conn.execute(
-            select(assets.c.id, func.string_agg(func.host(bindings.c.address), ", ").label("addresses"))
+            select(
+                assets.c.id,
+                func.host(bindings.c.address).label("address"),
+                _mac(bindings.c.address).label("mac"),
+            )
             .join(bindings, bindings.c.asset_id == assets.c.id)
             .where(assets.c.provisional)
-            .group_by(assets.c.id)
-            .order_by(assets.c.id)
+            .order_by(bindings.c.address)
         ).all(),
     }
+
+
+def _mac(address: ColumnElement[Any]) -> ScalarSelect[str]:
+    """The MAC most recently seen at an address, if any scan saw one."""
+    return (
+        select(cast(mac_sightings.c.mac, Text))
+        .where(mac_sightings.c.address == address)
+        .order_by(mac_sightings.c.confirmed_at.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
 
 
 def _count(conn: Connection, condition: ColumnElement[bool]) -> int:

@@ -67,7 +67,7 @@ an org rule, it says so, and it wins.
 Where pen16 doesn't follow the org standards yet. These are debt to pay down, not overrides: each one should go.
 
 - Config: nothing here sets `PEN16_EVIDENCE_DIR`, `PEN16_RUNNER_TOKEN_FILE`, `PEN16_EGRESS_MARKER`,
-  `PEN16_RUNNER_SCOPE`, `PEN16_BACKUP_DIR`, `PEN16_COMPLIANCE_CONF` or `PEN16_COMPLIANCE_STATE`, so each always
+  `PEN16_RUNNER_SCOPE`, `PEN16_BACKUP_DIR`, `PEN16_NEIGHBOURS`, `PEN16_COMPLIANCE_CONF` or `PEN16_COMPLIANCE_STATE`, so each always
   takes its default path.
 - Docs: [SPEC.md](SPEC.md) opens with what pen16 is, not the problem, its requirements are one flat series
   (`**FR-1**`–`FR-16`) under one heading with no name after each ID, and it has no Unknowns or Open questions
