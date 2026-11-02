@@ -38,10 +38,12 @@ start=$(sql 'SELECT version_num FROM alembic_version')
 echo "restored at revision $start"
 existing=$(sql "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY 1")
 before=$(counts)
-declare -A max
+# Each table's highest id before the upgrade, as "table max" lines: macOS's bash 3.2 has no associative arrays.
+maxes=""
 for t in "${tables[@]}"; do
-    max[$t]=0
-    if [[ -n $(sql "SELECT to_regclass('$t')") ]]; then max[$t]=$(sql "SELECT coalesce(max(id), 0) FROM $t"); fi
+    m=0
+    if [[ -n $(sql "SELECT to_regclass('$t')") ]]; then m=$(sql "SELECT coalesce(max(id), 0) FROM $t"); fi
+    maxes+="$t $m"$'\n'
 done
 
 migrate upgrade head
@@ -59,8 +61,9 @@ for t in "${tables[@]}"; do
     # The next id must clear every existing one, or the next insert collides.
     seq=$(sql "SELECT pg_get_serial_sequence('$t', 'id')")
     next=$(sql "SELECT CASE WHEN is_called THEN last_value + 1 ELSE last_value END FROM $seq")
-    (( next > max[$t] )) || fail "$t's next id $next doesn't clear its max ${max[$t]}"
-    echo "  $t: identity, next id $next, max ${max[$t]}"
+    max=$(awk -v t="$t" '$1 == t { print $2 }' <<<"$maxes")
+    (( next > max )) || fail "$t's next id $next doesn't clear its max $max"
+    echo "  $t: identity, next id $next, max $max"
 done
 # Each CHECK the migrations built matches the code's StrEnum, as tests/test_closed_sets.py asserts on a test
 # database. Read-only: the test's own fixtures would wipe this one.
