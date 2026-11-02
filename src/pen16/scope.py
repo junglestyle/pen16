@@ -34,7 +34,7 @@ class Scope:
         kept = {_network(excluded) for excluded in exclude}
         for excluded in self.exclude:
             if excluded not in kept:
-                raise OutOfScopeError(f"exclusion {excluded!r} is missing")
+                raise OutOfScopeError(f"exclusion {str(excluded)!r} is missing")
 
 
 def parse(networks: list[dict[str, str]], exclude: list[str]) -> Scope:

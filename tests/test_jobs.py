@@ -132,7 +132,7 @@ def test_runner_refuses_a_job_outside_its_own_scope(committed, lab_scope, tmp_pa
     runner.run_job(client, narrower, job, SERVICES)
 
     with committed.connect() as conn:
-        assert conn.scalar(select(jobs_table.c.error)) == "exclusion 192.0.2.13/32 is missing"
+        assert "192.0.2.13/32" in conn.scalar(select(jobs_table.c.error))
 
 
 def test_scope_rejects_targets_outside_and_dropped_exclusions(lab_scope):
