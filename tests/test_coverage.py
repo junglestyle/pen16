@@ -127,23 +127,27 @@ def test_a_chunk_whose_gateway_didnt_answer_sweeps_nothing(committed, tmp_path):
     assert lab_sweep(committed).swept == 0
 
 
-def test_a_stale_sweep_alerts_once_and_recovers(committed, tmp_path):
+def test_a_sweep_two_periods_behind_alerts_once_and_recovers(committed, tmp_path):
     client = runner_client(committed, tmp_path)
     scanned_nightly(committed, client, lab_xml())
     sweep_once(committed, client)
 
+    def incidents_after_check():
+        with committed.begin() as conn:
+            coverage.check(conn, LAB)
+            return open_incidents(conn)
+
+    # A week and a day: one period missed, which ordinary slippage explains.
     age_blocks(committed, range(coverage.BLOCKS), 8)
-    with committed.begin() as conn:
-        coverage.check(conn, LAB)
-        stale = open_incidents(conn)
+    slipped = incidents_after_check()
+    age_blocks(committed, range(coverage.BLOCKS), 15)
+    behind = incidents_after_check()
     let_pace_pass(committed)
     sweep_once(committed, client)
-    with committed.begin() as conn:
-        coverage.check(conn, LAB)
-        fresh = open_incidents(conn)
 
-    assert "sweep:lab" in stale
-    assert "sweep:lab" not in fresh
+    assert "sweep:lab" not in slipped
+    assert "sweep:lab" in behind
+    assert "sweep:lab" not in incidents_after_check()
 
 
 def test_a_waiting_sweep_chunk_neither_swallows_a_nightly_scan_nor_counts_as_one(committed, tmp_path):

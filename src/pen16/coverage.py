@@ -27,6 +27,9 @@ BLOCKS = 64
 FRESH = timedelta(days=7)
 # Pace sweeps to finish in this share of FRESH, leaving room for failed chunks and nightly scans.
 PACE = 0.8
+# A sweep this far behind has missed a whole period, not just slipped: it shows as behind and alerts once. Like
+# backups and nightly scans, which alert after two missed runs.
+STALE = 2 * FRESH
 # Address-port pairs one chunk may scan: a quarter-hour at the probe ceiling, at two probes a port, inside the
 # half-hour job deadline.
 CHUNK_PAIRS = profiles.MAX_RATE * 15 * 60 // 2
@@ -137,15 +140,15 @@ def sweep(conn: Connection, network: str, now: datetime) -> Sweep:
     swept = _swept(conn, network)
     oldest = min(swept.values()) if len(swept) == BLOCKS else None
     if oldest is not None:
-        stale = now - oldest > FRESH
+        stale = now - oldest > STALE
     else:
-        # Not yet swept in full: stale once its first chunk is older than a whole sweep should take.
+        # Not yet swept in full: behind once its first chunk is older than two whole sweeps should take.
         first = conn.scalar(
             select(func.min(jobs.c.created_at)).where(
                 jobs.c.profile == Profile.SWEEP, jobs.c.network == network
             )
         )
-        stale = first is not None and now - first > FRESH
+        stale = first is not None and now - first > STALE
     return Sweep(network, len(swept), oldest, stale)
 
 
@@ -159,15 +162,15 @@ def check(conn: Connection, scope: Scope) -> None:
                 conn,
                 key,
                 f"Full sweeps of {network.name} are behind",
-                f"Part of {network.cidr}'s TCP ports hasn't been swept in {FRESH.days} days: sweep jobs are failing "
-                "or never get a turn.",
+                f"Part of {network.cidr}'s TCP ports hasn't been swept in {STALE.days} days, twice the "
+                f"{FRESH.days} days a full sweep should take: sweep jobs are failing or never get a turn.",
             )
         else:
             notify.clear_incident(
                 conn,
                 key,
                 f"Full sweeps of {network.name} caught up",
-                f"All of {network.cidr} swept within {FRESH.days} days.",
+                f"All of {network.cidr} swept within {STALE.days} days again.",
             )
 
 
