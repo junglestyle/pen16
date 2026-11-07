@@ -236,6 +236,8 @@ def test_intake_takes_a_result_for_the_tokens_host_only(committed: Engine, tmp_p
         gzip.compress(
             b'<asset-report-collection xmlns="http://scap.nist.gov/schema/asset-reporting-format/1.1"/>'
         ),
+        # Its times without their offset.
+        gzip.compress(STIG_RESULT.read_bytes().replace(b"+00:00", b"")),
     ],
 )
 def test_intake_refuses_what_isnt_a_result(committed: Engine, tmp_path: Path, body: bytes) -> None:

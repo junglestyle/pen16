@@ -1,4 +1,5 @@
 import os
+import re
 from datetime import datetime
 from enum import StrEnum
 
@@ -105,9 +106,30 @@ class RuleResult(StrEnum):
 
 
 def _one_of(column: str, names: type[StrEnum], constraint: str) -> CheckConstraint:
-    """The CHECK for a column holding a closed set of names, built from its StrEnum so the two can't drift."""
+    """The CHECK for a column holding a closed set of names, built from its StrEnum so the two can't drift. The
+    StrEnum rides along in the constraint's info, for closed_set_drift."""
     listed = ", ".join(f"'{name}'" for name in names)
-    return CheckConstraint(f"{column} IN ({listed})", name=constraint)
+    return CheckConstraint(f"{column} IN ({listed})", name=constraint, info={"names": names})
+
+
+def closed_set_drift(conn: Connection) -> list[str]:
+    """The CHECKs the database has that don't list exactly their StrEnum's names, or that it lacks. Migrations
+    are never edited, so this compares the code with what the migrations built."""
+    drifted = []
+    for table in metadata.sorted_tables:
+        for constraint in table.constraints:
+            names = constraint.info.get("names")
+            if not isinstance(constraint, CheckConstraint) or names is None:
+                continue
+            definition = conn.scalar(
+                text("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = :name"),
+                {"name": constraint.name},
+            )
+            if definition is None or set(re.findall(r"'([^']*)'", definition)) != {
+                str(name) for name in names
+            }:
+                drifted.append(str(constraint.name))
+    return drifted
 
 
 assets = Table(
@@ -123,6 +145,7 @@ bindings = Table(
     metadata,
     Column("address", INET, primary_key=True),
     Column("asset_id", Text, ForeignKey("assets.id"), nullable=False),
+    Index("bindings_asset", "asset_id"),
 )
 
 # Intent: a service the owner expects. Stopping expecting it ends the row with a reason; ended rows stay as history,
@@ -171,6 +194,7 @@ observations = Table(
     Column("evidence_digest", Text, nullable=False),
     _one_of("state", ObservationState, "observation_state"),
     UniqueConstraint("evidence_digest", "address", "protocol", "port", "vantage"),
+    Index("observations_latest", "asset_id", "protocol", "port", "vantage", "observed_at"),
 )
 
 findings = Table(
@@ -215,6 +239,7 @@ mac_sightings = Table(
     Column("confirmed_at", DateTime(timezone=True), nullable=False),
     Column("evidence_digest", Text, nullable=False),
     PrimaryKeyConstraint("evidence_digest", "address"),
+    Index("mac_sightings_address", "address", "confirmed_at"),
 )
 
 # The owner's decision about one finding: its risk is accepted, or it's a false positive. It records the service

@@ -3,7 +3,6 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="refresh" content="300">
 <title>pen16</title>
 <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
@@ -285,5 +284,14 @@ form.inline { display: inline; }
 {% endif %}
 
 <p class="muted">Signed in as {{ owner }} · {{ h.now.strftime('%Y-%m-%d %H:%M UTC') }}</p>
+<script>
+// Reload every five minutes for fresh status, but not over a reason being typed or findings being ticked.
+setInterval(() => {
+  const busy = [...document.querySelectorAll("input[type=text], input[type=checkbox]")].some(
+    (input) => (input.type === "checkbox" ? input.checked : input.value),
+  );
+  if (!busy && document.activeElement?.tagName !== "INPUT") location.reload();
+}, 300000);
+</script>
 </body>
 </html>

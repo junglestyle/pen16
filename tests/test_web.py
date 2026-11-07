@@ -59,7 +59,7 @@ def test_scan_output_is_escaped(committed):
 
     page = dashboard(committed).get("/", headers=OWNER).text
 
-    assert "<script>" not in page
+    assert "<script>x" not in page
     assert "&lt;script&gt;x" in page
     assert "<b>ok</b>" not in page
 

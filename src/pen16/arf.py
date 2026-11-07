@@ -96,17 +96,26 @@ def parse(raw: bytes) -> Result:
                 labels,
             )
         )
+    started_at, finished_at = _when(test, "start-time"), _when(test, "end-time")
     return Result(
         benchmark_id=benchmark.get("id", benchmark_id),
         benchmark_version=_text(_child(benchmark, "version")),
         profile_id=profile_id,
         profile_title=_profile_title(root, profile_id),
-        started_at=datetime.fromisoformat(test.get("start-time", "")),
-        finished_at=datetime.fromisoformat(test.get("end-time", "")),
+        started_at=started_at,
+        finished_at=finished_at,
         tool_version=test.get("test-system", "").removeprefix("cpe:/a:"),
         digest=hashlib.sha256(raw).hexdigest(),
         rules=rules,
     )
+
+
+def _when(test: Any, attribute: str) -> datetime:
+    """A TestResult time. Without its offset it can't be ordered against the results already stored."""
+    when = datetime.fromisoformat(test.get(attribute, ""))
+    if when.tzinfo is None:
+        raise ValueError(f"{attribute} {test.get(attribute)!r} has no time zone")
+    return when
 
 
 def _rule(
