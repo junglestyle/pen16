@@ -45,6 +45,8 @@ class Scan:
     digest: str
     ports: list[Port]
     hosts: list[Host]
+    # How many ports nmap says it scanned, per protocol: what the scan actually covered.
+    scanned: dict[str, int]
 
     def up(self) -> set[str]:
         """The addresses this scan found up."""
@@ -106,7 +108,16 @@ def parse(raw: bytes) -> Scan:
         digest=hashlib.sha256(raw).hexdigest(),
         ports=ports,
         hosts=hosts,
+        scanned=_scanned(root),
     )
+
+
+def _scanned(root: Any) -> dict[str, int]:
+    scanned: dict[str, int] = {}
+    for info in root.iter("scaninfo"):
+        protocol = info.get("protocol", "")
+        scanned[protocol] = scanned.get(protocol, 0) + int(info.get("numservices", "0"))
+    return scanned
 
 
 def _unlisted(host: Any) -> dict[tuple[str, int], ObservationState]:

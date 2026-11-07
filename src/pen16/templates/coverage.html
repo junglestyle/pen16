@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}Coverage · pen16{% endblock %}
+{% block content %}
+<h1>Coverage</h1>
+<p class="muted">The nightly scan covers the top TCP ports plus every port expected or ever seen open, and a few UDP
+  ports. Between nightly scans, sweep jobs cover all TCP ports on known devices, a block of ports at a time, aiming
+  to finish every {{ fresh.days }} days. A device that doesn't answer keeps its findings open.</p>
+
+<h2>Full sweeps</h2>
+<div class="scroll"><table>
+  <tr><th>Network</th><th>Swept</th><th>Oldest part</th></tr>
+  {% for n in networks %}
+  <tr>
+    <td>{{ n.name }}<br><span class="muted">{{ n.cidr }}</span></td>
+    <td>{{ n.sweep.swept }} of {{ BLOCKS }} blocks of {{ 65536 // BLOCKS }} ports</td>
+    <td class="{{ 'bad' if n.sweep.stale else '' }}">{% if n.sweep.complete %}{{ m.ago(now - n.sweep.oldest) }} old <span class="muted">({{ m.minute(n.sweep.oldest) }})</span>
+      {% else %}not swept in full yet{% endif %}{% if n.sweep.stale %} · behind{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+
+<h2>Recent scans</h2>
+{% if recent %}
+<div class="scroll"><table>
+  <tr><th>Finished</th><th>Network</th><th>Scan</th><th>Ports</th><th>Up</th><th>Didn't answer</th></tr>
+  {% for c in recent %}
+  <tr>
+    <td>{{ m.minute(c.finished_at) }}</td>
+    <td>{{ c.network }}</td>
+    <td>{{ c.profile }} <span class="muted">#{{ c.job_id }}</span></td>
+    <td>{% if c.profile == Profile.SWEEP %}TCP {{ c.port_from }}–{{ c.port_to }}{% else %}{{ c.tcp_ports }} TCP{% if c.udp_ports %}, {{ c.udp_ports }} UDP{% endif %}{% endif %}</td>
+    <td>{{ c.hosts_up }}{% if not c.gateway_up %}<br><span class="bad">gateway didn't answer: nothing closed counts</span>{% endif %}</td>
+    <td>{% for address, device in c.unavailable %}{{ m.asset(device) }} <span class="muted">{{ address }}</span><br>{% else %}<span class="muted">none</span>{% endfor %}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% else %}
+<p class="muted">No scan has finished yet.</p>
+{% endif %}
+{% endblock %}

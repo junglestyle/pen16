@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from pen16 import neighbours, status
 from pen16.db import mac_sightings
-from tests.conftest import OWNER, dashboard, lab_xml, queue, runner_client, upload
+from tests.conftest import LAB, OWNER, dashboard, lab_xml, queue, runner_client, upload
 
 
 def neighbour_table(path, *entries):
@@ -114,7 +114,7 @@ def test_the_dashboard_shows_each_address_mac(committed, tmp_path):
     upload(client, job_id, lab_xml())
 
     with committed.connect() as conn:
-        seen = status.dashboard(conn)
+        seen = status.dashboard(conn, LAB)
     page = dashboard(committed).get("/", headers=OWNER).text
 
     assert {f.seen.mac for f in seen.needs_attention} == {"02:00:00:00:00:10"}

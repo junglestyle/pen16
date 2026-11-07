@@ -4,3 +4,4 @@
 {% macro port(f) %}<a href="/findings/{{ f.id }}">{{ f.port }}/{{ f.protocol }}</a>{% endmacro %}
 {% macro day(t) %}{{ t.strftime('%Y-%m-%d') }}{% endmacro %}
 {% macro minute(t) %}{{ t.strftime('%Y-%m-%d %H:%M UTC') }}{% endmacro %}
+{% macro ago(delta) %}{% if delta.days %}{{ delta.days }} day{{ 's' if delta.days != 1 }} {% endif %}{{ delta.seconds // 3600 }} h{% endmacro %}

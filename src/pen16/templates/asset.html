@@ -45,7 +45,7 @@
   <tr><th>Address</th><th>MAC</th><th>Since</th>{% if not a.provisional and others %}<th>Move to another device</th>{% endif %}</tr>
   {% for b in a.addresses %}
   <tr>
-    <td>{{ b.address }}</td>
+    <td>{{ b.address }}{% if b.unavailable %}<br><span class="bad">didn't answer the latest scan</span>{% endif %}</td>
     <td>{% if b.mac %}{{ m.mac(b.mac) }}{% else %}<span class="muted">none seen yet</span>{% endif %}</td>
     <td>{{ m.day(b.bound_at) }}</td>
     {% if not a.provisional and others %}

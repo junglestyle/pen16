@@ -78,10 +78,10 @@ Where pen16 doesn't follow the org standards yet. These are debt to pay down, no
   have no `Status:` or `Delivers:` line.
 - Docs: the shipped slices "Owner dashboard over Tailscale" and "Verified nightly backups" (`ROADMAP.md:24-28`) have
   no done-when.
-- Docs: slice C3 (`ROADMAP.md:155`) names no spec requirement, and slice 9 (`ROADMAP.md:111`) names "M1's
+- Docs: slice C3 (`ROADMAP.md:153`) names no spec requirement, and slice 9 (`ROADMAP.md:109`) names "M1's
   demonstration" instead of the part of FR-11 it delivers.
 - Docs: the deferred requirements under the spec's "After the pilot" (`SPEC.md:50`) have no slices; the roadmap's
-  "After the pilot" (`ROADMAP.md:209`) holds them back until the pilot has run.
+  "After the pilot" (`ROADMAP.md:207`) holds them back until the pilot has run.
 - Python testing: `arf-rhel9-stig.xml` is a real OpenSCAP evaluation of a UBI 9 filesystem, trimmed
   (`conftest.py:22`), not a synthetic fixture.
 - Python testing: test files are named one per module (`test_backups.py`, `test_exposure.py`, `test_jobs.py`,

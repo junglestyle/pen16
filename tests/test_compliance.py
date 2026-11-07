@@ -13,6 +13,7 @@ from pen16.db import TokenKind, compliance_results, compliance_scans, compliance
 from tests.conftest import (
     DISA_STIG,
     FIXTURES,
+    LAB,
     OWNER,
     OWNER_LOGIN,
     SAME_ORIGIN,
@@ -282,7 +283,7 @@ def test_the_dashboard_shows_a_hosts_result_and_takes_a_waiver(committed: Engine
 
     assert waived.status_code == 303
     with committed.connect() as conn:
-        [host] = status.dashboard(conn).compliance
+        [host] = status.dashboard(conn, LAB).compliance
     assert (host.result.scan_id, host.rate, host.checklist, host.result.has_playbook) == (
         uploaded,
         "53%",
@@ -346,7 +347,7 @@ def test_the_owner_downloads_the_playbook_without_waived_rules(
     cut = owner.get(f"/compliance/{uploaded}/playbook-without-waived.yml", headers=OWNER)
 
     with committed.connect() as conn:
-        [host] = status.dashboard(conn).compliance
+        [host] = status.dashboard(conn, LAB).compliance
     assert host.skip_tags == ["accounts_umask_etc_bashrc"]
     assert task_names(cut.text) == [
         "Restrict su to the wheel group",

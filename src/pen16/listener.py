@@ -49,6 +49,8 @@ def create(engine: Engine, settings: Config, evidence_dir: Path, neighbours_file
             "targets": job.targets,
             "exclude": job.exclude,
             "extra_tcp": job.extra_tcp,
+            "port_from": job.port_from,
+            "port_to": job.port_to,
             "deadline_at": job.deadline_at.isoformat(),
         }
 

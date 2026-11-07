@@ -67,7 +67,9 @@ M2 matches explicit product identifiers/aliases and affected versions. Ambiguous
 
 Jobs are queued, running, succeeded, failed, or cancelled. Run one at a time per runner, with a 30-minute deadline and one automatic retry. Further failures wait for the next schedule or owner request. Cancellation stops reachable tool work within 10 seconds; local expiry stops disconnected execution. Discard expired assignments after restart.
 
-Respect quiet windows. Manual pauses need explicit resume; resource pauses recover automatically. Show incomplete coverage separately from job status.
+Respect quiet windows. Manual pauses need explicit resume; resource pauses recover automatically. Show incomplete coverage separately from job status: each finished job records, per network it scanned, whether the gateway answered, how many addresses were up, how many ports nmap reports it scanned, and the known devices that didn't answer. Those stay unavailable until a later scan sees them, and their findings stay open.
+
+Between nightly scans, the worker queues rolling full-range TCP sweeps whenever nothing else is waiting. A network's ports are split into 64 blocks of 1024. Each sweep job scans the stalest blocks on the network's known addresses and gateway, with the nightly scan's light version detection so a port is named the same either way. Jobs are sized so that a quarter-hour at the probe ceiling fits the job deadline, and paced to cover every block within seven days. A chunk counts only if the gateway answered. The oldest block's sweep time is the network's sweep age; past seven days it raises one incident, which clears when the sweep catches up. A waiting sweep chunk never stands in for a requested or scheduled nightly scan, and only nightly scans count as the last good scan.
 
 Group related alerts by asset/vantage over five minutes. Start with a short ntfy-compatible HTTP POST containing a summary and authenticated dashboard link.
 

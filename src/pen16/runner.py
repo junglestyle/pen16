@@ -106,10 +106,18 @@ def _scanned(scope: Scope, job: dict[str, Any], services: Path) -> bytes:
 
 def _argv(scope: Scope, job: dict[str, Any], services: Path) -> list[str]:
     """The fixed nmap command for the job's profile, or OutOfScopeError if the job asks for anything else."""
-    if job["profile"] != Profile.NIGHTLY:
-        raise OutOfScopeError(f"unknown profile {job['profile']!r}")
     scope.check(job["targets"], job["exclude"])
-    return profiles.nightly_argv(job["targets"], job["exclude"], job["extra_tcp"], services)
+    if job["profile"] == Profile.NIGHTLY:
+        return profiles.nightly_argv(job["targets"], job["exclude"], job["extra_tcp"], services)
+    if job["profile"] == Profile.SWEEP:
+        port_from, port_to = job.get("port_from"), job.get("port_to")
+        if not (isinstance(port_from, int) and isinstance(port_to, int)):
+            raise OutOfScopeError("a sweep needs a whole-number port range")
+        try:
+            return profiles.sweep_argv(job["targets"], job["exclude"], port_from, port_to)
+        except ValueError as error:
+            raise OutOfScopeError(str(error)) from error
+    raise OutOfScopeError(f"unknown profile {job['profile']!r}")
 
 
 class ScanFailedError(Exception):

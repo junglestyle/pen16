@@ -17,7 +17,7 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import StrictUndefined
 from sqlalchemy import Engine, exists, select
 
-from pen16 import compliance, config, db, evidence, exposure, jobs, neighbours, notify, status
+from pen16 import compliance, config, coverage, db, evidence, exposure, jobs, neighbours, notify, status
 from pen16.config import Config
 from pen16.db import (
     BindingChange,
@@ -41,12 +41,14 @@ templates = Jinja2Templates(directory=str(files("pen16") / "templates"))
 templates.env.undefined = StrictUndefined
 # The template compares states by name, not by quoted string.
 templates.env.globals.update(
+    BLOCKS=coverage.BLOCKS,
     BindingChange=BindingChange,
     DecisionKind=DecisionKind,
     Difference=status.Difference,
     FindingStatus=FindingStatus,
     JobStatus=JobStatus,
     ObservationState=ObservationState,
+    Profile=Profile,
     RuleResult=RuleResult,
     Severity=Severity,
     asset_url=_asset_url,
@@ -76,7 +78,7 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     def dashboard(request: Request, login: Owner) -> HTMLResponse:
         with engine.connect() as conn:
-            view = status.dashboard(conn)
+            view = status.dashboard(conn, settings.scope)
         return templates.TemplateResponse(request, "dashboard.html", {"owner": login, "d": view})
 
     @app.post("/scan")
@@ -163,6 +165,18 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
         with engine.connect() as conn:
             changes = status.recent_changes(conn)
         return templates.TemplateResponse(request, "changes.html", {"owner": login, "c": changes})
+
+    @app.get("/coverage", response_class=HTMLResponse)
+    def coverage_page(request: Request, login: Owner) -> HTMLResponse:
+        with engine.connect() as conn:
+            now = db.now(conn)
+            networks = status.network_coverage(conn, settings.scope, now)
+            recent = status.recent_coverage(conn)
+        return templates.TemplateResponse(
+            request,
+            "coverage.html",
+            {"owner": login, "now": now, "networks": networks, "recent": recent, "fresh": coverage.FRESH},
+        )
 
     @app.get("/evidence/{digest}.xml")
     def raw_scan(_login: Owner, digest: str) -> Response:

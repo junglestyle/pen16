@@ -24,6 +24,30 @@ def nightly_argv(targets: list[str], exclude: list[str], extra_tcp: list[int], s
     return [*argv, "--", *targets]
 
 
+def sweep_argv(targets: list[str], exclude: list[str], port_from: int, port_to: int) -> list[str]:
+    """nmap arguments for one chunk of a rolling full-range sweep: a range of TCP ports on known addresses.
+
+    Light version detection, as nightly does, so an open port found here is named the way the nightly scan names
+    it, and a decision on it isn't withdrawn over a guess from nmap's port table. It only probes open ports.
+    """
+    if not 0 < port_from <= port_to < 65536:
+        raise ValueError(f"port range {port_from}-{port_to} is outside 1-65535")
+    argv = [NMAP, "-n", "-sS", "-sV", "--version-light", "-T4", "--max-retries", "1"]
+    argv += [
+        "--max-rate",
+        str(MAX_RATE),
+        "--host-timeout",
+        "20m",
+        "-p",
+        f"T:{port_from}-{port_to}",
+        "-oX",
+        "-",
+    ]
+    if exclude:
+        argv += ["--exclude", ",".join(exclude)]
+    return [*argv, "--", *targets]
+
+
 def top_tcp(services: Path, count: int) -> list[int]:
     """The ports nmap's --top-ports would pick, read from its own frequency table."""
     ranked = []
