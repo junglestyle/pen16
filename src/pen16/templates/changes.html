@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}Recent changes · pen16{% endblock %}
+{% block content %}
+<h1>Recent changes</h1>
+
+<h2>Services</h2>
+{% if c.services %}
+<div class="scroll"><table>
+  <tr><th>Seen</th><th>Device</th><th>Port</th><th>Change</th><th>Service</th></tr>
+  {% for s in c.services %}
+  <tr>
+    <td>{{ m.minute(s.at) }}</td>
+    <td>{{ m.asset(s.asset_id) }}<br><span class="muted">{{ s.address }}</span></td>
+    <td>{{ s.port }}/{{ s.protocol }} <span class="muted">{{ s.vantage }}</span></td>
+    <td class="{{ 'bad' if s.difference == Difference.NEW else '' }}">{{ s.difference }}{% if s.difference == Difference.CHANGED and s.now.state != ObservationState.OPEN %} <span class="muted">({{ s.now.state }})</span>{% endif %}</td>
+    <td>
+      {% if s.difference == Difference.NEW %}{{ m.service(s.now) }}
+      {% elif s.difference == Difference.REMOVED %}<span class="muted">was</span> {{ m.service(s.before) }}
+      {% else %}{{ m.service(s.before) }} <span class="muted">→</span> {{ m.service(s.now) }}{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% else %}
+<p class="muted">No service has opened, closed or changed yet.</p>
+{% endif %}
+
+<h2>Addresses</h2>
+{% if c.addresses %}
+<div class="scroll"><table>
+  <tr><th>When</th><th>Address</th><th>Device</th><th>Change</th><th>By</th><th>Why</th></tr>
+  {% for b in c.addresses %}
+  <tr>
+    <td>{{ m.minute(b.at) }}</td>
+    <td>{{ b.address }}{% if b.mac %}<br>{{ m.mac(b.mac) }}{% endif %}</td>
+    <td>{% if b.known %}{{ m.asset(b.asset_id) }}{% else %}{{ b.asset_id }}{% endif %}</td>
+    <td>{% if b.change == BindingChange.BOUND %}now here{% elif b.change == BindingChange.ENDED %}left{% else %}MAC learned{% endif %}</td>
+    <td class="muted">{{ b.by }}</td>
+    <td>{{ b.reason or '' }}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% else %}
+<p class="muted">No address has changed hands.</p>
+{% endif %}
+{% endblock %}

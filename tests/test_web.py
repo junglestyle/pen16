@@ -1,6 +1,8 @@
+import gzip
+
 from sqlalchemy import insert, select
 
-from pen16 import exposure, status
+from pen16 import evidence, exposure, status
 from pen16.db import DecisionKind, assets, bindings, expected_services, findings
 from tests.conftest import OWNER, OWNER_LOGIN, SAME_ORIGIN, dashboard, ingest, lab, lab_xml, scanned
 
@@ -116,7 +118,7 @@ def test_a_private_mac_change_is_asked_about_and_same_device_rejoins(committed):
     page = client.get("/", headers=OWNER).text
     same = post(client, "/assets/name", {"provisional_id": "new-192.0.2.10-2", "asset_id": "fileserver"})
 
-    assert "Took this address over from fileserver" in page
+    assert "Is this fileserver?" in page
     assert same.status_code == 303
     seen = view(committed)
     assert seen.unnamed == []
@@ -137,3 +139,37 @@ def test_retiring_a_device_from_the_dashboard(committed):
     assert (blank.status_code, retired.status_code) == (400, 303)
     seen = view(committed)
     assert (seen.devices, seen.needs_attention) == ([], [])
+
+
+def test_moving_an_address_from_a_devices_page_shows_on_both_pages_and_in_recent_changes(committed):
+    with committed.begin() as conn:
+        ingest(conn, lab())
+        exposure.name_asset(conn, "new-192.0.2.10", "fileserver", OWNER_LOGIN)
+        conn.execute(insert(assets).values(id="nas", provisional=False))
+    client = dashboard(committed)
+
+    blank = post(client, "/assets/move", {"address": "192.0.2.10", "asset_id": "nas", "reason": " "})
+    moved = post(
+        client, "/assets/move", {"address": "192.0.2.10", "asset_id": "nas", "reason": "its second NIC"}
+    )
+
+    assert blank.status_code == 400
+    assert (moved.status_code, moved.headers["location"]) == (303, "/assets/nas")
+    for page in ("/assets/fileserver", "/assets/nas", "/changes"):
+        assert "its second NIC" in client.get(page, headers=OWNER).text
+    assert client.get("/assets/printer", headers=OWNER).status_code == 404
+
+
+def test_raw_scan_evidence_is_served_only_for_a_recorded_scan(committed, tmp_path):
+    scan = lab()
+    with committed.begin() as conn:
+        ingest(conn, scan)
+    unrecorded = "0" * 64
+    evidence.store(tmp_path, scan.digest, gzip.compress(lab_xml()))
+    evidence.store(tmp_path, unrecorded, gzip.compress(b"<nmaprun/>"))
+    client = dashboard(committed, tmp_path)
+
+    served = client.get(f"/evidence/{scan.digest}.xml", headers=OWNER)
+
+    assert (served.status_code, served.content) == (200, lab_xml())
+    assert client.get(f"/evidence/{unrecorded}.xml", headers=OWNER).status_code == 404

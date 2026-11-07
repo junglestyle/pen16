@@ -11,7 +11,7 @@
 
 A security dashboard for your homelab and home network. See what’s exposed, what changed, and which new vulnerabilities may affect what you run. Set it up, let it monitor, tune it when you want.
 
-> **In development:** M1 is partway. A nightly nmap scan runs from a contained runner, unexpected open ports alert over ntfy, and a minimal dashboard marks services expected, accepts risks, and marks false positives. There is no release yet; the [roadmap](docs/ROADMAP.md) says what comes next.
+> **In development:** M1 is partway. A nightly nmap scan runs from a contained runner, unexpected open ports alert over ntfy, and a minimal dashboard marks services expected, accepts risks, marks false positives, and shows each device's and finding's history and what changed recently. There is no release yet; the [roadmap](docs/ROADMAP.md) says what comes next.
 
 ## What it will do
 

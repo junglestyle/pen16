@@ -2,32 +2,58 @@
 
 import json
 import os
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from importlib.resources import files
 from pathlib import Path
 from typing import Annotated
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import Engine
+from jinja2 import StrictUndefined
+from sqlalchemy import Engine, exists, select
 
 from pen16 import compliance, config, db, evidence, exposure, jobs, neighbours, notify, status
 from pen16.config import Config
-from pen16.db import DecisionKind, JobStatus, Profile, RuleResult, Severity
+from pen16.db import (
+    BindingChange,
+    DecisionKind,
+    FindingStatus,
+    JobStatus,
+    ObservationState,
+    Profile,
+    RuleResult,
+    Severity,
+    observations,
+)
+
+
+def _asset_url(asset_id: str) -> str:
+    return f"/assets/{quote(asset_id, safe='')}"
+
 
 templates = Jinja2Templates(directory=str(files("pen16") / "templates"))
+# A field a record doesn't have is a bug, not an empty cell.
+templates.env.undefined = StrictUndefined
 # The template compares states by name, not by quoted string.
 templates.env.globals.update(
+    BindingChange=BindingChange,
     DecisionKind=DecisionKind,
+    Difference=status.Difference,
+    FindingStatus=FindingStatus,
     JobStatus=JobStatus,
+    ObservationState=ObservationState,
     RuleResult=RuleResult,
     Severity=Severity,
+    asset_url=_asset_url,
     vendor=neighbours.vendor,
 )
+# An evidence file's name: its SHA-256.
+DIGEST = re.compile(r"[0-9a-f]{64}")
 
 
 def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
@@ -113,27 +139,89 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
             exposure.unexpect(conn, asset_id, protocol, port, vantage, reason, login)
         return _back()
 
+    @app.get("/assets/{asset_id}", response_class=HTMLResponse)
+    def asset_page(request: Request, login: Owner, asset_id: str) -> HTMLResponse:
+        with engine.connect() as conn:
+            device = status.asset(conn, asset_id)
+            if device is None:
+                raise HTTPException(404, f"there's no device {asset_id!r}")
+            others = [d.id for d in status.devices(conn) if d.id != asset_id]
+        return templates.TemplateResponse(
+            request, "asset.html", {"owner": login, "a": device, "others": others}
+        )
+
+    @app.get("/findings/{finding_id}", response_class=HTMLResponse)
+    def finding_page(request: Request, login: Owner, finding_id: int) -> HTMLResponse:
+        with engine.connect() as conn:
+            found = status.finding(conn, finding_id)
+        if found is None:
+            raise HTTPException(404, f"there's no finding {finding_id}")
+        return templates.TemplateResponse(request, "finding.html", {"owner": login, "f": found})
+
+    @app.get("/changes", response_class=HTMLResponse)
+    def changes_page(request: Request, login: Owner) -> HTMLResponse:
+        with engine.connect() as conn:
+            changes = status.recent_changes(conn)
+        return templates.TemplateResponse(request, "changes.html", {"owner": login, "c": changes})
+
+    @app.get("/evidence/{digest}.xml")
+    def raw_scan(_login: Owner, digest: str) -> Response:
+        """A scan's nmap XML, as the runner sent it. Only digests an observation names are served."""
+        with engine.connect() as conn:
+            known = DIGEST.fullmatch(digest) and conn.scalar(
+                select(exists().where(observations.c.evidence_digest == digest))
+            )
+        if not known:
+            raise HTTPException(404, "no such scan")
+        try:
+            raw = evidence.read(evidence_dir, digest)
+        except FileNotFoundError as error:
+            raise HTTPException(404, "this scan's raw evidence is no longer kept") from error
+        return Response(raw, media_type="application/xml", headers=_download(f"{digest}.xml"))
+
+    # The device forms are on the dashboard and on the device's own page. One posted from the device's page
+    # sends `back` with that page's URL and returns there; any other value returns to the dashboard.
     @app.post("/assets/name")
     def name_asset(
-        login: Owner, provisional_id: Annotated[str, Form()], asset_id: Annotated[str, Form()]
+        login: Owner,
+        provisional_id: Annotated[str, Form()],
+        asset_id: Annotated[str, Form()],
+        back: Annotated[str, Form()] = "",
     ) -> RedirectResponse:
         with _refusing(), engine.begin() as conn:
             exposure.name_asset(conn, provisional_id, asset_id, login)
-        return _back("#devices")
+        # The device's page is under its new name now.
+        return _back(_asset_url(asset_id) if back == _asset_url(provisional_id) else "/#devices")
 
     @app.post("/assets/separate")
-    def separate(_login: Owner, provisional_id: Annotated[str, Form()]) -> RedirectResponse:
+    def separate(
+        _login: Owner, provisional_id: Annotated[str, Form()], back: Annotated[str, Form()] = ""
+    ) -> RedirectResponse:
         with engine.begin() as conn:
             exposure.separate(conn, provisional_id)
-        return _back("#devices")
+        return _back(_returning(back, _asset_url(provisional_id)))
 
     @app.post("/assets/retire")
     def retire(
-        login: Owner, asset_id: Annotated[str, Form()], reason: Annotated[str, Form()]
+        login: Owner,
+        asset_id: Annotated[str, Form()],
+        reason: Annotated[str, Form()],
+        back: Annotated[str, Form()] = "",
     ) -> RedirectResponse:
         with _refusing(), engine.begin() as conn:
             exposure.retire(conn, asset_id, reason, login)
-        return _back("#devices")
+        return _back(_returning(back, _asset_url(asset_id)))
+
+    @app.post("/assets/move")
+    def move(
+        login: Owner,
+        address: Annotated[str, Form()],
+        asset_id: Annotated[str, Form()],
+        reason: Annotated[str, Form()],
+    ) -> RedirectResponse:
+        with _refusing(), engine.begin() as conn:
+            exposure.move(conn, address, asset_id, reason, login)
+        return _back(_asset_url(asset_id))
 
     @app.post("/compliance/waive")
     def waive(
@@ -144,7 +232,7 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
     ) -> RedirectResponse:
         with _refusing(), engine.begin() as conn:
             compliance.waive(conn, asset_id, rule_id, reason, login)
-        return _back("#compliance")
+        return _back("/#compliance")
 
     @app.post("/compliance/unwaive")
     def unwaive(
@@ -155,7 +243,7 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
     ) -> RedirectResponse:
         with _refusing(), engine.begin() as conn:
             compliance.unwaive(conn, asset_id, rule_id, reason, login)
-        return _back("#compliance")
+        return _back("/#compliance")
 
     @app.post("/alerts/replay")
     def replay(_login: Owner) -> RedirectResponse:
@@ -206,8 +294,13 @@ def _same_origin(request: Request) -> bool:
     return origin is None or urlsplit(origin).netloc == request.headers.get("Host")
 
 
-def _back(anchor: str = "") -> RedirectResponse:
-    return RedirectResponse(f"/{anchor}", status_code=303)
+def _back(to: str = "/") -> RedirectResponse:
+    return RedirectResponse(to, status_code=303)
+
+
+def _returning(back: str, page: str) -> str:
+    """`page` if the form came from it, else the dashboard's devices."""
+    return page if back == page else "/#devices"
 
 
 def _download(name: str) -> dict[str, str]:
