@@ -211,6 +211,7 @@ class Latest:
     asset_id: str
     benchmark_id: str
     benchmark_version: str
+    profile_id: str
     profile_title: str
     tool_version: str
     finished_at: datetime
@@ -255,6 +256,7 @@ def latest(conn: Connection) -> list[Latest]:
             asset_id=row.asset_id,
             benchmark_id=row.benchmark_id,
             benchmark_version=row.benchmark_version,
+            profile_id=row.profile_id,
             profile_title=row.profile_title,
             tool_version=row.tool_version,
             finished_at=row.finished_at,
@@ -330,6 +332,18 @@ def playbook(conn: Connection, scan_id: int) -> tuple[str, str]:
     return f"{scan.asset_id}-remediation-{scan.finished_at:%Y%m%d}.yml", scan.playbook_digest
 
 
+def latest_scan(conn: Connection, asset_id: str, profile_id: str) -> int:
+    """The newest result's ID for a host and profile, so a script can fetch its playbook by a URL that doesn't
+    change from week to week. Raises LookupError for none, and for one per benchmark when more than one
+    benchmark has the profile."""
+    found = [r.scan_id for r in latest(conn) if (r.asset_id, r.profile_id) == (asset_id, profile_id)]
+    if not found:
+        raise LookupError(f"no result from {asset_id} for {profile_id}")
+    if len(found) > 1:
+        raise LookupError(f"{asset_id} has {profile_id} results from {len(found)} benchmarks")
+    return found[0]
+
+
 def skip_tag(rule_id: str) -> str:
     """The tag a generated playbook puts on a rule's tasks, as `--skip-tags` takes it: the short ID for SCAP
     Security Guide's rules, and the full ID for others, such as the deployment's own content."""
@@ -343,6 +357,8 @@ def without_waived(playbook: str, rule_ids: Collection[str]) -> str:
     Raises ValueError rather than serve a waived fix: when the playbook has no task list, a task list it can't
     split into tasks, or a task it keeps that still names a waived rule's tag.
     """
+    if not rule_ids:
+        return playbook
     tags = {skip_tag(rule_id) for rule_id in rule_ids} | set(rule_ids)
     lines = playbook.splitlines(keepends=True)
     kept: list[str] = []

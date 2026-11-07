@@ -354,3 +354,25 @@ def test_the_owner_downloads_the_playbook_without_waived_rules(
     ]
     assert "without-waived.yml" in cut.headers["content-disposition"]
     assert owner.get(f"/compliance/{uploaded}/playbook-without-waived.yml").status_code == 403
+
+
+def test_the_newest_results_playbook_has_a_url_that_stays_put(
+    committed: Engine, uploaded: int, tmp_path: Path
+) -> None:
+    owner = dashboard(committed, tmp_path)
+    stable = "/compliance/hosts/lab-rhel9/xccdf_org.ssgproject.content_profile_stig"
+    client, headers = intake_client(committed, tmp_path)
+    newer = REMEDIATION[: REMEDIATION.index("    - name: Enable")]
+
+    first = owner.get(f"{stable}/playbook-without-waived.yml", headers=OWNER)
+    upload(client, headers, later(), newer.encode())
+    second = owner.get(f"{stable}/playbook-without-waived.yml", headers=OWNER)
+
+    # Nothing waived: the whole playbook, as the host sent it.
+    assert first.text == REMEDIATION
+    assert second.text == newer
+    assert owner.get(f"{stable}/playbook.yml", headers=OWNER).text == newer
+    assert (
+        owner.get("/compliance/hosts/lab-rhel9/no_such_profile/playbook.yml", headers=OWNER).status_code
+        == 404
+    )

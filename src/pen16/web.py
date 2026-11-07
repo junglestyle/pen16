@@ -297,6 +297,23 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
             headers=_download(name.removesuffix(".yml") + "-without-waived.yml"),
         )
 
+    def newest(asset_id: str, profile_id: str) -> int:
+        try:
+            with engine.connect() as conn:
+                return compliance.latest_scan(conn, asset_id, profile_id)
+        except LookupError as error:
+            raise HTTPException(404, str(error)) from error
+
+    # The newest result's playbooks for a host and profile, at URLs that stay put from one week's result to the
+    # next, for scripts such as the deployment's remediate.yml.
+    @app.get("/compliance/hosts/{asset_id}/{profile_id}/playbook.yml")
+    def newest_playbook(login: Owner, asset_id: str, profile_id: str) -> Response:
+        return playbook(login, newest(asset_id, profile_id))
+
+    @app.get("/compliance/hosts/{asset_id}/{profile_id}/playbook-without-waived.yml")
+    def newest_playbook_without_waived(login: Owner, asset_id: str, profile_id: str) -> Response:
+        return playbook_without_waived(login, newest(asset_id, profile_id))
+
     return app
 
 
