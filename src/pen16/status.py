@@ -179,6 +179,8 @@ class HostCompliance:
     stale: bool
     failing: list[compliance.FailingRule]
     checklist: bool
+    # The waived failing rules' tags, for `ansible-playbook --skip-tags`.
+    skip_tags: list[str]
 
 
 @dataclass(frozen=True)
@@ -395,16 +397,19 @@ def dashboard(conn: Connection) -> Dashboard:
         ],
         unnamed=unnamed(conn),
         devices=devices(conn),
-        compliance=[
-            HostCompliance(
-                result=result,
-                rate=compliance.pass_rate(result.passed, result.failed),
-                stale=now - result.received_at > compliance.STALE,
-                failing=compliance.failing(conn, result.scan_id),
-                checklist=compliance.matching_stig(conn, result.scan_id) is not None,
-            )
-            for result in compliance.latest(conn)
-        ],
+        compliance=[_host_compliance(conn, now, result) for result in compliance.latest(conn)],
+    )
+
+
+def _host_compliance(conn: Connection, now: datetime, result: compliance.Latest) -> HostCompliance:
+    failing = compliance.failing(conn, result.scan_id)
+    return HostCompliance(
+        result=result,
+        rate=compliance.pass_rate(result.passed, result.failed),
+        stale=now - result.received_at > compliance.STALE,
+        failing=failing,
+        checklist=compliance.matching_stig(conn, result.scan_id) is not None,
+        skip_tags=[compliance.skip_tag(rule.rule_id) for rule in failing if rule.waiver],
     )
 
 

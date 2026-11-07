@@ -158,8 +158,13 @@
   <dt>Downloads</dt>
   <dd>
     {% if c.checklist %}<a href="/compliance/{{ s.scan_id }}/checklist.cklb">STIG checklist</a>{% else %}<span class="muted">no matching STIG imported</span>{% endif %}
-    · {% if s.has_playbook %}<a href="/compliance/{{ s.scan_id }}/playbook.yml">remediation playbook</a>{% else %}<span class="muted">no playbook</span>{% endif %}
+    · {% if s.has_playbook %}<a href="/compliance/{{ s.scan_id }}/playbook.yml">remediation playbook</a>{% if c.skip_tags %}
+      · <a href="/compliance/{{ s.scan_id }}/playbook-without-waived.yml">without the {{ c.skip_tags|length }} waived rule{{ 's' if c.skip_tags|length != 1 }}</a>{% endif %}{% else %}<span class="muted">no playbook</span>{% endif %}
   </dd>
+  {% if s.has_playbook and c.skip_tags %}
+  <dt>Skip waived</dt>
+  <dd><code>--skip-tags {{ c.skip_tags|join(',') }}</code></dd>
+  {% endif %}
 </dl>
 {% if c.failing %}
 <div class="scroll"><table>

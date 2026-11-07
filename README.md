@@ -20,7 +20,7 @@ A security dashboard for your homelab and home network. See what’s exposed, wh
 - **Surface relevant threats.** Connect new advisories and known exploitation to your software, with source links.
 - **Hold your hosts to a STIG.** Each host evaluates itself with OpenSCAP and pushes the result. See its pass rate
   and failing rules, waive what fails on purpose, and download a STIG Viewer checklist and an Ansible playbook for
-  the fixes.
+  the fixes, whole or without the waived rules.
 - **Check your fixes.** Request a bounded verification and see what the scanner actually observed.
 - **Work with your assistant.** Give an assistant such as Hermes restricted API access to read status and request approved scans.
 - **Stay out of your way.** Run scheduled checks, handle routine housekeeping, and alert on useful changes or monitoring failures.

@@ -275,6 +275,28 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
             headers=_download(name),
         )
 
+    @app.get("/compliance/{scan_id}/playbook-without-waived.yml")
+    def playbook_without_waived(_login: Owner, scan_id: int) -> Response:
+        try:
+            with engine.connect() as conn:
+                name, digest = compliance.playbook(conn, scan_id)
+                waived = [rule.rule_id for rule in compliance.failing(conn, scan_id) if rule.waiver]
+        except LookupError as error:
+            raise HTTPException(404, str(error)) from error
+        try:
+            cut = compliance.without_waived(evidence.read(evidence_dir, digest, ".yml.gz").decode(), waived)
+        except ValueError as error:
+            raise HTTPException(
+                422,
+                f"can't take the waived rules' tasks out ({error}): download the full playbook and skip them "
+                "with --skip-tags",
+            ) from error
+        return Response(
+            cut,
+            media_type="text/plain; charset=utf-8",
+            headers=_download(name.removesuffix(".yml") + "-without-waived.yml"),
+        )
+
     return app
 
 
