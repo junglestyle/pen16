@@ -50,6 +50,11 @@ class DecisionKind(StrEnum):
     ACCEPTED_RISK = "accepted-risk"
     FALSE_POSITIVE = "false-positive"
 
+    @property
+    def label(self) -> str:
+        """How the dashboard and alerts name it."""
+        return self.value.replace("-", " ")
+
 
 class JobStatus(StrEnum):
     QUEUED = "queued"

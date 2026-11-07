@@ -77,14 +77,12 @@ Where pen16 doesn't follow the org standards yet. These are debt to pay down, no
   have no `Status:` or `Delivers:` line.
 - Docs: the shipped slices "Owner dashboard over Tailscale" and "Verified nightly backups" (`ROADMAP.md:24-28`) have
   no done-when.
-- Docs: slice C3 (`ROADMAP.md:151`) names no spec requirement, and slice 9 (`ROADMAP.md:107`) names "M1's
+- Docs: slice C3 (`ROADMAP.md:152`) names no spec requirement, and slice 9 (`ROADMAP.md:108`) names "M1's
   demonstration" instead of the part of FR-11 it delivers.
 - Docs: the deferred requirements under the spec's "After the pilot" (`SPEC.md:50`) have no slices; the roadmap's
-  "After the pilot" (`ROADMAP.md:205`) holds them back until the pilot has run.
-- Python typing: `compliance.latest`, `failing` and `_regressions` return driver rows as `list[Any]`, which go on to
-  `web.py` and the template unparsed, and `web._count` takes a SQL expression as `Any`.
+  "After the pilot" (`ROADMAP.md:206`) holds them back until the pilot has run.
 - Python testing: `arf-rhel9-stig.xml` is a real OpenSCAP evaluation of a UBI 9 filesystem, trimmed
-  (`conftest.py:19`), not a synthetic fixture.
+  (`conftest.py:22`), not a synthetic fixture.
 - Python testing: test files are named one per module (`test_backups.py`, `test_exposure.py`, `test_jobs.py`,
   `test_notify.py` and the rest), not for the behavior they cover.
 - SQL: closed sets with no `CHECK`: `findings.kind`, `stig_rules.severity`, and `protocol` and `vantage` in

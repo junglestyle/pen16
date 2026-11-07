@@ -68,7 +68,7 @@ def ingest(conn: Connection, scan: Scan, networks: Sequence[Network], vantage: s
             if change is None:
                 continue
             withdraw(conn, decision.id, change)
-            why = f"{_NAMES[decision.kind]} withdrawn: {change}"
+            why = f"{decision.kind.label} withdrawn: {change}"
             opened.append(Finding(asset_id, port.protocol, port.port, vantage, why))
         elif alert:
             opened.append(Finding(asset_id, port.protocol, port.port, vantage))
@@ -101,9 +101,6 @@ def expect(conn: Connection, finding_ids: list[int], reason: str, by: str) -> No
             )
         )
     _resolve(conn, finding_ids, f"expected: {reason.strip()}", by)
-
-
-_NAMES = {DecisionKind.ACCEPTED_RISK: "accepted risk", DecisionKind.FALSE_POSITIVE: "false positive"}
 
 
 def decide(

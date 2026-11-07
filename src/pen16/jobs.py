@@ -1,6 +1,7 @@
 import logging
 from collections.abc import Mapping
-from datetime import timedelta
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import Connection, Row, func, insert, select, union, update
@@ -97,7 +98,19 @@ def run_due_schedules(conn: Connection, scope: Scope) -> None:
         conn.execute(update(schedules).where(schedules.c.name == schedule.name).values(next_run_at=next_run))
 
 
-def claim(conn: Connection, runner: str) -> Row[Any] | None:
+@dataclass(frozen=True)
+class Assignment:
+    """What a runner is told to scan: everything it needs, and nothing it could widen."""
+
+    id: int
+    profile: Profile
+    targets: list[str]
+    exclude: list[str]
+    extra_tcp: list[int]
+    deadline_at: datetime
+
+
+def claim(conn: Connection, runner: str) -> Assignment | None:
     """Hand the runner the oldest queued job. Anything it was already running was lost in a restart."""
     abandoned = conn.execute(
         select(jobs).where(jobs.c.status == JobStatus.RUNNING, jobs.c.runner == runner).with_for_update()
@@ -112,7 +125,7 @@ def claim(conn: Connection, runner: str) -> Row[Any] | None:
         .with_for_update(skip_locked=True)
         .scalar_subquery()
     )
-    return conn.execute(
+    claimed = conn.execute(
         update(jobs)
         .where(jobs.c.id == next_id)
         .values(
@@ -124,6 +137,16 @@ def claim(conn: Connection, runner: str) -> Row[Any] | None:
         )
         .returning(jobs)
     ).first()
+    if claimed is None:
+        return None
+    return Assignment(
+        claimed.id,
+        Profile(claimed.profile),
+        claimed.targets,
+        claimed.exclude,
+        claimed.extra_tcp,
+        claimed.deadline_at,
+    )
 
 
 def complete(

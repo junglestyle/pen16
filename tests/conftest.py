@@ -1,3 +1,4 @@
+import gzip
 import os
 import re
 import uuid
@@ -6,11 +7,14 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError
 
-from pen16 import db, exposure, nmap, scope
+from pen16 import db, exposure, jobs, listener, nmap, scope, tokens, web
+from pen16.config import Config as Settings
+from pen16.db import Profile, TokenKind
 
 FIXTURES = Path(__file__).parent / "fixtures"
 LAB_SCAN = FIXTURES / "nmap-lab.xml"
@@ -22,6 +26,11 @@ DISA_STIG = FIXTURES / "disa-rhel9-stig-xccdf.xml"
 LAB_FINISHED = 1767225612
 # The lab network: its gateway answers in the closed scan, not the first one, and one host inside it is excluded.
 LAB = scope.parse([{"name": "lab", "cidr": "192.0.2.0/24", "gateway": "192.0.2.1"}], ["192.0.2.12/32"])
+OWNER_LOGIN = "owner@example.com"
+OWNER = {"Tailscale-User-Login": OWNER_LOGIN}
+DASHBOARD_URL = "https://pen16.example.ts.net"
+# A form posted from the dashboard's own page.
+SAME_ORIGIN = {**OWNER, "Origin": DASHBOARD_URL}
 
 
 def lab_xml(shift: int = 0, version: bytes = b'version="3.0.1"') -> bytes:
@@ -64,6 +73,40 @@ def alerts(conn):
         select(db.notifications.c.kind, db.notifications.c.body).order_by(db.notifications.c.id)
     )
     return [tuple(row) for row in rows]
+
+
+def dashboard(engine, evidence_dir=Path("/nonexistent")):
+    settings = Settings(scope=LAB, owner_login=OWNER_LOGIN, dashboard_url="")
+    return TestClient(web.create(engine, settings, evidence_dir), base_url=DASHBOARD_URL)
+
+
+def runner_client(engine, evidence, scope=LAB):
+    """The runner listener with a runner token, keeping evidence and the neighbour table in `evidence`."""
+    app = listener.create(
+        engine,
+        Settings(scope=scope, owner_login="", dashboard_url=""),
+        evidence,
+        evidence / "neighbours.json",
+    )
+    with engine.begin() as conn:
+        token = tokens.create(conn, TokenKind.RUNNER, "lab")
+    return TestClient(app, headers={"Authorization": f"Bearer {token}"})
+
+
+def queue(engine, schedule=None):
+    with engine.begin() as conn:
+        return jobs.request(conn, LAB, "owner:test", "test", Profile.NIGHTLY, schedule=schedule)
+
+
+def upload(client, job_id, raw):
+    response = client.post(f"/runner/v1/jobs/{job_id}/result", content=gzip.compress(raw))
+    return int(response.status_code)
+
+
+def scanned(engine, raw=None):
+    """Record the lab scan, or `raw`, in its own transaction."""
+    with engine.begin() as conn:
+        ingest(conn, nmap.parse(raw or lab_xml()))
 
 
 # Each run creates its own scratch database through this admin URL and drops it afterwards. make test sets it to
@@ -123,8 +166,3 @@ def committed(engine):
     tables = ", ".join(table.name for table in db.metadata.sorted_tables if table.name != "schedules")
     with engine.begin() as connection:
         connection.execute(text(f"TRUNCATE {tables} CASCADE"))
-
-
-@pytest.fixture
-def lab_scope():
-    return LAB

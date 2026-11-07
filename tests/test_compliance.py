@@ -8,16 +8,22 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection, Engine, func, select, update
 
-from pen16 import arf, compliance, intake, stig, tokens
-from pen16.db import compliance_results, compliance_scans, compliance_waivers
-from pen16.scope import Scope
-from tests.conftest import DISA_STIG, STIG_RESULT, alerts, open_incidents
-from tests.test_web import OWNER, dashboard
+from pen16 import arf, compliance, intake, status, stig, tokens
+from pen16.db import TokenKind, compliance_results, compliance_scans, compliance_waivers
+from tests.conftest import (
+    DISA_STIG,
+    OWNER,
+    OWNER_LOGIN,
+    SAME_ORIGIN,
+    STIG_RESULT,
+    alerts,
+    dashboard,
+    open_incidents,
+)
 
 RULE = "xccdf_org.ssgproject.content_rule_"
 GPGCHECK = f"{RULE}ensure_gpgcheck_globally_activated"
 UMASK = f"{RULE}accounts_umask_etc_bashrc"
-OWNER_LOGIN = "owner@example.com"
 
 
 def later(raw: bytes = STIG_RESULT.read_bytes(), days: int = 7, **results: str) -> bytes:
@@ -184,7 +190,7 @@ def test_no_checklist_without_a_matching_stig(conn: Connection) -> None:
 
 def intake_client(engine: Engine, evidence: Path) -> tuple[TestClient, dict[str, str]]:
     with engine.begin() as conn:
-        token = tokens.create(conn, "compliance", "lab-rhel9")
+        token = tokens.create(conn, TokenKind.COMPLIANCE, "lab-rhel9")
     return TestClient(intake.create(engine, evidence)), {"Authorization": f"Bearer {token}"}
 
 
@@ -198,7 +204,7 @@ def upload(client: TestClient, headers: dict[str, str], raw: bytes, playbook: by
 def test_intake_takes_a_result_for_the_tokens_host_only(committed: Engine, tmp_path: Path) -> None:
     client, headers = intake_client(committed, tmp_path)
     with committed.begin() as conn:
-        runner = tokens.create(conn, "runner", "lab-rhel9")
+        runner = tokens.create(conn, TokenKind.RUNNER, "lab-rhel9")
 
     assert upload(client, {}, STIG_RESULT.read_bytes()).status_code == 401
     assert upload(client, {"Authorization": f"Bearer {runner}"}, STIG_RESULT.read_bytes()).status_code == 401
@@ -238,31 +244,53 @@ def test_intake_refuses_what_isnt_a_result(committed: Engine, tmp_path: Path, bo
     assert list(tmp_path.iterdir()) == []
 
 
-def test_dashboard_shows_waives_and_downloads(committed: Engine, lab_scope: Scope, tmp_path: Path) -> None:
+PLAYBOOK = b"- hosts: all\n  tasks: []\n"
+
+
+@pytest.fixture
+def uploaded(committed: Engine, tmp_path: Path) -> int:
+    """The fixture's result, sent through the intake with a playbook, and its DISA STIG imported."""
     client, headers = intake_client(committed, tmp_path)
-    scan_id = upload(client, headers, STIG_RESULT.read_bytes(), b"- hosts: all\n  tasks: []\n").json()[
-        "result"
-    ]
+    scan_id: int = upload(client, headers, STIG_RESULT.read_bytes(), PLAYBOOK).json()["result"]
     with committed.begin() as conn:
         stig.load(conn, stig.parse(DISA_STIG.read_bytes()))
-    owner = dashboard(committed, lab_scope, tmp_path)
-    same_origin = {**OWNER, "Origin": "https://pen16.example.ts.net"}
+    return scan_id
 
-    page = owner.get("/", headers=OWNER).text
+
+def test_the_dashboard_shows_a_hosts_result_and_takes_a_waiver(committed: Engine, uploaded: int) -> None:
+    owner = dashboard(committed)
+
     waived = owner.post(
         "/compliance/waive",
         data={"asset_id": "lab-rhel9", "rule_id": UMASK, "reason": "set by the container image"},
-        headers=same_origin,
+        headers=SAME_ORIGIN,
         follow_redirects=False,
     )
-    cklb = owner.get(f"/compliance/{scan_id}/checklist.cklb", headers=OWNER)
-    playbook = owner.get(f"/compliance/{scan_id}/playbook.yml", headers=OWNER)
 
-    assert "53%" in page
-    assert "Configure System Cryptography Policy" in page
     assert waived.status_code == 303
-    assert "set by the container image" in owner.get("/", headers=OWNER).text
+    with committed.connect() as conn:
+        [host] = status.dashboard(conn).compliance
+    assert (host.result.scan_id, host.rate, host.checklist, host.result.has_playbook) == (
+        uploaded,
+        "53%",
+        True,
+        True,
+    )
+    assert [rule.waiver for rule in host.failing if rule.rule_id == UMASK] == ["set by the container image"]
+    assert "Configure System Cryptography Policy" in owner.get("/", headers=OWNER).text
+
+
+def test_the_owner_downloads_the_checklist_and_playbook(
+    committed: Engine, uploaded: int, tmp_path: Path
+) -> None:
+    owner = dashboard(committed, tmp_path)
+
+    cklb = owner.get(f"/compliance/{uploaded}/checklist.cklb", headers=OWNER)
+    playbook = owner.get(f"/compliance/{uploaded}/playbook.yml", headers=OWNER)
+
     assert cklb.json()["stigs"][0]["stig_id"] == "RHEL_9_STIG"
     assert "attachment" in cklb.headers["content-disposition"]
-    assert playbook.text == "- hosts: all\n  tasks: []\n"
-    assert owner.get(f"/compliance/{scan_id}/checklist.cklb").status_code == 403
+    assert playbook.content == PLAYBOOK
+    assert owner.get(f"/compliance/{uploaded}/checklist.cklb").status_code == 403
+    assert owner.get(f"/compliance/{uploaded}/playbook.yml").status_code == 403
+    assert owner.get(f"/compliance/{uploaded + 1}/playbook.yml", headers=OWNER).status_code == 404

@@ -1,13 +1,12 @@
 import json
 import time
 
+import pytest
 from sqlalchemy import func, insert, select
 
-from pen16 import neighbours
+from pen16 import neighbours, status
 from pen16.db import mac_sightings
-from tests.conftest import lab_xml
-from tests.test_jobs import queue, runner_client, upload
-from tests.test_web import OWNER, dashboard, scanned
+from tests.conftest import OWNER, dashboard, lab_xml, queue, runner_client, scanned, upload
 
 
 def neighbour_table(path, *entries):
@@ -30,9 +29,20 @@ def sightings(engine):
         ]
 
 
-def test_a_scan_records_the_mac_the_host_confirmed_during_it(committed, lab_scope, tmp_path):
-    client = runner_client(committed, lab_scope, tmp_path)
-    job_id = queue(committed, lab_scope)
+@pytest.fixture
+def vendors(tmp_path, monkeypatch):
+    """nmap's manufacturer list, with one fictional maker in it."""
+    prefixes = tmp_path / "nmap-mac-prefixes"
+    prefixes.write_text("# fictional\nACDE48 Example Devices\n")
+    monkeypatch.setattr(neighbours, "VENDORS", prefixes)
+    neighbours._vendors.cache_clear()
+    yield
+    neighbours._vendors.cache_clear()
+
+
+def test_a_scan_records_the_mac_the_host_confirmed_during_it(committed, tmp_path):
+    client = runner_client(committed, tmp_path)
+    job_id = queue(committed)
     client.post("/runner/v1/jobs/claim")
     neighbour_table(
         tmp_path / "neighbours.json",
@@ -46,9 +56,9 @@ def test_a_scan_records_the_mac_the_host_confirmed_during_it(committed, lab_scop
     assert sightings(committed) == [("192.0.2.10", "02:00:00:00:00:10")]
 
 
-def test_a_mac_confirmed_before_the_scan_isnt_recorded(committed, lab_scope, tmp_path):
-    client = runner_client(committed, lab_scope, tmp_path)
-    job_id = queue(committed, lab_scope)
+def test_a_mac_confirmed_before_the_scan_isnt_recorded(committed, tmp_path):
+    client = runner_client(committed, tmp_path)
+    job_id = queue(committed)
     client.post("/runner/v1/jobs/claim")
     neighbour_table(tmp_path / "neighbours.json", ("192.0.2.10", "02:00:00:00:00:10", 3600, "STALE"))
 
@@ -72,19 +82,14 @@ def test_unusable_entries_and_files_give_no_macs(tmp_path):
     assert neighbours.read(tmp_path / "missing.json") == {}
 
 
-def test_vendor_names_the_maker_or_a_private_address(tmp_path, monkeypatch):
-    prefixes = tmp_path / "nmap-mac-prefixes"
-    prefixes.write_text("# fictional\nACDE48 Example Devices\n")
-    monkeypatch.setattr(neighbours, "VENDORS", prefixes)
-    neighbours._vendors.cache_clear()
-
+@pytest.mark.usefixtures("vendors")
+def test_vendor_names_the_maker_or_a_private_address():
     assert neighbours.vendor("ac:de:48:00:00:01") == "Example Devices"
     assert neighbours.vendor("02:00:00:00:00:10") == "private address"
     assert neighbours.vendor("00:00:00:00:00:01") is None
-    neighbours._vendors.cache_clear()
 
 
-def test_the_dashboard_shows_each_address_mac(committed, lab_scope):
+def test_the_dashboard_shows_each_address_mac(committed):
     scanned(committed)
     with committed.begin() as conn:
         conn.execute(
@@ -93,7 +98,10 @@ def test_the_dashboard_shows_each_address_mac(committed, lab_scope):
             )
         )
 
-    page = dashboard(committed, lab_scope).get("/", headers=OWNER).text
+    with committed.connect() as conn:
+        seen = status.dashboard(conn)
+    page = dashboard(committed).get("/", headers=OWNER).text
 
-    # Once under each finding on the device in Needs attention, and once under Unnamed devices.
-    assert page.count("02:00:00:00:00:10 · private address") == 4
+    assert {f.seen.mac for f in seen.needs_attention} == {"02:00:00:00:00:10"}
+    assert [device.mac for device in seen.unnamed] == ["02:00:00:00:00:10"]
+    assert "02:00:00:00:00:10 · private address" in page

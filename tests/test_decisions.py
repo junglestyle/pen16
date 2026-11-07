@@ -1,12 +1,11 @@
 import pytest
-from sqlalchemy import exists, insert, select
+from sqlalchemy import insert, select
 
-from pen16 import exposure
+from pen16 import exposure, status
 from pen16.db import DecisionKind, assets, bindings, decisions, expected_services, finding_events, findings
 from pen16.exposure import Finding
+from tests.conftest import OWNER_LOGIN as OWNER
 from tests.conftest import closed, ingest, lab
-
-OWNER = "owner@example.com"
 
 
 def web_app_open(conn):
@@ -31,11 +30,8 @@ def web_app_open(conn):
 
 
 def needs_attention(conn):
-    """Open findings without an active decision, as the dashboard lists them."""
-    active = (decisions.c.finding_id == findings.c.id) & decisions.c.withdrawn_at.is_(None)
-    return list(
-        conn.scalars(select(findings.c.port).where(findings.c.status == "open", ~exists().where(active)))
-    )
+    """The ports in the dashboard's Needs attention."""
+    return [finding.port for finding in status.needs_attention(conn)]
 
 
 def test_accepted_risk_leaves_needs_attention_and_stays_quiet(conn):
