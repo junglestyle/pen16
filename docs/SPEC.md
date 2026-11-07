@@ -63,3 +63,4 @@ Deferred requirements. Each gets its own slice in the [roadmap](ROADMAP.md) once
 - Advisory digest and news/RSS feeds.
 - Approved remediation actions.
 - macOS compliance from the macOS Security Compliance Project's STIG baseline.
+- File integrity: hosts push the AIDE changes their package database doesn't explain, as metadata without file contents, with their own token, and each one alerts. An assistant client may annotate and rank them from the read API; it never suppresses or resolves one, and marking a change expected is the owner's decision.
