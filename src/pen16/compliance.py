@@ -2,13 +2,13 @@
 
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import Connection, case, delete, exists, func, insert, select
 from sqlalchemy.dialects.postgresql import insert as upsert
 
-from pen16 import arf, notify
+from pen16 import arf, db, notify
 from pen16.arf import FAILING, PASSING, Result
 from pen16.db import (
     NotificationKind,
@@ -171,7 +171,7 @@ def unwaive(conn: Connection, asset_id: str, rule_id: str) -> None:
 
 def check(conn: Connection) -> None:
     """Alert once for each host whose newest result is older than STALE."""
-    now = datetime.now(UTC)
+    now = db.now(conn)
     for asset_id, last in conn.execute(
         select(compliance_scans.c.asset_id, func.max(compliance_scans.c.received_at)).group_by(
             compliance_scans.c.asset_id

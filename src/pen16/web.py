@@ -4,7 +4,7 @@ import json
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from importlib.resources import files
 from pathlib import Path
 from typing import Annotated, Any
@@ -188,7 +188,7 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
 
 
 def _dashboard(conn: Connection) -> dict[str, Any]:
-    now = datetime.now(UTC)
+    now = db.now(conn)
     last_success = conn.scalar(
         select(func.max(db.jobs.c.finished_at)).where(db.jobs.c.status == JobStatus.SUCCEEDED)
     )

@@ -1,11 +1,11 @@
 """Backup freshness. deploy/pen16-backup verifies each backup, then records it here."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 from sqlalchemy import Connection, exists, func, select
 from sqlalchemy.dialects.postgresql import insert
 
-from pen16 import notify
+from pen16 import db, notify
 from pen16.db import NotificationKind, backups, notifications
 
 STALE = timedelta(hours=48)
@@ -32,7 +32,7 @@ def check(conn: Connection) -> None:
     """Alert once when the newest backup is too old. Silent until the first backup, so a deployment
     without backups never alerts; the dashboard shows "never" instead."""
     last = latest(conn)
-    if last is None or datetime.now(UTC) - last < STALE or _warned_since(conn, last):
+    if last is None or db.now(conn) - last < STALE or _warned_since(conn, last):
         return
     notify.enqueue(
         conn,

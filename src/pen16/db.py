@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from enum import StrEnum
 
 from sqlalchemy import (
@@ -6,6 +7,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
+    Connection,
     DateTime,
     Engine,
     ForeignKey,
@@ -19,6 +21,7 @@ from sqlalchemy import (
     UniqueConstraint,
     create_engine,
     func,
+    select,
     text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, INET, MACADDR
@@ -367,3 +370,10 @@ def database_url() -> str:
 
 def connect() -> Engine:
     return create_engine(database_url())
+
+
+def now(conn: Connection) -> datetime:
+    """The database's time, the one clock pen16 compares stored times with. The worker, web and listener may run
+    on clocks a little off from it, and a row stamped by now() mustn't look like it's from the future."""
+    current: datetime = conn.execute(select(func.now())).scalar_one()
+    return current

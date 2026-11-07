@@ -1,8 +1,8 @@
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 import httpx
-from sqlalchemy import Connection, Engine, insert, select, update
+from sqlalchemy import Connection, Engine, func, insert, select, update
 
 from pen16.db import NotificationKind, NotificationStatus, notifications
 
@@ -22,10 +22,12 @@ def deliver_due(engine: Engine, client: httpx.Client, url: str, token: str, clic
     while True:
         with engine.begin() as conn:
             row = conn.execute(
-                select(notifications)
+                select(
+                    notifications, (func.now() - notifications.c.created_at > GIVE_UP_AFTER).label("expired")
+                )
                 .where(
                     notifications.c.status == NotificationStatus.PENDING,
-                    notifications.c.next_attempt_at <= datetime.now(UTC),
+                    notifications.c.next_attempt_at <= func.now(),
                 )
                 .order_by(notifications.c.id)
                 .limit(1)
@@ -38,19 +40,15 @@ def deliver_due(engine: Engine, client: httpx.Client, url: str, token: str, clic
             if error is None:
                 values = {
                     "status": NotificationStatus.DELIVERED,
-                    "delivered_at": datetime.now(UTC),
+                    "delivered_at": func.now(),
                     "attempts": attempts,
                 }
-            elif permanent or datetime.now(UTC) - row.created_at > GIVE_UP_AFTER:
+            elif permanent or row.expired:
                 log.warning("notification %s failed for good: %s", row.id, error)
                 values = {"status": NotificationStatus.FAILED, "attempts": attempts, "last_error": error}
             else:
                 delay = min(timedelta(minutes=2**attempts), MAX_BACKOFF)
-                values = {
-                    "attempts": attempts,
-                    "last_error": error,
-                    "next_attempt_at": datetime.now(UTC) + delay,
-                }
+                values = {"attempts": attempts, "last_error": error, "next_attempt_at": func.now() + delay}
             conn.execute(update(notifications).where(notifications.c.id == row.id).values(**values))
 
 

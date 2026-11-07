@@ -1,12 +1,12 @@
 import logging
 from collections.abc import Mapping
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
 from sqlalchemy import Connection, Row, func, insert, select, union, update
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 
-from pen16 import exposure, notify
+from pen16 import db, exposure, notify
 from pen16.db import (
     JobStatus,
     NotificationKind,
@@ -65,7 +65,7 @@ def request(conn: Connection, scope: Scope, requester: str, reason: str, schedul
 
 
 def run_due_schedules(conn: Connection, scope: Scope) -> None:
-    now = datetime.now(UTC)
+    now = db.now(conn)
     due = conn.execute(
         select(schedules).where(schedules.c.enabled, schedules.c.next_run_at <= now).with_for_update()
     )
@@ -153,7 +153,7 @@ def fail(conn: Connection, job_id: int, runner: str, error: str) -> None:
 
 def expire(conn: Connection) -> None:
     """Retry or fail jobs past their deadline, and fail jobs no runner picked up."""
-    now = datetime.now(UTC)
+    now = db.now(conn)
     late = conn.execute(
         select(jobs)
         .where(jobs.c.status == JobStatus.RUNNING, jobs.c.deadline_at < now)

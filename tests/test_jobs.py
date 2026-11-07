@@ -1,10 +1,10 @@
 import gzip
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
 from pen16 import jobs, listener, runner, scope, tokens
 from pen16.config import Config
@@ -95,7 +95,7 @@ def test_missed_deadline_retries_once_then_fails_loudly(committed, lab_scope, tm
     for _ in range(2):
         assert client.post("/runner/v1/jobs/claim").status_code == 200
         with committed.begin() as conn:
-            conn.execute(update(jobs_table).values(deadline_at=datetime.now(UTC) - timedelta(seconds=1)))
+            conn.execute(update(jobs_table).values(deadline_at=func.now() - timedelta(seconds=1)))
             jobs.expire(conn)
 
     assert client.post("/runner/v1/jobs/claim").status_code == 204

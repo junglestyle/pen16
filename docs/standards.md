@@ -9,8 +9,8 @@ an org rule, it says so, and it wins.
 ## Scanning and evidence
 
 - Run fixed executables with argument arrays and `shell=False`. Bound runtime and output, and support cancellation.
-- Change observations, findings, and notifications in one transaction. Store UTC timestamps. Migrations preserve
-  evidence.
+- Change observations, findings, and notifications in one transaction. Store UTC timestamps, and compare stored
+  times with the database's clock (`func.now()`, `db.now`), never the process's. Migrations preserve evidence.
 - Escape untrusted tool and feed output everywhere it's shown.
 - Log requester, operation, job, outcome, and safe errors. Never log tokens, full request bodies, or raw evidence.
 - Pin runtime and tool images by digest, and record tool and parser versions with their fixtures.
