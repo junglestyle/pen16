@@ -1,3 +1,4 @@
+import functools
 import gzip
 import os
 import re
@@ -12,7 +13,7 @@ from sqlalchemy import create_engine, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError
 
-from pen16 import db, exposure, jobs, listener, nmap, scope, tokens, web
+from pen16 import db, exposure, jobs, listener, nmap, roles, scope, tokens, web
 from pen16.config import Config as Settings
 from pen16.db import Profile, TokenKind
 
@@ -81,9 +82,10 @@ def dashboard(engine, evidence_dir=Path("/nonexistent")):
 
 
 def runner_client(engine, evidence, scope=LAB):
-    """The runner listener with a runner token, keeping evidence and the neighbour table in `evidence`."""
+    """The runner listener, logged in as its own database role, with a runner token, keeping evidence and the
+    neighbour table in `evidence`."""
     app = listener.create(
-        engine,
+        as_role(engine, "pen16_listener"),
         Settings(scope=scope, owner_login="", dashboard_url=""),
         evidence,
         evidence / "neighbours.json",
@@ -91,6 +93,12 @@ def runner_client(engine, evidence, scope=LAB):
     with engine.begin() as conn:
         token = tokens.create(conn, TokenKind.RUNNER, "lab")
     return TestClient(app, headers={"Authorization": f"Bearer {token}"})
+
+
+@functools.cache
+def as_role(engine, role):
+    """An engine on the same database that logs in as one of roles.ROLES."""
+    return create_engine(engine.url.set(username=role, password=ROLE_PASSWORD))
 
 
 def queue(engine, schedule=None):
@@ -112,6 +120,8 @@ def scanned(engine, raw=None):
 # Each run creates its own scratch database through this admin URL and drops it afterwards. make test sets it to
 # make db's Postgres; it's never PEN16_DATABASE_URL, so a run can't touch a database it didn't create.
 ADMIN_URL = "PEN16_TEST_ADMIN_URL"
+# Every role in roles.ROLES logs in with this in the scratch database.
+ROLE_PASSWORD = "test-only"  # noqa: S105  # a throwaway test database's
 
 
 @pytest.fixture(scope="session")
@@ -136,7 +146,11 @@ def engine():
         command.upgrade(config, "head")
         command.downgrade(config, "base")
         command.upgrade(config, "head")
+        for variable, _ in roles.ROLES.values():
+            env.setenv(variable, ROLE_PASSWORD)
         engine = db.connect()
+        with engine.begin() as connection:
+            roles.ensure(connection)
         yield engine
         engine.dispose()
     with admin.connect() as connection:

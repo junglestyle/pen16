@@ -35,6 +35,8 @@ The dashboard and versioned API share application services. The dashboard is rea
 
 An assistant client receives read and scan. Each request selects one registered asset, an approved profile, and a reason. Tokens cannot change intent, findings, scope, or deployment policy. Apply a simple per-token rate limit, initially six scan requests/hour. Return the API schema with permissions documented.
 
+The runner listener and the compliance intake are the services other machines reach, so each logs in to the database as its own role with only the table privileges its requests use ([roles.py](../src/pen16/roles.py)): neither can read settings or schedules, change intent, waivers or token revocation, or touch the other's data. `pen16 migrate` creates the roles and resets their grants after every upgrade. The dashboard sits on a container network with only the database, so neither service can reach it to send identity headers.
+
 ## Evidence flow
 
 1. A schedule, owner, or permitted client requests work. Record targets, bindings, profile, vantage, requester, and deadline.

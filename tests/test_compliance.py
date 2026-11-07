@@ -17,6 +17,7 @@ from tests.conftest import (
     SAME_ORIGIN,
     STIG_RESULT,
     alerts,
+    as_role,
     dashboard,
     open_incidents,
 )
@@ -191,7 +192,9 @@ def test_no_checklist_without_a_matching_stig(conn: Connection) -> None:
 def intake_client(engine: Engine, evidence: Path) -> tuple[TestClient, dict[str, str]]:
     with engine.begin() as conn:
         token = tokens.create(conn, TokenKind.COMPLIANCE, "lab-rhel9")
-    return TestClient(intake.create(engine, evidence)), {"Authorization": f"Bearer {token}"}
+    return TestClient(intake.create(as_role(engine, "pen16_intake"), evidence)), {
+        "Authorization": f"Bearer {token}"
+    }
 
 
 def upload(client: TestClient, headers: dict[str, str], raw: bytes, playbook: bytes | None = None) -> Any:

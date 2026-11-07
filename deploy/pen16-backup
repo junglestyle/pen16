@@ -50,7 +50,9 @@ for _ in $(seq 60); do
 	docker exec "$scratch" pg_isready -q -h 127.0.0.1 -U pen16 && break
 	sleep 1
 done
-docker exec -i "$scratch" pg_restore -U pen16 -d pen16 --no-owner --exit-on-error < "$work/pen16.dump"
+# Without grants: the intake's and listener's roles live in the cluster, not the dump, and pen16 migrate
+# grants them again on a restored database.
+docker exec -i "$scratch" pg_restore -U pen16 -d pen16 --no-owner --no-privileges --exit-on-error < "$work/pen16.dump"
 
 query='select version_num from alembic_version'
 live=$("${compose[@]}" exec -T db psql -U pen16 -d pen16 -tAc "$query")

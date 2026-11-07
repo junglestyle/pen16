@@ -22,9 +22,9 @@ M3 uses a dedicated runner listener. Tunnel ACLs allow only that listener, witho
 
 ## Access and secrets
 
-Serve the dashboard only over Tailscale, with automatic certificate renewal. The owner is identified by Tailscale identity headers and an allowed login; pen16 stores no passwords. Reject identity headers that don't come from the local proxy, and use CSRF protection on state-changing forms.
+Serve the dashboard only over Tailscale, with automatic certificate renewal. The owner is identified by Tailscale identity headers and an allowed login; pen16 stores no passwords. Reject identity headers that don't come from the local proxy: the dashboard listens on localhost for `tailscale serve`, and its container network holds only the database. Use CSRF protection on state-changing forms.
 
-API tokens are random, hashed, shown once, and individually revocable. Store runner and compliance tokens in restricted files. Compliance is push-only: a host's token uploads results for that host and nothing else, through an intake that serves nothing else, and pen16 holds no credential that reaches a host. Replace compromised credentials and re-enroll affected runners.
+API tokens are random, hashed, shown once, and individually revocable. Store runner and compliance tokens in restricted files. Compliance is push-only: a host's token uploads results for that host and nothing else, through an intake that serves nothing else, and pen16 holds no credential that reaches a host. The intake and the runner listener each use a database role limited to what their requests write ([ARCHITECTURE.md](ARCHITECTURE.md#api-permissions)). Replace compromised credentials and re-enroll affected runners.
 
 Disable parser external resources and XML entities; escape output and generate storage paths. Limit uploads, including ARF results and their playbooks, to 50 MiB compressed/250 MiB expanded; bound feed downloads. Treat scan/feed prose as data, including in assistant clients.
 

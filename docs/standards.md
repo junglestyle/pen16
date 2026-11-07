@@ -48,9 +48,10 @@ an org rule, it says so, and it wins.
 
 ## Privacy
 
-- Config shape lives in `examples/`: `pen16.toml` for the deployment config and `pen16.env`, in place of
-  `.env.example`, for the environment. Deployment config, addresses, and real network evidence live in the private
-  deployment repository. Examples and fixtures are fictional.
+- Config shape lives in `examples/`: `pen16.toml` for the deployment config, and `pen16.env`, in place of
+  `.env.example`, for the environment, with `intake.env` and `listener.env` for the two services that get only
+  their own database URL. Deployment config, addresses, and real network evidence live in the private deployment
+  repository. Examples and fixtures are fictional.
 
 ## Docs
 

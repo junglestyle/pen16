@@ -7,14 +7,16 @@ import uvicorn
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-from pen16 import backups, db, exposure, runner, stig, tokens, worker
+from pen16 import backups, db, exposure, roles, runner, stig, tokens, worker
 from pen16.db import TokenKind
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="pen16")
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("migrate", help="bring the database schema up to date")
+    commands.add_parser(
+        "migrate", help="bring the database schema up to date, and the listener's and intake's roles with it"
+    )
     commands.add_parser("worker", help="run schedules, job deadlines, and notification delivery")
     commands.add_parser("runner", help="claim scan jobs from the listener and run them")
     for name, about, port in (
@@ -44,6 +46,8 @@ def main() -> None:
         alembic = AlembicConfig()
         alembic.set_main_option("script_location", str(files("pen16") / "migrations"))
         command.upgrade(alembic, "head")
+        with db.connect().begin() as conn:
+            roles.ensure(conn)
     elif args.command == "worker":
         worker.run_forever()
     elif args.command == "runner":

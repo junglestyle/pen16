@@ -32,7 +32,8 @@ migrate() { (cd "$repo" && PEN16_DATABASE_URL=$url uv run --frozen alembic "$@")
     -p "127.0.0.1:$port:5432" "$image" >/dev/null
 # Over TCP: the image's first-start server listens only on its socket.
 for _ in $(seq 60); do "$engine" exec "$name" pg_isready -h 127.0.0.1 -U pen16 -q && break; sleep 1; done
-"$engine" exec -i "$name" pg_restore -U pen16 -d pen16 --no-owner --exit-on-error < "$dump"
+# Without grants: the intake's and listener's roles aren't in this throwaway cluster.
+"$engine" exec -i "$name" pg_restore -U pen16 -d pen16 --no-owner --no-privileges --exit-on-error < "$dump"
 
 start=$(sql 'SELECT version_num FROM alembic_version')
 echo "restored at revision $start"
