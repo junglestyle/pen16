@@ -8,7 +8,9 @@ x-logging: &logging
 
 x-app: &app
   image: pen16:local
-  build: ..
+  # Only migrate builds it, so a deploy makes one image and every service runs it. With a build on each, compose
+  # built one per service and tagged whichever finished last. Never pulled: it exists only once built here.
+  pull_policy: never
   restart: unless-stopped
   logging: *logging
   read_only: true
@@ -44,6 +46,8 @@ services:
 
   migrate:
     <<: *app
+    build: ..
+    pull_policy: missing
     env_file: /etc/pen16/pen16.env
     command: [migrate]
     restart: "no"
