@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy import Connection, Row, func, insert, select, union, update
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 
-from pen16 import db, exposure, notify
+from pen16 import coverage, db, exposure, notify
 from pen16.db import (
     JobStatus,
     ObservationState,
@@ -40,10 +40,12 @@ def request(
     conn: Connection, scope: Scope, requester: str, reason: str, profile: Profile, schedule: str | None = None
 ) -> int:
     """Queue a scan of the whole scope, or return the scan already waiting or running. A schedule that comes due
-    while a requested scan waits takes that scan as its run."""
+    while a requested scan waits takes that scan as its run. A sweep chunk waiting doesn't count: it's other work."""
     conn.execute(select(func.pg_advisory_xact_lock(REQUEST_LOCK)))
     waiting = conn.execute(
-        select(jobs.c.id, jobs.c.schedule).where(jobs.c.status.in_([JobStatus.QUEUED, JobStatus.RUNNING]))
+        select(jobs.c.id, jobs.c.schedule).where(
+            jobs.c.status.in_([JobStatus.QUEUED, JobStatus.RUNNING]), jobs.c.profile == profile
+        )
     ).first()
     if waiting is not None:
         if schedule is not None and waiting.schedule is None:
@@ -98,6 +100,40 @@ def run_due_schedules(conn: Connection, scope: Scope) -> None:
         conn.execute(update(schedules).where(schedules.c.name == schedule.name).values(next_run_at=next_run))
 
 
+def queue_sweep(conn: Connection, scope: Scope) -> int | None:
+    """Queue the next chunk of a rolling full-range sweep when the runner has nothing waiting and a network's sweep
+    is due (pen16.coverage). Returns the new job's ID, or None."""
+    conn.execute(select(func.pg_advisory_xact_lock(REQUEST_LOCK)))
+    if (
+        conn.scalar(select(jobs.c.id).where(jobs.c.status.in_([JobStatus.QUEUED, JobStatus.RUNNING])))
+        is not None
+    ):
+        return None
+    chunk = coverage.next_chunk(conn, scope, db.now(conn))
+    if chunk is None:
+        return None
+    exclude = [str(network) for network in scope.exclude]
+    scope.check(chunk.targets, exclude)
+    job_id: int = conn.scalar(
+        insert(jobs)
+        .values(
+            requester="sweep",
+            reason=f"full sweep of {chunk.network}, TCP {chunk.port_from}-{chunk.port_to}",
+            profile=Profile.SWEEP,
+            targets=chunk.targets,
+            exclude=exclude,
+            extra_tcp=[],
+            network=chunk.network,
+            port_from=chunk.port_from,
+            port_to=chunk.port_to,
+            status=JobStatus.QUEUED,
+        )
+        .returning(jobs.c.id)
+    )
+    log.info("queued sweep job %s: %s", job_id, chunk)
+    return job_id
+
+
 @dataclass(frozen=True)
 class Assignment:
     """What a runner is told to scan: everything it needs, and nothing it could widen."""
@@ -107,6 +143,8 @@ class Assignment:
     targets: list[str]
     exclude: list[str]
     extra_tcp: list[int]
+    port_from: int | None
+    port_to: int | None
     deadline_at: datetime
 
 
@@ -145,6 +183,8 @@ def claim(conn: Connection, runner: str) -> Assignment | None:
         claimed.targets,
         claimed.exclude,
         claimed.extra_tcp,
+        claimed.port_from,
+        claimed.port_to,
         claimed.deadline_at,
     )
 
@@ -182,7 +222,11 @@ def complete(
         )
     macs = {address: n.mac for address, n in confirmed.items()}
     opened = exposure.ingest(conn, scan, scope.networks, "internal", macs)
+    coverage.record(conn, job, scan, scope)
+    # A sweep chunk scans one network, so only its gateway says anything.
     for network in scope.networks:
+        if job.network is not None and network.name != job.network:
+            continue
         if str(network.gateway) in up:
             notify.clear_incident(
                 conn,

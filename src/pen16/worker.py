@@ -1,5 +1,5 @@
-"""Background work: start due scheduled scans, expire late jobs, watch backups and compliance results, and
-deliver notifications."""
+"""Background work: start due scheduled scans and sweep chunks, expire late jobs, watch backups, sweeps and
+compliance results, and deliver notifications."""
 
 import logging
 import os
@@ -12,7 +12,7 @@ import httpx
 from sqlalchemy import Connection, Engine, func
 from sqlalchemy.dialects.postgresql import insert
 
-from pen16 import backups, compliance, config, db, jobs, notify
+from pen16 import backups, compliance, config, coverage, db, jobs, notify
 from pen16.db import heartbeats
 from pen16.scope import Scope
 
@@ -43,8 +43,10 @@ def run_forever() -> None:
 def tick(engine: Engine, scope: Scope, deliver: Callable[[], None] | None) -> None:
     """One round of work, then a heartbeat. Each task runs on its own, so one that keeps failing can't hold up
     the others, alert delivery included: it opens an incident instead, and clears it once it runs again."""
-    tasks: list[tuple[str, Callable[[Connection], None]]] = [
+    tasks: list[tuple[str, Callable[[Connection], object]]] = [
         ("schedules", partial(jobs.run_due_schedules, scope=scope)),
+        ("sweeps", partial(jobs.queue_sweep, scope=scope)),
+        ("sweep-age", partial(coverage.check, scope=scope)),
         ("expiry", jobs.expire),
         ("backups", backups.check),
         ("compliance", compliance.check),
@@ -63,7 +65,7 @@ def tick(engine: Engine, scope: Scope, deliver: Callable[[], None] | None) -> No
     )
 
 
-def _in_transaction(engine: Engine, task: Callable[[Connection], None]) -> None:
+def _in_transaction(engine: Engine, task: Callable[[Connection], object]) -> None:
     with engine.begin() as conn:
         task(conn)
 

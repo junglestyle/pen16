@@ -7,10 +7,22 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import ColumnElement, Connection, Row, ScalarSelect, Text, cast, exists, func, or_, select
+from sqlalchemy import (
+    ColumnElement,
+    Connection,
+    Row,
+    ScalarSelect,
+    Select,
+    Text,
+    cast,
+    exists,
+    func,
+    or_,
+    select,
+)
 from sqlalchemy.dialects.postgresql import distinct_on
 
-from pen16 import backups, compliance, db, worker
+from pen16 import backups, compliance, coverage, db, worker
 from pen16.db import (
     BindingChange,
     DecisionKind,
@@ -19,6 +31,7 @@ from pen16.db import (
     JobStatus,
     NotificationStatus,
     ObservationState,
+    Profile,
     TokenKind,
     assets,
     binding_events,
@@ -35,7 +48,10 @@ from pen16.db import (
     observations,
     schedules,
     tokens,
+    unavailable,
 )
+from pen16.db import coverage as covered
+from pen16.scope import Scope
 
 # A nightly scan older than this is stale.
 SCANS_STALE = timedelta(hours=48)
@@ -71,6 +87,8 @@ class OpenFinding:
     withdrawal: str | None
     # The device isn't at the address this was seen at any more: another took it over, or it was retired.
     away: bool
+    # The address didn't answer the latest scan of its network, so nothing there can resolve this.
+    unavailable: bool
 
 
 @dataclass(frozen=True)
@@ -194,6 +212,34 @@ class Dashboard:
     unnamed: list[Unnamed]
     devices: list[Device]
     compliance: list[HostCompliance]
+    coverage: list[NetworkCoverage]
+
+
+@dataclass(frozen=True)
+class Covered:
+    """What one finished job covered in one network, and the known devices there that didn't answer."""
+
+    job_id: int
+    network: str
+    profile: Profile
+    finished_at: datetime
+    gateway_up: bool
+    hosts_up: int
+    tcp_ports: int
+    udp_ports: int
+    # A sweep chunk's TCP port range.
+    port_from: int | None
+    port_to: int | None
+    # (address, device) for each known device that didn't answer.
+    unavailable: list[tuple[str, str]]
+
+
+@dataclass(frozen=True)
+class NetworkCoverage:
+    name: str
+    cidr: str
+    latest: Covered | None
+    sweep: coverage.Sweep
 
 
 @dataclass(frozen=True)
@@ -201,6 +247,8 @@ class Address:
     address: str
     mac: str | None
     bound_at: datetime
+    # It didn't answer the latest scan of its network.
+    unavailable: bool
 
 
 @dataclass(frozen=True)
@@ -377,7 +425,7 @@ class RecentChanges:
     addresses: list[AddressChange]
 
 
-def dashboard(conn: Connection) -> Dashboard:
+def dashboard(conn: Connection, scope: Scope) -> Dashboard:
     now = db.now(conn)
     return Dashboard(
         health=health(conn, now),
@@ -398,6 +446,72 @@ def dashboard(conn: Connection) -> Dashboard:
         unnamed=unnamed(conn),
         devices=devices(conn),
         compliance=[_host_compliance(conn, now, result) for result in compliance.latest(conn)],
+        coverage=network_coverage(conn, scope, now),
+    )
+
+
+def network_coverage(conn: Connection, scope: Scope, now: datetime) -> list[NetworkCoverage]:
+    """Each scope network's latest coverage, and how far its rolling sweep has got."""
+    result = []
+    for network in scope.networks:
+        found = recent_coverage(conn, network.name, 1)
+        result.append(
+            NetworkCoverage(
+                network.name,
+                str(network.cidr),
+                found[0] if found else None,
+                coverage.sweep(conn, network.name, now),
+            )
+        )
+    return result
+
+
+def recent_coverage(conn: Connection, network: str | None = None, limit: int = 50) -> list[Covered]:
+    """What the latest finished jobs covered, newest first, in one network or all of them."""
+    query = select(covered).order_by(covered.c.finished_at.desc(), covered.c.job_id.desc(), covered.c.network)
+    if network is not None:
+        query = query.where(covered.c.network == network)
+    rows = conn.execute(query.limit(limit)).all()
+    missing: dict[tuple[int, str], list[tuple[str, str]]] = {}
+    for row in conn.execute(
+        select(
+            unavailable.c.job_id,
+            unavailable.c.network,
+            func.host(unavailable.c.address).label("address"),
+            unavailable.c.asset_id,
+        )
+        .where(unavailable.c.job_id.in_([row.job_id for row in rows]))
+        .order_by(unavailable.c.address)
+    ):
+        missing.setdefault((row.job_id, row.network), []).append((row.address, row.asset_id))
+    return [
+        Covered(
+            row.job_id,
+            row.network,
+            Profile(row.profile),
+            row.finished_at,
+            row.gateway_up,
+            row.hosts_up,
+            row.tcp_ports,
+            row.udp_ports,
+            row.port_from,
+            row.port_to,
+            missing.get((row.job_id, row.network), []),
+        )
+        for row in rows
+    ]
+
+
+def _unavailable_now() -> Select[Any]:
+    """The addresses that didn't answer the latest finished job covering their network."""
+    latest = (
+        select(covered.c.job_id, covered.c.network)
+        .ext(distinct_on(covered.c.network))
+        .order_by(covered.c.network, covered.c.finished_at.desc(), covered.c.job_id.desc())
+        .subquery()
+    )
+    return select(unavailable.c.address).join(
+        latest, (latest.c.job_id == unavailable.c.job_id) & (latest.c.network == unavailable.c.network)
     )
 
 
@@ -414,7 +528,12 @@ def _host_compliance(conn: Connection, now: datetime, result: compliance.Latest)
 
 
 def health(conn: Connection, now: datetime) -> Health:
-    last_scan = conn.scalar(select(func.max(jobs.c.finished_at)).where(jobs.c.status == JobStatus.SUCCEEDED))
+    # Sweep chunks cover a few ports each, so only a nightly scan counts as a good scan of everything.
+    last_scan = conn.scalar(
+        select(func.max(jobs.c.finished_at)).where(
+            jobs.c.status == JobStatus.SUCCEEDED, jobs.c.profile == Profile.NIGHTLY
+        )
+    )
     latest = conn.execute(
         select(jobs.c.id, jobs.c.status, jobs.c.error).order_by(jobs.c.id.desc()).limit(1)
     ).first()
@@ -457,7 +576,13 @@ def needs_attention(conn: Connection) -> list[OpenFinding]:
     )
     here = exists().where(bindings.c.address == seen.c.address, bindings.c.asset_id == findings.c.asset_id)
     rows = conn.execute(
-        select(findings, *_seen_columns(seen), withdrawn.label("withdrawal"), here.label("here"))
+        select(
+            findings,
+            *_seen_columns(seen),
+            withdrawn.label("withdrawal"),
+            here.label("here"),
+            seen.c.address.in_(_unavailable_now()).label("unavailable"),
+        )
         .join(seen, seen.c.id == findings.c.last_observation_id)
         .where(findings.c.status == FindingStatus.OPEN, ~exists().where(_active_decision()))
         .order_by(findings.c.opened_at.desc())
@@ -473,6 +598,7 @@ def needs_attention(conn: Connection) -> list[OpenFinding]:
             _seen(row),
             row.withdrawal,
             not row.here,
+            row.unavailable,
         )
         for row in rows
     ]
@@ -628,6 +754,7 @@ def asset(conn: Connection, asset_id: str) -> Asset | None:
             func.host(bindings.c.address).label("address"),
             cast(bindings.c.mac, Text).label("mac"),
             bindings.c.bound_at,
+            bindings.c.address.in_(_unavailable_now()).label("unavailable"),
         )
         .where(bindings.c.asset_id == asset_id)
         .order_by(bindings.c.address)
@@ -652,7 +779,7 @@ def asset(conn: Connection, asset_id: str) -> Asset | None:
         took_over_private=row.took_over_private,
         retired_at=row.retired_at,
         retirement=row.retirement,
-        addresses=[Address(a.address, a.mac, a.bound_at) for a in addresses],
+        addresses=[Address(a.address, a.mac, a.bound_at, a.unavailable) for a in addresses],
         services=_services(conn, asset_id),
         expected=[Expected(e.asset_id, e.protocol, e.port, e.vantage, e.reason) for e in expected],
         findings=[

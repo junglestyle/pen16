@@ -4,7 +4,7 @@ from sqlalchemy import insert, select
 
 from pen16 import evidence, exposure, status
 from pen16.db import DecisionKind, assets, bindings, expected_services, findings
-from tests.conftest import OWNER, OWNER_LOGIN, SAME_ORIGIN, dashboard, ingest, lab, lab_xml, scanned
+from tests.conftest import LAB, OWNER, OWNER_LOGIN, SAME_ORIGIN, dashboard, ingest, lab, lab_xml, scanned
 
 
 def post(client, path, data):
@@ -13,7 +13,7 @@ def post(client, path, data):
 
 def view(engine):
     with engine.connect() as conn:
-        return status.dashboard(conn)
+        return status.dashboard(conn, LAB)
 
 
 def test_only_the_owner_gets_in(committed):

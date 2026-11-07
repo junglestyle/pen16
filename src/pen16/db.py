@@ -75,6 +75,8 @@ class Profile(StrEnum):
     """The fixed scan profiles a job can ask for; the runner builds each one's nmap command itself."""
 
     NIGHTLY = "nightly"
+    # A chunk of a network's rolling full-range TCP sweep: its known addresses, across a range of ports.
+    SWEEP = "sweep"
 
 
 class TokenKind(StrEnum):
@@ -318,6 +320,10 @@ jobs = Table(
     Column("targets", ARRAY(Text), nullable=False),
     Column("exclude", ARRAY(Text), nullable=False),
     Column("extra_tcp", ARRAY(Integer), nullable=False),
+    # A sweep chunk's network and TCP port range; null for a nightly scan of the whole scope.
+    Column("network", Text),
+    Column("port_from", Integer),
+    Column("port_to", Integer),
     Column("status", Text, nullable=False),
     Column("attempts", Integer, nullable=False, server_default="0"),
     Column("runner", Text),
@@ -329,6 +335,48 @@ jobs = Table(
     Column("evidence_digest", Text),
     _one_of("status", JobStatus, "job_status"),
     _one_of("profile", Profile, "job_profile"),
+)
+
+# What a finished job covered in each network it scanned: whether the gateway answered, how many addresses were
+# up, and how many ports nmap says it scanned. Coverage is shown apart from the job's status.
+coverage = Table(
+    "coverage",
+    metadata,
+    Column("job_id", BigInteger, ForeignKey("jobs.id"), nullable=False),
+    Column("network", Text, nullable=False),
+    Column("profile", Text, nullable=False),
+    Column("finished_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("gateway_up", Boolean, nullable=False),
+    Column("hosts_up", Integer, nullable=False),
+    Column("tcp_ports", Integer, nullable=False),
+    Column("udp_ports", Integer, nullable=False),
+    Column("port_from", Integer),
+    Column("port_to", Integer),
+    PrimaryKeyConstraint("job_id", "network"),
+    _one_of("profile", Profile, "coverage_profile"),
+)
+
+# Known devices a job scanned that didn't answer. Their findings stay open: missing coverage resolves nothing.
+unavailable = Table(
+    "unavailable",
+    metadata,
+    Column("job_id", BigInteger, ForeignKey("jobs.id"), nullable=False),
+    Column("network", Text, nullable=False),
+    Column("address", INET, nullable=False),
+    Column("asset_id", Text, nullable=False),
+    PrimaryKeyConstraint("job_id", "address"),
+)
+
+# When each block of a network's TCP ports was last swept in full, by a chunk whose gateway answered. The oldest
+# block's time is the network's sweep age.
+sweep_blocks = Table(
+    "sweep_blocks",
+    metadata,
+    Column("network", Text, nullable=False),
+    Column("block", Integer, nullable=False),
+    Column("swept_at", DateTime(timezone=True), nullable=False),
+    Column("job_id", BigInteger, ForeignKey("jobs.id"), nullable=False),
+    PrimaryKeyConstraint("network", "block"),
 )
 
 tokens = Table(

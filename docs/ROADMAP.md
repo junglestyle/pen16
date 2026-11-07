@@ -50,15 +50,13 @@ exception: it comes before the pilot and runs alongside M1's remaining slices.
   hand from one named device to another, with a reason; what's already recorded stays with the first. Shown by the
   device identity, exposure and dashboard tests: move an address between two named devices from a device's page,
   and see the move in both devices' history and in Recent changes.
-
-### 3. Coverage and rolling sweeps
-
-Delivers the rest of FR-3. The dashboard shows what each scan actually covered, which targets were unavailable, and
-how old each network's full-range sweep is. Full-range TCP sweeps run in bounded chunks between nightly scans,
-aiming at seven-day freshness. Findings on an unavailable host stay open.
-
-Done when: a host that drops off the network shows as unavailable with its findings still open, and the sweep
-age counts down as chunks complete.
+- **Coverage and rolling sweeps.** The rest of FR-3. Each finished scan records, per network, whether its gateway
+  answered, how many addresses were up, how many ports it covered, and which known devices didn't answer. The
+  dashboard shows the latest per network, flags unavailable devices on their findings and pages, and lists recent
+  coverage on its own page. Between nightly scans, sweep jobs cover all TCP ports on known devices a block at a time,
+  paced to finish within seven days, and each network's sweep age is shown and alerts once when it falls behind.
+  Shown by the coverage tests: a host drops off a scan and shows as unavailable with its finding still open, and
+  sweeping the stalest blocks brings the sweep age down.
 
 ### 4. Verification and cancellation
 

@@ -11,6 +11,19 @@
     {% if h.last_scan %}{{ h.last_scan.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}never{% endif %}
     {% if h.scans_stale %}(stale){% endif %}
   </dd>
+  {% for n in d.coverage %}
+  <dt>{{ n.name }} <span class="muted">{{ n.cidr }}</span></dt>
+  <dd>
+    {% if n.latest %}{% set c = n.latest %}
+    Last {{ c.profile }} scan {{ m.minute(c.finished_at) }}: {{ c.hosts_up }} up{% if not c.gateway_up %}, <span class="bad">gateway didn't answer</span>{% endif %}
+    {% if c.unavailable %}<br><span class="bad">Didn't answer:</span> {% for address, device in c.unavailable %}{{ m.asset(device) }}{{ ', ' if not loop.last }}{% endfor %}{% endif %}
+    {% else %}<span class="muted">not scanned yet</span>{% endif %}
+    <br>Full sweep: {% if n.sweep.complete %}<span class="{{ 'bad' if n.sweep.stale else 'ok' }}">oldest part {{ m.ago(h.now - n.sweep.oldest) }} old</span>
+    {% else %}<span class="{{ 'bad' if n.sweep.stale }}">{{ n.sweep.swept }} of {{ BLOCKS }} port blocks so far</span>{% endif %}
+  </dd>
+  {% endfor %}
+  <dt>Coverage</dt>
+  <dd><a href="/coverage">What each scan covered</a></dd>
   <dt>Last backup</dt>
   <dd class="{{ 'bad' if h.backup_stale else 'ok' }}">
     {% if h.last_backup %}{{ h.last_backup.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}never{% endif %}
@@ -52,7 +65,7 @@
   {% for f in d.needs_attention %}
   <tr>
     <td><input type="checkbox" name="finding" value="{{ f.id }}" id="f{{ f.id }}" aria-label="select {{ f.asset_id }} {{ f.port }}/{{ f.protocol }}"></td>
-    <td>{{ m.asset(f.asset_id) }}{% if f.away %} <span class="muted">· no longer at {{ f.seen.address }}</span>{% endif %}</td>
+    <td>{{ m.asset(f.asset_id) }}{% if f.away %} <span class="muted">· no longer at {{ f.seen.address }}</span>{% elif f.unavailable %} <span class="muted">· didn't answer the last scan</span>{% endif %}</td>
     <td>{{ m.port(f) }}</td>
     <td>{{ m.service(f.seen) }}
       {% if f.withdrawal %}<br><span class="bad">Decision withdrawn: {{ f.withdrawal }}</span>{% endif %}</td>

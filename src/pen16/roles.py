@@ -31,6 +31,9 @@ ROLES: dict[str, tuple[str, dict[str, str]]] = {
             "mac_sightings": "SELECT, INSERT",
             "notifications": "SELECT, INSERT",
             "incidents": "SELECT, INSERT, UPDATE",
+            "coverage": "SELECT, INSERT",
+            "unavailable": "SELECT, INSERT",
+            "sweep_blocks": "SELECT, INSERT, UPDATE",
         },
     ),
     "pen16_intake": (
