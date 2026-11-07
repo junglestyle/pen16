@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Connection, Engine, func, select, update
 
 from pen16 import arf, compliance, intake, stig, tokens
-from pen16.db import compliance_results, compliance_scans
+from pen16.db import compliance_results, compliance_scans, compliance_waivers
 from pen16.scope import Scope
 from tests.conftest import DISA_STIG, STIG_RESULT, alerts, open_incidents
 from tests.test_web import OWNER, dashboard
@@ -17,6 +17,7 @@ from tests.test_web import OWNER, dashboard
 RULE = "xccdf_org.ssgproject.content_rule_"
 GPGCHECK = f"{RULE}ensure_gpgcheck_globally_activated"
 UMASK = f"{RULE}accounts_umask_etc_bashrc"
+OWNER_LOGIN = "owner@example.com"
 
 
 def later(raw: bytes = STIG_RESULT.read_bytes(), days: int = 7, **results: str) -> bytes:
@@ -81,7 +82,7 @@ def test_regression_alerts_with_the_rule_and_a_fix_alone_stays_quiet(conn: Conne
 
 def test_a_waived_rule_regresses_quietly_and_stays_failing(conn: Connection) -> None:
     recorded(conn, STIG_RESULT.read_bytes())
-    compliance.waive(conn, "lab-rhel9", GPGCHECK, "local repo mirror signs nothing")
+    compliance.waive(conn, "lab-rhel9", GPGCHECK, "local repo mirror signs nothing", OWNER_LOGIN)
 
     scan = recorded(conn, later(ensure_gpgcheck_globally_activated="fail"))
 
@@ -89,12 +90,31 @@ def test_a_waived_rule_regresses_quietly_and_stays_failing(conn: Connection) -> 
     waived = [row for row in compliance.failing(conn, scan.scan_id) if row.rule_id == GPGCHECK]
     assert waived[0].waiver == "local repo mirror signs nothing"
     with pytest.raises(ValueError, match="needs a reason"):
-        compliance.waive(conn, "lab-rhel9", UMASK, " ")
+        compliance.waive(conn, "lab-rhel9", UMASK, " ", OWNER_LOGIN)
+
+
+def test_a_removed_waiver_stays_in_history_and_its_rule_alerts_again(conn: Connection) -> None:
+    recorded(conn, STIG_RESULT.read_bytes())
+    compliance.waive(conn, "lab-rhel9", GPGCHECK, "mirror signs nothing", OWNER_LOGIN)
+    compliance.waive(conn, "lab-rhel9", GPGCHECK, "mirror signs nothing yet", OWNER_LOGIN)
+    compliance.unwaive(conn, "lab-rhel9", GPGCHECK, "mirror signs now", OWNER_LOGIN)
+
+    recorded(conn, later(ensure_gpgcheck_globally_activated="fail"))
+
+    assert alerts(conn)[-1][0] == "finding"
+    assert len(alerts(conn)) == 2
+    history = conn.execute(
+        select(compliance_waivers.c.reason, compliance_waivers.c.end_reason).order_by(compliance_waivers.c.id)
+    )
+    assert [tuple(row) for row in history] == [
+        ("mirror signs nothing", "replaced by a new waiver"),
+        ("mirror signs nothing yet", "mirror signs now"),
+    ]
 
 
 def test_failing_lists_unwaived_worst_first(conn: Connection) -> None:
     scan = recorded(conn, STIG_RESULT.read_bytes())
-    compliance.waive(conn, "lab-rhel9", f"{RULE}configure_crypto_policy", "FIPS breaks the lab")
+    compliance.waive(conn, "lab-rhel9", f"{RULE}configure_crypto_policy", "FIPS breaks the lab", OWNER_LOGIN)
 
     rows = compliance.failing(conn, scan.scan_id)
 
@@ -136,7 +156,7 @@ def checklist(conn: Connection, scan_id: int) -> dict[str, Any]:
 
 def test_checklist_lists_every_stig_rule_with_its_scap_status(conn: Connection) -> None:
     scan = recorded(conn, STIG_RESULT.read_bytes())
-    compliance.waive(conn, "lab-rhel9", f"{RULE}rootfiles_configured", "image default")
+    compliance.waive(conn, "lab-rhel9", f"{RULE}rootfiles_configured", "image default", OWNER_LOGIN)
 
     rules = checklist(conn, scan.scan_id)
 

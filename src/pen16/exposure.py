@@ -7,12 +7,14 @@ from sqlalchemy.dialects.postgresql import insert
 
 from pen16.db import (
     DecisionKind,
+    FindingChange,
     FindingStatus,
     ObservationState,
     assets,
     bindings,
     decisions,
     expected_services,
+    finding_events,
     findings,
     observations,
 )
@@ -20,6 +22,8 @@ from pen16.nmap import PARSER_VERSION, Port, Scan
 
 UNEXPECTED_EXPOSURE = "unexpected-exposure"
 ASSET_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,62}")
+# Who changed a finding when no person did.
+SCAN = "scan"
 
 
 @dataclass(frozen=True)
@@ -65,7 +69,7 @@ def ingest(conn: Connection, scan: Scan, vantage: str, *, closures: bool = True)
     return opened
 
 
-def expect(conn: Connection, finding_ids: list[int], reason: str) -> None:
+def expect(conn: Connection, finding_ids: list[int], reason: str, by: str) -> None:
     """Declare the services behind these findings expected, and resolve the findings."""
     if not reason.strip():
         raise ValueError("expected exposure needs a reason")
@@ -76,13 +80,14 @@ def expect(conn: Connection, finding_ids: list[int], reason: str) -> None:
     )
     for row in rows:
         conn.execute(
-            insert(expected_services).values(**row._asdict(), reason=reason).on_conflict_do_nothing()
+            insert(expected_services)
+            .values(**row._asdict(), reason=reason.strip(), declared_by=by)
+            .on_conflict_do_nothing(
+                index_elements=["asset_id", "protocol", "port", "vantage"],
+                index_where=expected_services.c.ended_at.is_(None),
+            )
         )
-    conn.execute(
-        update(findings)
-        .where(findings.c.id.in_(finding_ids), findings.c.status == FindingStatus.OPEN)
-        .values(status=FindingStatus.RESOLVED, resolved_at=func.now(), resolution=f"expected: {reason}")
-    )
+    _resolve(conn, finding_ids, f"expected: {reason.strip()}", by)
 
 
 _NAMES = {DecisionKind.ACCEPTED_RISK: "accepted risk", DecisionKind.FALSE_POSITIVE: "false positive"}
@@ -142,38 +147,42 @@ def withdraw(conn: Connection, decision_id: int, why: str) -> None:
     )
 
 
-def resolve(conn: Connection, finding_ids: list[int], reason: str) -> None:
+def resolve(conn: Connection, finding_ids: list[int], reason: str, by: str) -> None:
     """Resolve open findings by hand, such as a filtered port or a device that's gone. A scan that sees the
     port open again reopens it."""
     if not reason.strip():
         raise ValueError("resolving by hand needs a reason")
-    conn.execute(
-        update(findings)
-        .where(findings.c.id.in_(finding_ids), findings.c.status == FindingStatus.OPEN)
-        .values(
-            status=FindingStatus.RESOLVED, resolved_at=func.now(), resolution=f"by hand: {reason.strip()}"
-        )
-    )
+    _resolve(conn, finding_ids, f"by hand: {reason.strip()}", by)
 
 
-def reopen(conn: Connection, finding_id: int) -> None:
-    """Put a resolved finding back in Needs attention."""
-    conn.execute(
+def reopen(conn: Connection, finding_id: int, by: str) -> None:
+    """Put a resolved finding back in Needs attention. Its resolution stays in its history."""
+    reopened = conn.scalars(
         update(findings)
         .where(findings.c.id == finding_id, findings.c.status == FindingStatus.RESOLVED)
         .values(status=FindingStatus.OPEN, resolved_at=None, resolution=None)
-    )
+        .returning(findings.c.id)
+    ).all()
+    for reopened_id in reopened:
+        _event(conn, reopened_id, FindingChange.REOPENED, by)
 
 
-def unexpect(conn: Connection, asset_id: str, protocol: str, port: int, vantage: str) -> None:
+def unexpect(
+    conn: Connection, asset_id: str, protocol: str, port: int, vantage: str, reason: str, by: str
+) -> None:
     """Stop expecting a service. The next scan that sees it open reopens its finding."""
+    if not reason.strip():
+        raise ValueError("stopping expecting a service needs a reason")
     conn.execute(
-        delete(expected_services).where(
+        update(expected_services)
+        .where(
             expected_services.c.asset_id == asset_id,
             expected_services.c.protocol == protocol,
             expected_services.c.port == port,
             expected_services.c.vantage == vantage,
+            expected_services.c.ended_at.is_(None),
         )
+        .values(ended_at=func.now(), ended_by=by, end_reason=reason.strip())
     )
 
 
@@ -241,6 +250,7 @@ def _expected(conn: Connection, asset_id: str, protocol: str, port: int, vantage
                 expected_services.c.protocol == protocol,
                 expected_services.c.port == port,
                 expected_services.c.vantage == vantage,
+                expected_services.c.ended_at.is_(None),
             )
         )
         is not None
@@ -284,7 +294,12 @@ def _material_change(decision: _Decision, port: Port) -> str | None:
 def _open(
     conn: Connection, asset_id: str, port: Port, vantage: str, observed_at: datetime, observation_id: int
 ) -> tuple[int, bool]:
-    """Open, keep open, or reopen this service's finding. Returns its ID and whether that's news."""
+    """Open, keep open, or reopen this service's finding. Returns its ID and whether that's news.
+
+    Only evidence newer than the finding's last observation counts. A resolved finding's last observation is
+    the one it was resolved on, closed by a scan or seen open before the owner resolved it by hand, so scanner
+    time is only ever compared with scanner time.
+    """
     key = (
         findings.c.kind == UNEXPECTED_EXPOSURE,
         findings.c.asset_id == asset_id,
@@ -292,8 +307,11 @@ def _open(
         findings.c.port == port.port,
         findings.c.vantage == vantage,
     )
+    last = observations.alias("last")
     existing = conn.execute(
-        select(findings.c.id, findings.c.status, findings.c.resolved_at).where(*key)
+        select(findings.c.id, findings.c.status, last.c.observed_at.label("last_seen"))
+        .join(last, last.c.id == findings.c.last_observation_id)
+        .where(*key)
     ).first()
     if existing is None:
         finding_id: int = conn.scalar(
@@ -310,11 +328,12 @@ def _open(
             )
             .returning(findings.c.id)
         )
+        _event(conn, finding_id, FindingChange.OPENED, SCAN, observation_id=observation_id)
         return finding_id, True
+    if existing.last_seen >= observed_at:
+        return existing.id, False
     if existing.status == FindingStatus.OPEN:
         conn.execute(update(findings).where(*key).values(last_observation_id=observation_id))
-        return existing.id, False
-    if existing.resolved_at is not None and existing.resolved_at >= observed_at:
         return existing.id, False
     conn.execute(
         update(findings)
@@ -323,6 +342,7 @@ def _open(
             status=FindingStatus.OPEN, resolved_at=None, resolution=None, last_observation_id=observation_id
         )
     )
+    _event(conn, existing.id, FindingChange.REOPENED, SCAN, observation_id=observation_id)
     return existing.id, True
 
 
@@ -372,3 +392,31 @@ def _close(conn: Connection, scan: Scan, vantage: str) -> None:
                 last_observation_id=closed_id,
             )
         )
+        _event(conn, finding.id, FindingChange.RESOLVED, SCAN, "closed", closed_id)
+
+
+def _resolve(conn: Connection, finding_ids: list[int], resolution: str, by: str) -> None:
+    """Resolve the open ones of these findings by an owner's hand, recording why in their history."""
+    resolved = conn.scalars(
+        update(findings)
+        .where(findings.c.id.in_(finding_ids), findings.c.status == FindingStatus.OPEN)
+        .values(status=FindingStatus.RESOLVED, resolved_at=func.now(), resolution=resolution)
+        .returning(findings.c.id)
+    ).all()
+    for finding_id in resolved:
+        _event(conn, finding_id, FindingChange.RESOLVED, by, resolution)
+
+
+def _event(
+    conn: Connection,
+    finding_id: int,
+    change: FindingChange,
+    by: str,
+    reason: str | None = None,
+    observation_id: int | None = None,
+) -> None:
+    conn.execute(
+        insert(finding_events).values(
+            finding_id=finding_id, change=change, by=by, reason=reason, observation_id=observation_id
+        )
+    )

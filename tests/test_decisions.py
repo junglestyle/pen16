@@ -2,9 +2,11 @@ import pytest
 from sqlalchemy import exists, insert, select
 
 from pen16 import exposure
-from pen16.db import DecisionKind, assets, bindings, decisions, expected_services, findings
+from pen16.db import DecisionKind, assets, bindings, decisions, expected_services, finding_events, findings
 from pen16.exposure import Finding
 from tests.conftest import closed, lab
+
+OWNER = "owner@example.com"
 
 
 def web_app_open(conn):
@@ -95,24 +97,33 @@ def test_withdrawing_a_decision_puts_the_finding_back(conn):
     assert needs_attention(conn) == [8080]
 
 
-def test_resolving_by_hand_needs_a_reason_and_can_be_reopened(conn):
+def test_resolving_by_hand_needs_a_reason_and_reopening_keeps_it_in_history(conn):
     web_app = web_app_open(conn)
 
     with pytest.raises(ValueError, match="reason"):
-        exposure.resolve(conn, [web_app], " ")
-    exposure.resolve(conn, [web_app], "unplugged it")
+        exposure.resolve(conn, [web_app], " ", OWNER)
+    exposure.resolve(conn, [web_app], "unplugged it", OWNER)
     assert needs_attention(conn) == []
-    assert conn.scalar(select(findings.c.resolution)) == "by hand: unplugged it"
 
-    exposure.reopen(conn, web_app)
+    exposure.reopen(conn, web_app, OWNER)
+
     assert needs_attention(conn) == [8080]
+    history = conn.execute(
+        select(finding_events.c.change, finding_events.c.by, finding_events.c.reason)
+        .where(finding_events.c.finding_id == web_app)
+        .order_by(finding_events.c.id)
+    )
+    assert [tuple(event) for event in history] == [
+        ("opened", "scan", None),
+        ("resolved", OWNER, "by hand: unplugged it"),
+        ("reopened", OWNER, None),
+    ]
 
 
 def test_a_port_resolved_by_hand_but_still_open_comes_back(conn):
     web_app = web_app_open(conn)
-    exposure.resolve(conn, [web_app], "thought it was off")
+    exposure.resolve(conn, [web_app], "thought it was off", OWNER)
 
-    # The lab fixture is from 2026, before now(), so shift it past the resolution.
-    opened = exposure.ingest(conn, lab(shift=10 * 365 * 86400), vantage="internal")
+    opened = exposure.ingest(conn, lab(shift=86400), vantage="internal")
 
     assert opened == [Finding("fileserver", "tcp", 8080, "internal")]

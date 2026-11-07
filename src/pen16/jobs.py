@@ -42,7 +42,9 @@ def request(conn: Connection, scope: Scope, requester: str, reason: str, schedul
     exclude = [str(network) for network in scope.exclude]
     scope.check(targets, exclude)
     known = union(
-        select(expected_services.c.port).where(expected_services.c.protocol == "tcp"),
+        select(expected_services.c.port).where(
+            expected_services.c.protocol == "tcp", expected_services.c.ended_at.is_(None)
+        ),
         select(observations.c.port).where(
             observations.c.protocol == "tcp", observations.c.state == ObservationState.OPEN
         ),

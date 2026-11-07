@@ -209,6 +209,7 @@ form.inline { display: inline; }
       <form class="inline" method="post" action="/compliance/unwaive">
         <input type="hidden" name="asset_id" value="{{ c.scan.asset_id }}">
         <input type="hidden" name="rule_id" value="{{ r.rule_id }}">
+        <input type="text" name="reason" required aria-label="reason to remove the waiver of {{ r.title }}" placeholder="why it no longer applies">
         <button>Remove</button>
       </form>
       {% else %}
@@ -246,6 +247,7 @@ form.inline { display: inline; }
         <input type="hidden" name="protocol" value="{{ e.protocol }}">
         <input type="hidden" name="port" value="{{ e.port }}">
         <input type="hidden" name="vantage" value="{{ e.vantage }}">
+        <input type="text" name="reason" required aria-label="reason to stop expecting {{ e.asset_id }} {{ e.port }}/{{ e.protocol }}" placeholder="why">
         <button>Stop expecting</button>
       </form>
     </td>

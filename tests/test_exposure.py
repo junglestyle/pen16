@@ -100,10 +100,27 @@ def test_expected_service_resolves_and_stays_quiet(conn):
     exposure.ingest(conn, lab(), vantage="internal")
     ids = list(conn.scalars(select(findings.c.id).where(findings.c.port.in_([22, 445]))))
 
-    exposure.expect(conn, ids, "file sharing for the LAN")
+    exposure.expect(conn, ids, "file sharing for the LAN", "owner@example.com")
 
     assert open_findings(conn) == [("new-192.0.2.10", "tcp", 8080)]
     assert exposure.ingest(conn, lab(shift=2 * 86400), vantage="internal") == []
+
+
+def test_stopping_expecting_a_service_reopens_it_and_keeps_the_old_intent(conn):
+    exposure.ingest(conn, lab(), vantage="internal")
+    ssh = conn.scalar(select(findings.c.id).where(findings.c.port == 22))
+    exposure.expect(conn, [ssh], "admin over ssh", "owner@example.com")
+
+    with pytest.raises(ValueError, match="reason"):
+        exposure.unexpect(conn, "new-192.0.2.10", "tcp", 22, "internal", "", "owner@example.com")
+    exposure.unexpect(
+        conn, "new-192.0.2.10", "tcp", 22, "internal", "moved to the bastion", "owner@example.com"
+    )
+    reopened = exposure.ingest(conn, lab(shift=86400), vantage="internal")
+
+    assert Finding("new-192.0.2.10", "tcp", 22, "internal") in reopened
+    intent = conn.execute(select(expected_services.c.reason, expected_services.c.end_reason)).all()
+    assert [tuple(row) for row in intent] == [("admin over ssh", "moved to the bastion")]
 
 
 def test_naming_a_device_keeps_its_findings(conn):

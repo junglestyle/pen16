@@ -85,10 +85,10 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
 
     @app.post("/findings/expect")
     def expect(
-        _login: Owner, finding: Annotated[list[int], Form()], reason: Annotated[str, Form()]
+        login: Owner, finding: Annotated[list[int], Form()], reason: Annotated[str, Form()]
     ) -> RedirectResponse:
         with _refusing(), engine.begin() as conn:
-            exposure.expect(conn, finding, reason)
+            exposure.expect(conn, finding, reason, login)
         return _back()
 
     @app.post("/findings/decide")
@@ -104,16 +104,16 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
 
     @app.post("/findings/resolve")
     def resolve(
-        _login: Owner, finding: Annotated[list[int], Form()], reason: Annotated[str, Form()]
+        login: Owner, finding: Annotated[list[int], Form()], reason: Annotated[str, Form()]
     ) -> RedirectResponse:
         with _refusing(), engine.begin() as conn:
-            exposure.resolve(conn, finding, reason)
+            exposure.resolve(conn, finding, reason, login)
         return _back()
 
     @app.post("/findings/reopen")
-    def reopen(_login: Owner, finding: Annotated[int, Form()]) -> RedirectResponse:
+    def reopen(login: Owner, finding: Annotated[int, Form()]) -> RedirectResponse:
         with engine.begin() as conn:
-            exposure.reopen(conn, finding)
+            exposure.reopen(conn, finding, login)
         return _back()
 
     @app.post("/decisions/withdraw")
@@ -124,14 +124,15 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
 
     @app.post("/expected/remove")
     def unexpect(
-        _login: Owner,
+        login: Owner,
         asset_id: Annotated[str, Form()],
         protocol: Annotated[str, Form()],
         port: Annotated[int, Form()],
         vantage: Annotated[str, Form()],
+        reason: Annotated[str, Form()],
     ) -> RedirectResponse:
-        with engine.begin() as conn:
-            exposure.unexpect(conn, asset_id, protocol, port, vantage)
+        with _refusing(), engine.begin() as conn:
+            exposure.unexpect(conn, asset_id, protocol, port, vantage, reason, login)
         return _back()
 
     @app.post("/assets/name")
@@ -144,21 +145,24 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
 
     @app.post("/compliance/waive")
     def waive(
-        _login: Owner,
+        login: Owner,
         asset_id: Annotated[str, Form()],
         rule_id: Annotated[str, Form()],
         reason: Annotated[str, Form()],
     ) -> RedirectResponse:
         with _refusing(), engine.begin() as conn:
-            compliance.waive(conn, asset_id, rule_id, reason)
+            compliance.waive(conn, asset_id, rule_id, reason, login)
         return _back("#compliance")
 
     @app.post("/compliance/unwaive")
     def unwaive(
-        _login: Owner, asset_id: Annotated[str, Form()], rule_id: Annotated[str, Form()]
+        login: Owner,
+        asset_id: Annotated[str, Form()],
+        rule_id: Annotated[str, Form()],
+        reason: Annotated[str, Form()],
     ) -> RedirectResponse:
-        with engine.begin() as conn:
-            compliance.unwaive(conn, asset_id, rule_id)
+        with _refusing(), engine.begin() as conn:
+            compliance.unwaive(conn, asset_id, rule_id, reason, login)
         return _back("#compliance")
 
     @app.post("/alerts/replay")
@@ -266,7 +270,8 @@ def _dashboard(conn: Connection) -> dict[str, Any]:
             (expected.c.asset_id == latest_state.c.asset_id)
             & (expected.c.protocol == latest_state.c.protocol)
             & (expected.c.port == latest_state.c.port)
-            & (expected.c.vantage == latest_state.c.vantage),
+            & (expected.c.vantage == latest_state.c.vantage)
+            & expected.c.ended_at.is_(None),
         )
         .where(latest_state.c.state == ObservationState.OPEN)
         .order_by(latest_state.c.asset_id, latest_state.c.protocol, latest_state.c.port)
@@ -303,7 +308,11 @@ def _dashboard(conn: Connection) -> dict[str, Any]:
         "decided": decided,
         "resolved": resolved,
         "exposed": exposed,
-        "expected": conn.execute(select(expected_services).order_by(expected_services.c.asset_id)).all(),
+        "expected": conn.execute(
+            select(expected_services)
+            .where(expected_services.c.ended_at.is_(None))
+            .order_by(expected_services.c.asset_id)
+        ).all(),
         # A provisional asset is one address, so one row each.
         "provisional": conn.execute(
             select(

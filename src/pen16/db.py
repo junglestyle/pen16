@@ -40,6 +40,12 @@ class FindingStatus(StrEnum):
     RESOLVED = "resolved"
 
 
+class FindingChange(StrEnum):
+    OPENED = "opened"
+    RESOLVED = "resolved"
+    REOPENED = "reopened"
+
+
 class DecisionKind(StrEnum):
     ACCEPTED_RISK = "accepted-risk"
     FALSE_POSITIVE = "false-positive"
@@ -109,16 +115,31 @@ bindings = Table(
     Column("asset_id", Text, ForeignKey("assets.id"), nullable=False),
 )
 
+# Intent: a service the owner expects. Stopping expecting it ends the row with a reason; ended rows stay as history,
+# and at most one row per service is current.
 expected_services = Table(
     "expected_services",
     metadata,
+    Column("id", BigInteger, Identity(always=True), primary_key=True),
     Column("asset_id", Text, ForeignKey("assets.id"), nullable=False),
     Column("protocol", Text, nullable=False),
     Column("port", Integer, nullable=False),
     Column("vantage", Text, nullable=False),
     Column("reason", Text, nullable=False),
+    Column("declared_by", Text),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
-    PrimaryKeyConstraint("asset_id", "protocol", "port", "vantage"),
+    Column("ended_at", DateTime(timezone=True)),
+    Column("ended_by", Text),
+    Column("end_reason", Text),
+    Index(
+        "expected_services_current",
+        "asset_id",
+        "protocol",
+        "port",
+        "vantage",
+        unique=True,
+        postgresql_where=text("ended_at IS NULL"),
+    ),
 )
 
 observations = Table(
@@ -158,6 +179,21 @@ findings = Table(
     Column("last_observation_id", BigInteger, ForeignKey("observations.id"), nullable=False),
     _one_of("status", FindingStatus, "finding_status"),
     UniqueConstraint("kind", "asset_id", "protocol", "port", "vantage"),
+)
+
+# Every change to a finding's status, by a scan (with the observation that caused it) or by the owner (with
+# their reason). The finding row holds only the current state.
+finding_events = Table(
+    "finding_events",
+    metadata,
+    Column("id", BigInteger, Identity(always=True), primary_key=True),
+    Column("finding_id", BigInteger, ForeignKey("findings.id"), nullable=False),
+    Column("change", Text, nullable=False),
+    Column("at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("by", Text, nullable=False),
+    Column("reason", Text),
+    Column("observation_id", BigInteger, ForeignKey("observations.id")),
+    _one_of("change", FindingChange, "finding_change"),
 )
 
 # Which MAC answered at an address during a scan, from the scanner host's neighbour table (pen16.neighbours).
@@ -339,15 +375,27 @@ compliance_results = Table(
     _one_of("result", RuleResult, "compliance_result"),
 )
 
-# Owner decisions: a rule that fails on purpose on one host. It stays failing; the reason travels with it.
+# Owner decisions: a rule that fails on purpose on one host. It stays failing; the reason travels with it. Removing
+# or replacing one ends it with a reason; ended rows stay as history, and at most one per rule and host is current.
 compliance_waivers = Table(
     "compliance_waivers",
     metadata,
+    Column("id", BigInteger, Identity(always=True), primary_key=True),
     Column("asset_id", Text, ForeignKey("assets.id"), nullable=False),
     Column("rule_id", Text, nullable=False),
     Column("reason", Text, nullable=False),
+    Column("waived_by", Text),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
-    PrimaryKeyConstraint("asset_id", "rule_id"),
+    Column("ended_at", DateTime(timezone=True)),
+    Column("ended_by", Text),
+    Column("end_reason", Text),
+    Index(
+        "compliance_waivers_current",
+        "asset_id",
+        "rule_id",
+        unique=True,
+        postgresql_where=text("ended_at IS NULL"),
+    ),
 )
 
 # DISA STIG releases, imported from the manual XCCDF in DISA's zip. A checklist lists every rule of the STIG,

@@ -41,7 +41,9 @@ exception: it comes before the pilot and runs alongside M1's remaining slices.
 Delivers the rest of FR-4 and the asset and finding detail from [Dashboard](SPEC.md#dashboard). Each asset has a
 page with its bindings, declared and observed services, product labels, and history. A "Recent changes" view lists
 new, removed and changed services and versions. You can correct a binding or retire an asset; its history stays,
-and a reused address becomes a new provisional device that inherits no decisions.
+and a reused address becomes a new provisional device that inherits no decisions. Until this slice ships, a named
+device's address passes to whatever device takes it next, with its expected services and decisions; the MACs scans
+record are the evidence it will use. Results gathered before then, pilot runs included, are read with that in mind.
 
 Done when: rename a device, retire it, hand its address to a new fixture host, and show the old history intact, the
 new device unnamed, and nothing expected on it.

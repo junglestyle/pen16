@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 
-from sqlalchemy import Connection, case, delete, exists, func, insert, select
+from sqlalchemy import Connection, case, exists, func, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as upsert
 
 from pen16 import arf, db, notify
@@ -133,8 +133,9 @@ def record(
     return Recorded(scan_id, duplicate=False)
 
 
-def waive(conn: Connection, asset_id: str, rule_id: str, reason: str) -> None:
-    """Accept a failing rule on one host. It stays failing, with the reason beside it, and stops alerting."""
+def waive(conn: Connection, asset_id: str, rule_id: str, reason: str, by: str) -> None:
+    """Accept a failing rule on one host. It stays failing, with the reason beside it, and stops alerting. A new
+    reason for a rule already waived replaces the old waiver, which stays in the history."""
     if not reason.strip():
         raise ValueError("a waiver needs a reason")
     evaluated = conn.scalar(
@@ -148,20 +149,30 @@ def waive(conn: Connection, asset_id: str, rule_id: str, reason: str) -> None:
     )
     if not evaluated:
         raise ValueError(f"no result from {asset_id!r} evaluates {rule_id!r}")
+    _end_waiver(conn, asset_id, rule_id, "replaced by a new waiver", by)
     conn.execute(
-        upsert(compliance_waivers)
-        .values(asset_id=asset_id, rule_id=rule_id, reason=reason.strip())
-        .on_conflict_do_update(
-            index_elements=["asset_id", "rule_id"], set_={"reason": reason.strip(), "created_at": func.now()}
+        insert(compliance_waivers).values(
+            asset_id=asset_id, rule_id=rule_id, reason=reason.strip(), waived_by=by
         )
     )
 
 
-def unwaive(conn: Connection, asset_id: str, rule_id: str) -> None:
+def unwaive(conn: Connection, asset_id: str, rule_id: str, reason: str, by: str) -> None:
+    """End a host's waiver for a rule, with the reason. A regression of the rule alerts again."""
+    if not reason.strip():
+        raise ValueError("removing a waiver needs a reason")
+    _end_waiver(conn, asset_id, rule_id, reason.strip(), by)
+
+
+def _end_waiver(conn: Connection, asset_id: str, rule_id: str, reason: str, by: str) -> None:
     conn.execute(
-        delete(compliance_waivers).where(
-            compliance_waivers.c.asset_id == asset_id, compliance_waivers.c.rule_id == rule_id
+        update(compliance_waivers)
+        .where(
+            compliance_waivers.c.asset_id == asset_id,
+            compliance_waivers.c.rule_id == rule_id,
+            compliance_waivers.c.ended_at.is_(None),
         )
+        .values(ended_at=func.now(), ended_by=by, end_reason=reason)
     )
 
 
@@ -219,7 +230,8 @@ def failing(conn: Connection, scan_id: int) -> list[Any]:
             .outerjoin(
                 compliance_waivers,
                 (compliance_waivers.c.asset_id == scan.asset_id)
-                & (compliance_waivers.c.rule_id == compliance_results.c.rule_id),
+                & (compliance_waivers.c.rule_id == compliance_results.c.rule_id)
+                & compliance_waivers.c.ended_at.is_(None),
             )
             .where(compliance_results.c.scan_id == scan_id, compliance_results.c.result.in_(FAILING))
             .order_by(compliance_waivers.c.reason.is_not(None), SEVERITY_ORDER, compliance_rules.c.title)
@@ -274,7 +286,8 @@ def checklist(conn: Connection, scan_id: int) -> tuple[str, dict[str, Any]]:
         .outerjoin(
             compliance_waivers,
             (compliance_waivers.c.asset_id == scan.asset_id)
-            & (compliance_waivers.c.rule_id == compliance_rules.c.rule_id),
+            & (compliance_waivers.c.rule_id == compliance_rules.c.rule_id)
+            & compliance_waivers.c.ended_at.is_(None),
         )
         .where(compliance_rules.c.benchmark_id == scan.benchmark_id, compliance_rules.c.vuln_id.is_not(None))
         .order_by(compliance_rules.c.rule_id)
@@ -404,7 +417,9 @@ def _regressions(conn: Connection, asset_id: str, previous_id: int, scan_id: int
                 now.c.result.in_(FAILING),
                 before.c.result.in_(PASSING),
                 ~exists().where(
-                    compliance_waivers.c.asset_id == asset_id, compliance_waivers.c.rule_id == now.c.rule_id
+                    compliance_waivers.c.asset_id == asset_id,
+                    compliance_waivers.c.rule_id == now.c.rule_id,
+                    compliance_waivers.c.ended_at.is_(None),
                 ),
             )
             .order_by(SEVERITY_ORDER, compliance_rules.c.title)
