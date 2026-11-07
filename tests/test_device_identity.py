@@ -166,3 +166,41 @@ def test_a_retired_devices_address_goes_to_a_new_unnamed_device_and_its_history_
     assert tokens.verify(conn, compliance_token, TokenKind.COMPLIANCE) is None
     with pytest.raises(ValueError, match="retired"):
         exposure.name_asset(conn, f"new-{ADDRESS}-2", "fileserver", OWNER_LOGIN)
+
+
+def test_moving_an_address_gives_what_is_seen_there_from_now_on_to_the_other_device(conn):
+    web_app = fileserver(conn, NAS)
+    conn.execute(
+        insert(assets), [{"id": "nas", "provisional": False}, {"id": "new-192.0.2.99", "provisional": True}]
+    )
+    conn.execute(insert(assets).values(id="old-nas", provisional=False, retired_at=func.now()))
+    for to, reason, refused in [
+        ("nas", " ", "reason"),
+        ("fileserver", "lab", "already"),
+        ("printer", "lab", "no device"),
+        ("new-192.0.2.99", "lab", "unnamed"),
+        ("old-nas", "lab", "retired"),
+    ]:
+        with pytest.raises(ValueError, match=refused):
+            exposure.move(conn, ADDRESS, to, reason, OWNER_LOGIN)
+
+    exposure.move(conn, ADDRESS, "nas", "its second NIC", OWNER_LOGIN)
+    opened = ingest(conn, lab(shift=86400), {ADDRESS: NAS})
+
+    # The binding keeps its MAC, and nothing fileserver expected or decided applies to the nas: all of it is news.
+    assert tuple(bound(conn)) == ("nas", NAS)
+    assert sorted((f.asset_id, f.port) for f in opened) == [("nas", 22), ("nas", 445), ("nas", 8080)]
+    # fileserver's finding stays its own, open and away from the address.
+    kept = status.finding(conn, web_app)
+    assert (kept.asset_id, kept.status, kept.away) == ("fileserver", "open", True)
+    # Both devices' history has the move, and so does Recent changes.
+    assert ("no longer at 192.0.2.10", "moved to nas: its second NIC") in [
+        (e.what, e.reason) for e in status.asset(conn, "fileserver").history
+    ]
+    assert ("at 192.0.2.10", "moved from fileserver: its second NIC") in [
+        (e.what, e.reason) for e in status.asset(conn, "nas").history
+    ]
+    assert [(a.asset_id, a.change) for a in status.recent_changes(conn).addresses[:2]] == [
+        ("nas", "bound"),
+        ("fileserver", "ended"),
+    ]

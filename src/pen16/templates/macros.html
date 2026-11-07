@@ -1,0 +1,6 @@
+{% macro mac(m) %}{% if m %}<span class="muted">{{ m }}{% if vendor(m) %} · {{ vendor(m) }}{% endif %}</span>{% endif %}{% endmacro %}
+{% macro service(s) %}{{ s.service or '' }} <span class="muted">{{ s.product or '' }} {{ s.version or '' }}</span>{% endmacro %}
+{% macro asset(id) %}<a href="{{ asset_url(id) }}">{{ id }}</a>{% endmacro %}
+{% macro port(f) %}<a href="/findings/{{ f.id }}">{{ f.port }}/{{ f.protocol }}</a>{% endmacro %}
+{% macro day(t) %}{{ t.strftime('%Y-%m-%d') }}{% endmacro %}
+{% macro minute(t) %}{{ t.strftime('%Y-%m-%d %H:%M UTC') }}{% endmacro %}

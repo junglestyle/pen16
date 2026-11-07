@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}{{ f.asset_id }} {{ f.port }}/{{ f.protocol }} · pen16{% endblock %}
+{% macro evidence(e) %}{{ e.state }} at {{ e.address }}{% if e.mac %} ({{ m.mac(e.mac) }}){% endif %}, {{ m.minute(e.observed_at) }}
+  <br><span class="muted">{{ e.tool_version }}, parser {{ e.parser_version }} · <a href="/evidence/{{ e.evidence_digest }}.xml">raw scan</a></span>{% endmacro %}
+{% block content %}
+<h1>{{ m.asset(f.asset_id) }} {{ f.port }}/{{ f.protocol }}</h1>
+<dl>
+  <dt>Finding</dt>
+  <dd>{{ f.kind }} <span class="muted">({{ f.vantage }})</span></dd>
+  <dt>Status</dt>
+  <dd class="{{ 'bad' if f.status == FindingStatus.OPEN else 'ok' }}">{{ f.status }}{% if f.resolution %} <span class="muted">{{ f.resolution }}, {{ m.minute(f.resolved_at) }}</span>{% endif %}</dd>
+  <dt>Opened</dt>
+  <dd>{{ m.minute(f.opened_at) }}</dd>
+  <dt>Last seen</dt>
+  <dd>{{ m.service(f.last) }}<br>{{ evidence(f.last) }}
+    {% if f.away %}<br><span class="muted">{{ f.asset_id }} is no longer at this address, so no scan there can change this finding.</span>{% endif %}</dd>
+</dl>
+
+<h2>History</h2>
+<div class="scroll"><table>
+  <tr><th>When</th><th>Change</th><th>By</th><th>Why, or the evidence</th></tr>
+  {% for c in f.changes %}
+  <tr>
+    <td>{{ m.minute(c.at) }}</td>
+    <td>{{ c.change }}</td>
+    <td class="muted">{{ c.by }}</td>
+    <td>{{ c.reason or '' }}{% if c.evidence %}{% if c.reason %}<br>{% endif %}{{ m.service(c.evidence) }}<br>{{ evidence(c.evidence) }}{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+
+<h2>Decisions</h2>
+{% if f.decisions %}
+<div class="scroll"><table>
+  <tr><th>Decided</th><th>Decision</th><th>On</th><th>Withdrawn</th></tr>
+  {% for d in f.decisions %}
+  <tr>
+    <td>{{ m.minute(d.decided_at) }}<br><span class="muted">{{ d.decided_by }}</span></td>
+    <td>{{ d.kind.label|capitalize }}: {{ d.reason }}</td>
+    <td>{{ m.service(d) }}</td>
+    <td>{% if d.withdrawn_at %}{{ m.minute(d.withdrawn_at) }}<br><span class="muted">{{ d.withdrawal }}</span>{% else %}<span class="ok">active</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% else %}
+<p class="muted">None.</p>
+{% endif %}
+{% endblock %}

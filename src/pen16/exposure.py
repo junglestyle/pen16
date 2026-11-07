@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import Connection, Row, Text, cast, delete, exists, func, select, update
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.dialects.postgresql import distinct_on, insert
 
 from pen16 import compliance, neighbours, notify
 from pen16.db import (
@@ -115,8 +115,9 @@ def ingest(
             opened.append(Finding(asset_id, port.protocol, port.port, vantage, why))
         elif alert:
             opened.append(Finding(asset_id, port.protocol, port.port, vantage))
-    up = scan.up()
-    _close(conn, scan, vantage, [network for network in networks if str(network.gateway) in up])
+    trusted = [network for network in networks if str(network.gateway) in scan.up()]
+    _record_closed(conn, scan, vantage, trusted)
+    _close(conn, scan, vantage, trusted)
     _alert(conn, opened, took_over)
     return opened
 
@@ -351,6 +352,48 @@ def retire(conn: Connection, asset_id: str, reason: str, by: str) -> None:
         .values(retired_at=func.now(), retired_by=by, retirement=why)
     )
     notify.dismiss_incident(conn, compliance.stale_incident(asset_id))
+
+
+def move(conn: Connection, address: str, asset_id: str, reason: str, by: str) -> None:
+    """Correct a binding by hand: the named device at `address` is really `asset_id`, another named device.
+
+    Only what's seen there from now on is the new device's. Observations, findings and decisions already recorded
+    stay with the device they were recorded for, and its open findings stay open, no longer at this address:
+    missing coverage resolves nothing. Both devices' history records the move.
+    """
+    if not reason.strip():
+        raise ValueError("moving an address needs a reason")
+    address = str(ipaddress.IPv4Address(address))
+    binding = conn.execute(
+        select(bindings.c.asset_id, cast(bindings.c.mac, Text).label("mac"), assets.c.provisional)
+        .join(assets, assets.c.id == bindings.c.asset_id)
+        .where(bindings.c.address == address)
+    ).first()
+    if binding is None:
+        raise ValueError(f"no device is at {address}")
+    if binding.asset_id == asset_id:
+        raise ValueError(f"{address} is already {asset_id}'s")
+    if binding.provisional:
+        raise ValueError(f"{binding.asset_id!r} is unnamed: name it first")
+    target = conn.execute(
+        select(assets.c.provisional, assets.c.retired_at).where(assets.c.id == asset_id)
+    ).first()
+    if target is None:
+        raise ValueError(f"there's no device {asset_id!r}")
+    if target.provisional:
+        raise ValueError(f"{asset_id!r} is unnamed: name it first")
+    if target.retired_at is not None:
+        raise ValueError(f"{asset_id!r} is retired")
+    why = reason.strip()
+    _binding_event(
+        conn, address, binding.asset_id, binding.mac, BindingChange.ENDED, by, f"moved to {asset_id}: {why}"
+    )
+    conn.execute(
+        update(bindings).where(bindings.c.address == address).values(asset_id=asset_id, bound_at=func.now())
+    )
+    _binding_event(
+        conn, address, asset_id, binding.mac, BindingChange.BOUND, by, f"moved from {binding.asset_id}: {why}"
+    )
 
 
 def _device_at(
@@ -626,6 +669,50 @@ def _open(
     return existing.id, True
 
 
+def _seen_closed(scan: Scan, address: str, protocol: str, port: int, trusted: Sequence[Network]) -> bool:
+    """Whether this scan saw a port closed at an address whose negative results it can trust: the address
+    answered, and so did its network's gateway."""
+    return (
+        address in scan.up()
+        and any(ipaddress.IPv4Address(address) in network.cidr for network in trusted)
+        and scan.state(address, protocol, port) == ObservationState.CLOSED
+    )
+
+
+def _record_closed(conn: Connection, scan: Scan, vantage: str, trusted: Sequence[Network]) -> None:
+    """Record a closed observation for each service that was last seen open at a bound address and that this
+    scan saw closed there, so a service that's gone shows as removed. nmap folds closed ports into a count
+    rather than listing them, so otherwise only a listed port could ever be seen closing."""
+    up = scan.up()
+    for binding in conn.execute(select(bindings.c.address, bindings.c.asset_id)).all():
+        address = str(binding.address)
+        if address not in up:
+            continue
+        latest = conn.execute(
+            select(observations.c.protocol, observations.c.port, observations.c.state)
+            .ext(distinct_on(observations.c.protocol, observations.c.port))
+            .where(
+                observations.c.asset_id == binding.asset_id,
+                observations.c.address == address,
+                observations.c.vantage == vantage,
+            )
+            .order_by(
+                observations.c.protocol,
+                observations.c.port,
+                observations.c.observed_at.desc(),
+                observations.c.id.desc(),
+            )
+        ).all()
+        for service in latest:
+            if service.state == ObservationState.OPEN and _seen_closed(
+                scan, address, service.protocol, service.port, trusted
+            ):
+                closed = Port(
+                    address, service.protocol, service.port, ObservationState.CLOSED, None, None, None
+                )
+                _observe(conn, scan, closed, binding.asset_id, vantage)
+
+
 def _close(conn: Connection, scan: Scan, vantage: str, trusted: Sequence[Network]) -> None:
     """Resolve open findings whose port this scan saw closed on every address bound to the asset, when every
     one of those addresses is in a trusted network."""
@@ -642,15 +729,11 @@ def _close(conn: Connection, scan: Scan, vantage: str, trusted: Sequence[Network
             last_open.c.observed_at < scan.finished_at,
         )
     )
-    up = scan.up()
     for finding in rows.all():
         bound = conn.scalars(select(bindings.c.address).where(bindings.c.asset_id == finding.asset_id))
         addresses = [str(address) for address in bound]
         if not addresses or not all(
-            address in up
-            and any(ipaddress.IPv4Address(address) in network.cidr for network in trusted)
-            and scan.state(address, finding.protocol, finding.port) == ObservationState.CLOSED
-            for address in addresses
+            _seen_closed(scan, address, finding.protocol, finding.port, trusted) for address in addresses
         ):
             continue
         for address in addresses:

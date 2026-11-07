@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% import "macros.html" as m %}
+{% block title %}{{ a.id }} · pen16{% endblock %}
+{% block content %}
+{% set here = asset_url(a.id) %}
+<h1>{{ a.id }}</h1>
+<p>
+  {% if a.retired_at %}<span class="bad">Retired {{ m.day(a.retired_at) }}</span> <span class="muted">{{ a.retirement }}</span>
+  {% elif a.provisional %}Unnamed: first seen {{ m.day(a.created_at) }}.
+  {% else %}Named device.{% endif %}
+  {% if a.took_over_from %}<br><span class="bad">Took its address over from {{ m.asset(a.took_over_from) }}: a different MAC answered.</span>{% endif %}
+</p>
+
+{% if a.provisional and not a.retired_at %}
+<h2>Name it</h2>
+{% if a.took_over_from and a.took_over_private %}
+<p class="muted">A private MAC can change on its own. Is this {{ a.took_over_from }}?</p>
+<div>
+  <form class="inline" method="post" action="/assets/name">
+    <input type="hidden" name="provisional_id" value="{{ a.id }}">
+    <input type="hidden" name="asset_id" value="{{ a.took_over_from }}">
+    <input type="hidden" name="back" value="{{ here }}">
+    <button>Same device</button>
+  </form>
+  <form class="inline" method="post" action="/assets/separate">
+    <input type="hidden" name="provisional_id" value="{{ a.id }}">
+    <input type="hidden" name="back" value="{{ here }}">
+    <button>Different device</button>
+  </form>
+</div>
+{% endif %}
+<form method="post" action="/assets/name">
+  <input type="hidden" name="provisional_id" value="{{ a.id }}">
+  <input type="hidden" name="back" value="{{ here }}">
+  <input type="text" name="asset_id" required pattern="[a-z0-9][a-z0-9\-]*" aria-label="name for {{ a.id }}" placeholder="e.g. nas">
+  <button>Save</button>
+</form>
+<p class="muted">Naming it after a device with no address, such as a compliance host or the device it took the
+  address over from, joins the two.</p>
+{% endif %}
+
+<h2>Addresses</h2>
+{% if a.addresses %}
+<div class="scroll"><table>
+  <tr><th>Address</th><th>MAC</th><th>Since</th>{% if not a.provisional and others %}<th>Move to another device</th>{% endif %}</tr>
+  {% for b in a.addresses %}
+  <tr>
+    <td>{{ b.address }}</td>
+    <td>{% if b.mac %}{{ m.mac(b.mac) }}{% else %}<span class="muted">none seen yet</span>{% endif %}</td>
+    <td>{{ m.day(b.bound_at) }}</td>
+    {% if not a.provisional and others %}
+    <td>
+      <form class="inline" method="post" action="/assets/move">
+        <input type="hidden" name="address" value="{{ b.address }}">
+        <select name="asset_id" required aria-label="device to move {{ b.address }} to">
+          {% for other in others %}<option>{{ other }}</option>{% endfor %}
+        </select>
+        <input type="text" name="reason" required aria-label="reason to move {{ b.address }}" placeholder="why">
+        <button>Move</button>
+      </form>
+    </td>
+    {% endif %}
+  </tr>
+  {% endfor %}
+</table></div>
+{% if not a.provisional and others %}
+<p class="muted">Moving an address gives what's seen there from now on to the other device. What's already recorded
+  stays with this one, and its open findings there stay open.</p>
+{% endif %}
+{% else %}
+<p class="muted">None now.</p>
+{% endif %}
+
+<h2>Services</h2>
+{% if a.services %}
+<div class="scroll"><table>
+  <tr><th>Port</th><th>Service</th><th>State</th><th>Seen</th><th>Expected</th></tr>
+  {% for s in a.services %}
+  <tr>
+    <td>{{ s.port }}/{{ s.protocol }}<br><span class="muted">{{ s.address }}{% if not s.here %} · no longer at this address{% endif %}</span></td>
+    <td>{{ m.service(s) }}</td>
+    <td>{{ s.state }}</td>
+    <td>{{ m.minute(s.observed_at) }}</td>
+    <td>{% if s.expected %}<span class="ok">yes</span> <span class="muted">{{ s.expected }}</span>{% else %}<span class="muted">no</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% else %}
+<p class="muted">No open or filtered service seen.</p>
+{% endif %}
+
+<h2>Expected services</h2>
+{% if a.expected %}
+<div class="scroll"><table>
+  <tr><th>Port</th><th>Vantage</th><th>Reason</th></tr>
+  {% for e in a.expected %}
+  <tr><td>{{ e.port }}/{{ e.protocol }}</td><td>{{ e.vantage }}</td><td>{{ e.reason }}</td></tr>
+  {% endfor %}
+</table></div>
+{% else %}
+<p class="muted">None.</p>
+{% endif %}
+
+<h2>Findings</h2>
+{% if a.findings %}
+<div class="scroll"><table>
+  <tr><th>Port</th><th>Status</th><th>Opened</th><th>Decision</th></tr>
+  {% for f in a.findings %}
+  <tr>
+    <td>{{ m.port(f) }} <span class="muted">{{ f.vantage }}</span></td>
+    <td class="{{ 'bad' if f.status == FindingStatus.OPEN and not f.decision else '' }}">{{ f.status }}{% if f.resolution %} <span class="muted">{{ f.resolution }}</span>{% endif %}</td>
+    <td>{{ m.day(f.opened_at) }}</td>
+    <td>{% if f.decision %}{{ f.decision.label }}{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% else %}
+<p class="muted">None.</p>
+{% endif %}
+
+<h2>History</h2>
+<div class="scroll"><table>
+  <tr><th>When</th><th>What</th><th>By</th><th>Why</th></tr>
+  {% for e in a.history %}
+  <tr>
+    <td>{{ m.minute(e.at) }}</td>
+    <td>{{ e.what }}</td>
+    <td class="muted">{{ e.by or '' }}</td>
+    <td>{{ e.reason or '' }}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+
+{% if not a.provisional and not a.retired_at %}
+<h2>Retire</h2>
+<form method="post" action="/assets/retire">
+  <input type="hidden" name="asset_id" value="{{ a.id }}">
+  <input type="hidden" name="back" value="{{ here }}">
+  <input type="text" name="reason" required aria-label="reason to retire {{ a.id }}" placeholder="why it's gone">
+  <button>Retire</button>
+</form>
+<p class="muted">Retiring ends its addresses, expected services and decisions, resolves its findings, and revokes its
+  compliance tokens. The next device at its address is a new, unnamed one.</p>
+{% endif %}
+{% endblock %}

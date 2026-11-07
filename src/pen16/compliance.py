@@ -1,6 +1,8 @@
 """Host compliance: OpenSCAP results hosts push to the intake, waivers, alerts, and STIG checklists."""
 
+import re
 import uuid
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
@@ -32,6 +34,9 @@ SEVERITY_ORDER = case(
 )
 # Names of CKLB statuses, in STIG Viewer's spelling.
 OPEN, NOT_A_FINDING, NOT_APPLICABLE, NOT_REVIEWED = "open", "not_a_finding", "not_applicable", "not_reviewed"
+# SCAP Security Guide's rule IDs start with this, and the playbooks OpenSCAP generates from its content tag each
+# rule's tasks with the rest.
+SSG_RULE = "xccdf_org.ssgproject.content_rule_"
 
 
 class StaleResultError(Exception):
@@ -206,6 +211,7 @@ class Latest:
     asset_id: str
     benchmark_id: str
     benchmark_version: str
+    profile_id: str
     profile_title: str
     tool_version: str
     finished_at: datetime
@@ -250,6 +256,7 @@ def latest(conn: Connection) -> list[Latest]:
             asset_id=row.asset_id,
             benchmark_id=row.benchmark_id,
             benchmark_version=row.benchmark_version,
+            profile_id=row.profile_id,
             profile_title=row.profile_title,
             tool_version=row.tool_version,
             finished_at=row.finished_at,
@@ -323,6 +330,111 @@ def playbook(conn: Connection, scan_id: int) -> tuple[str, str]:
     if scan is None or scan.playbook_digest is None:
         raise LookupError("no playbook for this result")
     return f"{scan.asset_id}-remediation-{scan.finished_at:%Y%m%d}.yml", scan.playbook_digest
+
+
+def latest_scan(conn: Connection, asset_id: str, profile_id: str) -> int:
+    """The newest result's ID for a host and profile, so a script can fetch its playbook by a URL that doesn't
+    change from week to week. Raises LookupError for none, and for one per benchmark when more than one
+    benchmark has the profile."""
+    found = [r.scan_id for r in latest(conn) if (r.asset_id, r.profile_id) == (asset_id, profile_id)]
+    if not found:
+        raise LookupError(f"no result from {asset_id} for {profile_id}")
+    if len(found) > 1:
+        raise LookupError(f"{asset_id} has {profile_id} results from {len(found)} benchmarks")
+    return found[0]
+
+
+def skip_tag(rule_id: str) -> str:
+    """The tag a generated playbook puts on a rule's tasks, as `--skip-tags` takes it: the short ID for SCAP
+    Security Guide's rules, and the full ID for others, such as the deployment's own content."""
+    return rule_id.removeprefix(SSG_RULE)
+
+
+def without_waived(playbook: str, rule_ids: Collection[str]) -> str:
+    """A playbook without the tasks of these waived rules, under a comment naming them, every other line as the
+    host wrote it. A waiver means the owner won't fix the rule, so its fix doesn't belong in what they apply.
+
+    Raises ValueError rather than serve a waived fix: when the playbook has no task list, a task list it can't
+    split into tasks, or a task it keeps that still names a waived rule's tag.
+    """
+    if not rule_ids:
+        return playbook
+    tags = {skip_tag(rule_id) for rule_id in rule_ids} | set(rule_ids)
+    lines = playbook.splitlines(keepends=True)
+    kept: list[str] = []
+    lists = 0
+    i = 0
+    while i < len(lines):
+        kept.append(lines[i])
+        key = re.fullmatch(r"( *)tasks:[ \t]*", lines[i].rstrip("\r\n"))
+        i += 1
+        if key is None:
+            continue
+        lists += 1
+        end = i
+        while end < len(lines) and (_blank(lines[end]) or _indent(lines[end]) > len(key.group(1))):
+            end += 1
+        kept.extend(_untagged(lines[i:end], tags))
+        i = end
+    if lists == 0:
+        raise ValueError("the playbook has no task list")
+    removed = "\n".join(f"#   {tag}" for tag in sorted(skip_tag(rule_id) for rule_id in rule_ids))
+    return f"# pen16 removed the tasks of these rules, waived on the dashboard:\n{removed}\n" + "".join(kept)
+
+
+def _untagged(section: list[str], tags: set[str]) -> list[str]:
+    """A task list's lines without the tasks tagged with any of `tags`."""
+    content = [line for line in section if not _blank(line)]
+    if not content:
+        return section
+    item = _indent(content[0])
+    tasks: list[list[str]] = [[]]
+    for line in section:
+        if _blank(line) or _indent(line) > item:
+            tasks[-1].append(line)
+        elif line.lstrip().startswith("- "):
+            tasks.append([line])
+        else:
+            raise ValueError(f"can't split the task list at {line.strip()!r}")
+    kept = tasks[0]
+    for task in tasks[1:]:
+        if _tags(task, item + 2) & tags:
+            continue
+        text = "".join(task)
+        named = sorted(tag for tag in tags if re.search(rf"(?<![\w.-]){re.escape(tag)}(?![\w.-])", text))
+        if named:
+            raise ValueError(f"a task it would keep names {', '.join(named)} in a way pen16 can't read")
+        kept.extend(task)
+    return kept
+
+
+def _tags(task: list[str], key: int) -> set[str]:
+    """A task's tags, written as `tags: [a, b]`, `tags: a`, or a block list under `tags:`."""
+    for n, line in enumerate(task):
+        if _blank(line) or _indent(line) != key or not line.lstrip().startswith("tags:"):
+            continue
+        value = line.split(":", 1)[1].strip()
+        if value.startswith("[") and value.endswith("]"):
+            return {tag.strip().strip("'\"") for tag in value[1:-1].split(",") if tag.strip()}
+        if value:
+            return {value.strip("'\"")}
+        found = set()
+        for item in task[n + 1 :]:
+            if _blank(item):
+                continue
+            if _indent(item) < key or not item.lstrip().startswith("- "):
+                break
+            found.add(item.lstrip()[2:].strip().strip("'\""))
+        return found
+    return set()
+
+
+def _blank(line: str) -> bool:
+    return not line.strip() or line.lstrip().startswith("#")
+
+
+def _indent(line: str) -> int:
+    return len(line) - len(line.lstrip(" "))
 
 
 def checklist(conn: Connection, scan_id: int) -> tuple[str, dict[str, Any]]:

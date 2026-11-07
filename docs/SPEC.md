@@ -35,7 +35,7 @@ Counts link to assets and findings. Show observation time, vantage, coverage, an
 - **FR-13** M3 adds one external IPv4/TCP probe with independent internet egress, restricted transport, DDNS checks, and heartbeat alerts. Keep internal and external evidence separate.
 - **FR-14** Hosts evaluate pinned SCAP content with OpenSCAP weekly and push the ARF to pen16 over the tailnet with their own token; pen16 holds no credentials on them. Record benchmark, profile, content version, and every rule's result with its severity and STIG, SRG, CCI and NIST 800-53 references, and keep the ARF as evidence. A stale or duplicate upload changes nothing.
 - **FR-15** Show each host's pass rate and failing rules. A waiver covers one rule on one host, needs a reason, and keeps the rule visible as failing. Alert once on a host's first result, whenever an unwaived rule goes from pass to fail, and when a host hasn't reported in 10 days.
-- **FR-16** Export a STIG Viewer checklist (CKLB) for a result that matches an imported DISA STIG: every rule of the STIG, its status from the SCAP rules that check it or not reviewed, and waiver reasons as comments. Serve the Ansible playbook the host generated from its own failures. The owner runs remediation; pen16 never changes a host.
+- **FR-16** Export a STIG Viewer checklist (CKLB) for a result that matches an imported DISA STIG: every rule of the STIG, its status from the SCAP rules that check it or not reviewed, and waiver reasons as comments. Serve the Ansible playbook the host generated from its own failures, as it sent it and without the tasks of waived rules, and show the `--skip-tags` that leaves those out of the full one. The owner runs remediation; pen16 never changes a host.
 
 ## Limits
 

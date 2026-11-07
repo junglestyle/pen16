@@ -1,0 +1,45 @@
+---
+###############################################################################
+#
+# Synthetic fixture in the shape `oscap xccdf generate fix --fix-type ansible` (OpenSCAP 1.4.6) writes from
+# SCAP Security Guide content: one play, every task tagged with its rule's short ID. Fictional values.
+#
+###############################################################################
+
+- hosts: all
+  vars:
+    var_accounts_user_umask: '027'
+  tasks:
+    - name: Gather the package facts
+      package_facts:
+        manager: auto
+      tags:
+      - accounts_umask_etc_bashrc
+      - medium_severity
+
+    - name: Ensure the umask in /etc/bashrc
+      ansible.builtin.replace:
+        path: /etc/bashrc
+        regexp: ^(\s*)umask\s+.*
+        replace: \g<1>umask {{ var_accounts_user_umask }}
+      when: '"bash" in ansible_facts.packages'
+      tags:
+      - NIST-800-53-AC-6(1)
+      - accounts_umask_etc_bashrc
+      - medium_severity
+
+    - name: Restrict su to the wheel group
+      ansible.builtin.lineinfile:
+        path: /etc/pam.d/su
+        regexp: ^#?auth\s+required\s+pam_wheel.so
+        line: auth             required        pam_wheel.so use_uid
+      tags:
+      - NIST-800-53-AC-6
+      - use_pam_wheel_for_su
+      - medium_severity
+
+    - name: Enable the weekly compliance evaluation
+      ansible.builtin.systemd_service:
+        name: pen16-compliance.timer
+        enabled: true
+      tags: [xccdf_io.pen16_rule_compliance_timer_enabled]

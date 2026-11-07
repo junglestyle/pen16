@@ -42,16 +42,14 @@ exception: it comes before the pilot and runs alongside M1's remaining slices.
   history. Addresses no MAC answers for, such as a routed network's, are still told apart by address alone. Shown
   by the device identity tests: name a device, retire it, hand its address to a new fixture host, and see the old
   history intact, the new device unnamed, and nothing expected on it.
-
-### 2. Assets, history and recent changes
-
-Delivers the rest of FR-4 and the asset and finding detail from [Dashboard](SPEC.md#dashboard). Each asset has a
-page with its bindings, declared and observed services, product labels, and history. A "Recent changes" view lists
-new, removed and changed services and versions. You can correct a binding by hand, moving an address to another
-device; its history stays.
-
-Done when: move an address from one named device to another from the dashboard, and show both devices' pages with
-the change in their history and the recent changes view listing it.
+- **Assets, history and recent changes.** The rest of FR-4, and the asset and finding detail from
+  [Dashboard](SPEC.md#dashboard). Each device has a page with its addresses and MACs, its services with the product
+  and version scans identified, what's expected of it, its findings, and its history; each finding has one with
+  the evidence behind its state, every change to it, its decisions, and the raw scan. "Recent changes" lists
+  services that opened, closed or changed version, and addresses that changed hands. An address can be moved by
+  hand from one named device to another, with a reason; what's already recorded stays with the first. Shown by the
+  device identity, exposure and dashboard tests: move an address between two named devices from a device's page,
+  and see the move in both devices' history and in Recent changes.
 
 ### 3. Coverage and rolling sweeps
 

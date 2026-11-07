@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy import func, insert, select
 
-from pen16 import exposure, scope
+from pen16 import exposure, scope, status
 from pen16.db import assets, bindings, expected_services, findings, observations
 from pen16.exposure import Finding
 from tests.conftest import closed, ingest, lab
@@ -169,3 +169,40 @@ def test_naming_a_device_after_a_compliance_host_joins_them(conn):
     exposure.name_asset(conn, "new-192.0.2.10", "fileserver", "owner@example.com")
 
     assert conn.scalar(select(bindings.c.asset_id).where(bindings.c.address == "192.0.2.10")) == "fileserver"
+
+
+def service_changes(conn):
+    return [
+        (c.port, c.difference, c.before.version if c.before else None, c.now.version)
+        for c in status.recent_changes(conn).services
+    ]
+
+
+def exposed_ports(conn):
+    return [service.port for service in status.exposed(conn)]
+
+
+def test_an_expected_service_that_closes_is_removed_once_the_gateway_answers(conn):
+    ingest(conn, lab())
+    web_app = conn.scalar(select(findings.c.id).where(findings.c.port == 8080))
+    # Expected, so no open finding closes it: only the observation can say it's gone.
+    exposure.expect(conn, [web_app], "lab tool", "owner@example.com")
+
+    ingest(conn, closed(gateway=False))
+    assert 8080 in exposed_ports(conn)
+    assert [c[:2] for c in service_changes(conn)] == [(22, "new"), (445, "new"), (8080, "new")]
+
+    ingest(conn, closed())
+    assert exposed_ports(conn) == [22, 445]
+    assert service_changes(conn)[0] == (8080, "removed", "3.0.1", None)
+
+
+def test_a_new_version_is_a_change_and_an_unreported_one_isnt(conn):
+    ingest(conn, lab())
+    ingest(conn, lab(shift=3600, version=b""))
+    ingest(conn, lab(shift=7200))
+    assert [c[:2] for c in service_changes(conn)] == [(22, "new"), (445, "new"), (8080, "new")]
+
+    ingest(conn, lab(shift=10800, version=b'version="3.0.2"'))
+
+    assert service_changes(conn)[0] == (8080, "changed", "3.0.1", "3.0.2")

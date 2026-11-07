@@ -12,6 +12,7 @@ from pen16 import arf, compliance, intake, status, stig, tokens
 from pen16.db import TokenKind, compliance_results, compliance_scans, compliance_waivers
 from tests.conftest import (
     DISA_STIG,
+    FIXTURES,
     OWNER,
     OWNER_LOGIN,
     SAME_ORIGIN,
@@ -25,6 +26,13 @@ from tests.conftest import (
 RULE = "xccdf_org.ssgproject.content_rule_"
 GPGCHECK = f"{RULE}ensure_gpgcheck_globally_activated"
 UMASK = f"{RULE}accounts_umask_etc_bashrc"
+WHEEL = f"{RULE}use_pam_wheel_for_su"
+TIMER = "xccdf_io.pen16_rule_compliance_timer_enabled"
+REMEDIATION = (FIXTURES / "ssg-remediation.yml").read_text()
+
+
+def task_names(playbook: str) -> list[str]:
+    return re.findall(r"^    - name: (.*)$", playbook, re.MULTILINE)
 
 
 def later(raw: bytes = STIG_RESULT.read_bytes(), days: int = 7, **results: str) -> bytes:
@@ -249,7 +257,7 @@ def test_intake_refuses_what_isnt_a_result(committed: Engine, tmp_path: Path, bo
     assert list(tmp_path.iterdir()) == []
 
 
-PLAYBOOK = b"- hosts: all\n  tasks: []\n"
+PLAYBOOK = REMEDIATION.encode()
 
 
 @pytest.fixture
@@ -299,3 +307,72 @@ def test_the_owner_downloads_the_checklist_and_playbook(
     assert owner.get(f"/compliance/{uploaded}/checklist.cklb").status_code == 403
     assert owner.get(f"/compliance/{uploaded}/playbook.yml").status_code == 403
     assert owner.get(f"/compliance/{uploaded + 1}/playbook.yml", headers=OWNER).status_code == 404
+
+
+def test_a_waived_rule_loses_every_task_it_tagged_and_the_rest_stays_as_written() -> None:
+    cut = compliance.without_waived(REMEDIATION, [UMASK, TIMER])
+
+    assert task_names(cut) == ["Restrict su to the wheel group"]
+    assert cut.startswith(
+        "# pen16 removed the tasks of these rules, waived on the dashboard:\n"
+        "#   accounts_umask_etc_bashrc\n#   xccdf_io.pen16_rule_compliance_timer_enabled\n---\n"
+    )
+    wheel = REMEDIATION[
+        REMEDIATION.index("    - name: Restrict su") : REMEDIATION.index("    - name: Enable")
+    ]
+    assert wheel in cut
+
+
+def test_a_waived_rules_tag_pen16_cant_read_is_refused_not_kept() -> None:
+    unreadable = REMEDIATION.replace(
+        "      tags:\n      - NIST-800-53-AC-6\n      - use_pam_wheel_for_su\n",
+        "      tags: [NIST-800-53-AC-6,\n        use_pam_wheel_for_su]\n",
+    )
+
+    with pytest.raises(ValueError, match="use_pam_wheel_for_su"):
+        compliance.without_waived(unreadable, [WHEEL])
+
+
+def test_the_owner_downloads_the_playbook_without_waived_rules(
+    committed: Engine, uploaded: int, tmp_path: Path
+) -> None:
+    owner = dashboard(committed, tmp_path)
+    owner.post(
+        "/compliance/waive",
+        data={"asset_id": "lab-rhel9", "rule_id": UMASK, "reason": "set by the container image"},
+        headers=SAME_ORIGIN,
+    )
+
+    cut = owner.get(f"/compliance/{uploaded}/playbook-without-waived.yml", headers=OWNER)
+
+    with committed.connect() as conn:
+        [host] = status.dashboard(conn).compliance
+    assert host.skip_tags == ["accounts_umask_etc_bashrc"]
+    assert task_names(cut.text) == [
+        "Restrict su to the wheel group",
+        "Enable the weekly compliance evaluation",
+    ]
+    assert "without-waived.yml" in cut.headers["content-disposition"]
+    assert owner.get(f"/compliance/{uploaded}/playbook-without-waived.yml").status_code == 403
+
+
+def test_the_newest_results_playbook_has_a_url_that_stays_put(
+    committed: Engine, uploaded: int, tmp_path: Path
+) -> None:
+    owner = dashboard(committed, tmp_path)
+    stable = "/compliance/hosts/lab-rhel9/xccdf_org.ssgproject.content_profile_stig"
+    client, headers = intake_client(committed, tmp_path)
+    newer = REMEDIATION[: REMEDIATION.index("    - name: Enable")]
+
+    first = owner.get(f"{stable}/playbook-without-waived.yml", headers=OWNER)
+    upload(client, headers, later(), newer.encode())
+    second = owner.get(f"{stable}/playbook-without-waived.yml", headers=OWNER)
+
+    # Nothing waived: the whole playbook, as the host sent it.
+    assert first.text == REMEDIATION
+    assert second.text == newer
+    assert owner.get(f"{stable}/playbook.yml", headers=OWNER).text == newer
+    assert (
+        owner.get("/compliance/hosts/lab-rhel9/no_such_profile/playbook.yml", headers=OWNER).status_code
+        == 404
+    )
