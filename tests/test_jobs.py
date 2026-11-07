@@ -8,10 +8,10 @@ from sqlalchemy import func, select, update
 
 from pen16 import jobs, listener, runner, scope, tokens
 from pen16.config import Config
-from pen16.db import findings, notifications
+from pen16.db import findings
 from pen16.db import jobs as jobs_table
 from pen16.scope import OutOfScopeError
-from tests.conftest import closed_xml, lab_xml
+from tests.conftest import alerts, closed_xml, lab_xml, open_incidents
 
 SERVICES = Path(__file__).parent / "fixtures" / "nmap-services"
 
@@ -25,9 +25,9 @@ def runner_client(engine, scope, evidence):
     return TestClient(app, headers={"Authorization": f"Bearer {token}"})
 
 
-def queue(engine, scope):
+def queue(engine, scope, schedule=None):
     with engine.begin() as conn:
-        return jobs.request(conn, scope, "owner:test", "test")
+        return jobs.request(conn, scope, "owner:test", "test", schedule=schedule)
 
 
 def upload(client, job_id, raw):
@@ -35,9 +35,18 @@ def upload(client, job_id, raw):
     return int(response.status_code)
 
 
-def notices(engine):
+def miss_deadlines(engine, client):
+    """Claim the queued job and let it miss its deadline, then do the same to its one retry."""
+    for _ in range(2):
+        assert client.post("/runner/v1/jobs/claim").status_code == 200
+        with engine.begin() as conn:
+            conn.execute(update(jobs_table).values(deadline_at=func.now() - timedelta(seconds=1)))
+            jobs.expire(conn)
+
+
+def incidents_and_alerts(engine):
     with engine.connect() as conn:
-        return [tuple(row) for row in conn.execute(select(notifications.c.kind, notifications.c.title))]
+        return open_incidents(conn), alerts(conn)
 
 
 def test_scan_round_trip_opens_one_alerted_finding(committed, lab_scope, tmp_path):
@@ -50,7 +59,8 @@ def test_scan_round_trip_opens_one_alerted_finding(committed, lab_scope, tmp_pat
     assert upload(client, job_id, lab_xml()) == 204
 
     assert len(list(tmp_path.glob("*.xml.gz"))) == 1
-    assert ("finding", "3 unexpected service(s)") in notices(committed)
+    [body] = [body for kind, body in incidents_and_alerts(committed)[1] if kind == "finding"]
+    assert "8080/tcp" in body
     with committed.connect() as conn:
         assert conn.scalar(select(jobs_table.c.status)) == "succeeded"
 
@@ -75,7 +85,7 @@ def test_silent_gateway_blocks_closure_and_says_so(committed, lab_scope, tmp_pat
 
     with committed.connect() as conn:
         assert conn.scalar(select(findings.c.status).where(findings.c.port == 8080)) == "open"
-    assert ("health", "Gateway didn't answer") in notices(committed)
+    assert incidents_and_alerts(committed)[0] == ["gateway:lab"]
 
 
 def test_gateway_up_lets_closed_ports_resolve(committed, lab_scope, tmp_path):
@@ -89,17 +99,36 @@ def test_gateway_up_lets_closed_ports_resolve(committed, lab_scope, tmp_path):
         assert conn.scalar(select(findings.c.status).where(findings.c.port == 8080)) == "resolved"
 
 
-def test_missed_deadline_retries_once_then_fails_loudly(committed, lab_scope, tmp_path):
+def test_a_requested_scan_retries_once_then_fails_on_the_dashboard(committed, lab_scope, tmp_path):
     client = runner_client(committed, lab_scope, tmp_path)
     queue(committed, lab_scope)
-    for _ in range(2):
-        assert client.post("/runner/v1/jobs/claim").status_code == 200
-        with committed.begin() as conn:
-            conn.execute(update(jobs_table).values(deadline_at=func.now() - timedelta(seconds=1)))
-            jobs.expire(conn)
+
+    miss_deadlines(committed, client)
 
     assert client.post("/runner/v1/jobs/claim").status_code == 204
-    assert notices(committed) == [("health", "Scan failed")]
+    with committed.connect() as conn:
+        assert conn.scalar(select(jobs_table.c.status)) == "failed"
+    assert incidents_and_alerts(committed) == ([], [])
+
+
+def test_two_failed_nights_alert_once_and_a_good_one_recovers(committed, lab_scope, tmp_path):
+    client = runner_client(committed, lab_scope, tmp_path)
+    queue(committed, lab_scope, schedule="nightly")
+    miss_deadlines(committed, client)
+    assert incidents_and_alerts(committed) == ([], [])
+
+    for _ in range(2):
+        queue(committed, lab_scope, schedule="nightly")
+        miss_deadlines(committed, client)
+    assert incidents_and_alerts(committed)[0] == ["schedule:nightly"]
+
+    job_id = queue(committed, lab_scope, schedule="nightly")
+    client.post("/runner/v1/jobs/claim")
+    upload(client, job_id, closed_xml())
+
+    incidents, sent = incidents_and_alerts(committed)
+    assert incidents == []
+    assert [kind for kind, _ in sent if kind == "health"] == ["health", "health"]
 
 
 def test_runner_token_is_required(committed, lab_scope, tmp_path):

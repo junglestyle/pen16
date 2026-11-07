@@ -2,7 +2,7 @@
 
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
 from sqlalchemy import Connection, case, delete, exists, func, insert, select
@@ -19,7 +19,6 @@ from pen16.db import (
     compliance_rules,
     compliance_scans,
     compliance_waivers,
-    notifications,
     stig_rules,
     stigs,
 )
@@ -71,8 +70,6 @@ def record(
         raise StaleResultError(
             f"{asset_id} already has a result from {previous.finished_at:%Y-%m-%d %H:%M} UTC"
         )
-    was_stale = _stale_warned(conn, asset_id)
-
     for rule in result.rules:
         values = {
             "title": rule.title,
@@ -132,8 +129,7 @@ def record(
                 f"{len(regressed)} compliance regression{'s' if len(regressed) > 1 else ''} on {asset_id}",
                 "\n".join([summary, *lines]),
             )
-    if was_stale:
-        notify.enqueue(conn, NotificationKind.HEALTH, f"Compliance results resumed from {asset_id}", summary)
+    notify.clear_incident(conn, _stale(asset_id), f"Compliance results resumed from {asset_id}", summary)
     return Recorded(scan_id, duplicate=False)
 
 
@@ -170,18 +166,18 @@ def unwaive(conn: Connection, asset_id: str, rule_id: str) -> None:
 
 
 def check(conn: Connection) -> None:
-    """Alert once for each host whose newest result is older than STALE."""
+    """Open a stale incident for each host whose newest result is older than STALE."""
     now = db.now(conn)
     for asset_id, last in conn.execute(
         select(compliance_scans.c.asset_id, func.max(compliance_scans.c.received_at)).group_by(
             compliance_scans.c.asset_id
         )
     ):
-        if now - last > STALE and not _stale_warned(conn, asset_id, since=last):
-            notify.enqueue(
+        if now - last > STALE:
+            notify.raise_incident(
                 conn,
-                NotificationKind.HEALTH,
-                _stale_title(asset_id),
+                _stale(asset_id),
+                f"Compliance results stale from {asset_id}",
                 f"The last compliance result from {asset_id} arrived {last:%Y-%m-%d %H:%M} UTC.",
             )
 
@@ -416,29 +412,9 @@ def _regressions(conn: Connection, asset_id: str, previous_id: int, scan_id: int
     )
 
 
-def _stale_title(asset_id: str) -> str:
-    return f"Compliance results stale from {asset_id}"
-
-
-def _stale_warned(conn: Connection, asset_id: str, since: datetime | None = None) -> bool:
-    """Whether a stale warning went out for this host after its newest result (or after `since`)."""
-    if since is None:
-        since = conn.scalar(
-            select(func.max(compliance_scans.c.received_at)).where(compliance_scans.c.asset_id == asset_id)
-        )
-        if since is None:
-            return False
-    return bool(
-        conn.scalar(
-            select(
-                exists().where(
-                    notifications.c.kind == NotificationKind.HEALTH,
-                    notifications.c.title == _stale_title(asset_id),
-                    notifications.c.created_at > since,
-                )
-            )
-        )
-    )
+def _stale(asset_id: str) -> str:
+    """The incident key for a host that has stopped reporting."""
+    return f"compliance-stale:{asset_id}"
 
 
 def pass_rate(passed: int, failed: int) -> str:

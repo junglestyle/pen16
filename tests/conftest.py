@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError
 
@@ -44,6 +44,19 @@ def lab(shift: int = 0, version: bytes = b'version="3.0.1"') -> nmap.Scan:
 
 def closed(*, gateway: bool = True) -> nmap.Scan:
     return nmap.parse(closed_xml(gateway=gateway))
+
+
+def open_incidents(conn):
+    """The keys of the open incidents."""
+    return sorted(conn.scalars(select(db.incidents.c.key).where(db.incidents.c.cleared_at.is_(None))))
+
+
+def alerts(conn):
+    """Each queued notification's kind and body, oldest first."""
+    rows = conn.execute(
+        select(db.notifications.c.kind, db.notifications.c.body).order_by(db.notifications.c.id)
+    )
+    return [tuple(row) for row in rows]
 
 
 # Each run creates its own scratch database through this admin URL and drops it afterwards. make test sets it to

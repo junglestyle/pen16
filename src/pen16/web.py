@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import ColumnElement, Connection, Engine, ScalarSelect, Text, cast, exists, func, select
 
-from pen16 import backups, compliance, config, db, evidence, exposure, jobs, neighbours
+from pen16 import backups, compliance, config, db, evidence, exposure, jobs, neighbours, notify
 from pen16.config import Config
 from pen16.db import (
     DecisionKind,
@@ -33,6 +33,7 @@ from pen16.db import (
     decisions,
     expected_services,
     findings,
+    incidents,
     mac_sightings,
     notifications,
     observations,
@@ -159,6 +160,12 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
         with engine.begin() as conn:
             compliance.unwaive(conn, asset_id, rule_id)
         return _back("#compliance")
+
+    @app.post("/alerts/replay")
+    def replay(_login: Owner) -> RedirectResponse:
+        with engine.begin() as conn:
+            notify.replay_failed(conn)
+        return _back()
 
     @app.get("/compliance/{scan_id}/checklist.cklb")
     def checklist(_login: Owner, scan_id: int) -> Response:
@@ -289,6 +296,9 @@ def _dashboard(conn: Connection) -> dict[str, Any]:
         ),
         "pending": _count(conn, notifications.c.status == NotificationStatus.PENDING),
         "failed": _count(conn, notifications.c.status == NotificationStatus.FAILED),
+        "incidents": conn.execute(
+            select(incidents).where(incidents.c.cleared_at.is_(None)).order_by(incidents.c.opened_at)
+        ).all(),
         "findings": open_findings,
         "decided": decided,
         "resolved": resolved,

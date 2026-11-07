@@ -68,7 +68,13 @@ form.inline { display: inline; }
     {% else %}<span class="muted">no host has reported</span>{% endif %}
   </dd>
   <dt>Alerts</dt>
-  <dd>{{ pending }} queued{% if failed %}, <span class="bad">{{ failed }} failed to send</span>{% endif %}</dd>
+  <dd>{{ pending }} queued{% if failed %}, <span class="bad">{{ failed }} failed to send</span>
+    <form class="inline" method="post" action="/alerts/replay"><button>Resend</button></form>{% endif %}</dd>
+  <dt>Problems</dt>
+  <dd>
+    {% for i in incidents %}<span class="bad">{{ i.title }}</span> <span class="muted">since {{ i.opened_at.strftime('%Y-%m-%d %H:%M UTC') }}: {{ i.detail }}</span><br>
+    {% else %}<span class="ok">none</span>{% endfor %}
+  </dd>
 </dl>
 <form method="post" action="/scan"><p><button>Scan now</button></p></form>
 

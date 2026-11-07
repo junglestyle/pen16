@@ -71,9 +71,9 @@ Group related alerts by asset/vantage over five minutes. Start with a short ntfy
 | --- | --- |
 | Success | Mark delivered |
 | Transient failure | Back off automatically, capped at one hour, for up to 24 hours |
-| Permanent failure or retry exhaustion | Show failed delivery and one health incident; allow replay |
+| Permanent failure or retry exhaustion | Show failed delivery and one health incident; resend from the dashboard, with a fresh 24 hours |
 
-Alert after two missed/failed scheduled windows; gateway failure alerts immediately. M2 feed health degrades after two missed daily fetches. M3 heartbeats run every minute and alert after five minutes missing. An optional independent monitor receives a heartbeat while database, scheduler, and notification health pass.
+Problems with monitoring itself are incidents, one per subject: a network's gateway, a schedule, backups, a compliance host, alert delivery. Opening one alerts once, clearing it sends one recovery notice, and the open ones show under monitoring health; cleared ones stay as history. A scheduled scan alerts after two missed/failed windows in a row, and a requested one shows its failure on the dashboard only; gateway failure alerts immediately. M2 feed health degrades after two missed daily fetches. M3 heartbeats run every minute and alert after five minutes missing. An optional independent monitor receives a heartbeat while database, scheduler, and notification health pass.
 
 ## Deployment and state ownership
 

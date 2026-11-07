@@ -9,9 +9,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Connection, Engine, func, select, update
 
 from pen16 import arf, compliance, intake, stig, tokens
-from pen16.db import compliance_results, compliance_scans, notifications
+from pen16.db import compliance_results, compliance_scans
 from pen16.scope import Scope
-from tests.conftest import DISA_STIG, STIG_RESULT
+from tests.conftest import DISA_STIG, STIG_RESULT, alerts, open_incidents
 from tests.test_web import OWNER, dashboard
 
 RULE = "xccdf_org.ssgproject.content_rule_"
@@ -38,10 +38,6 @@ def recorded(conn: Connection, raw: bytes, host: str = "lab-rhel9") -> complianc
     return compliance.record(conn, host, result, result.digest, None)
 
 
-def titles(conn: Connection) -> list[str]:
-    return list(conn.scalars(select(notifications.c.title).order_by(notifications.c.id)))
-
-
 def test_parse_reads_profile_results_and_stig_references() -> None:
     result = arf.parse(STIG_RESULT.read_bytes())
 
@@ -63,24 +59,24 @@ def test_parse_reads_profile_results_and_stig_references() -> None:
 def test_first_result_alerts_once_with_the_pass_rate(conn: Connection) -> None:
     recorded(conn, STIG_RESULT.read_bytes())
 
-    assert titles(conn) == ["First compliance result from lab-rhel9"]
-    body = conn.scalar(select(notifications.c.body))
-    assert body == "DISA STIG for Red Hat Enterprise Linux 9: 53% passing, 8 failing."
+    [(kind, body)] = alerts(conn)
+    assert kind == "finding"
+    assert "53%" in body
 
 
 def test_regression_alerts_with_the_rule_and_a_fix_alone_stays_quiet(conn: Connection) -> None:
     recorded(conn, STIG_RESULT.read_bytes())
     recorded(conn, later(days=7, accounts_umask_etc_bashrc="pass"))
-    assert len(titles(conn)) == 1
+    assert len(alerts(conn)) == 1
 
     recorded(
         conn, later(days=14, accounts_umask_etc_bashrc="pass", ensure_gpgcheck_globally_activated="fail")
     )
 
-    assert titles(conn)[-1] == "1 compliance regression on lab-rhel9"
-    body = conn.scalar(select(notifications.c.body).order_by(notifications.c.id.desc()).limit(1))
-    assert body is not None
-    assert body.endswith("[high] Ensure gpgcheck Enabled In Main dnf Configuration")
+    kind, body = alerts(conn)[-1]
+    assert kind == "finding"
+    assert "Ensure gpgcheck Enabled In Main dnf Configuration" in body
+    assert "umask" not in body.lower()
 
 
 def test_a_waived_rule_regresses_quietly_and_stays_failing(conn: Connection) -> None:
@@ -89,7 +85,7 @@ def test_a_waived_rule_regresses_quietly_and_stays_failing(conn: Connection) -> 
 
     scan = recorded(conn, later(ensure_gpgcheck_globally_activated="fail"))
 
-    assert len(titles(conn)) == 1
+    assert len(alerts(conn)) == 1
     waived = [row for row in compliance.failing(conn, scan.scan_id) if row.rule_id == GPGCHECK]
     assert waived[0].waiver == "local repo mirror signs nothing"
     with pytest.raises(ValueError, match="needs a reason"):
@@ -119,16 +115,16 @@ def test_duplicate_is_a_no_op_and_an_older_result_is_refused(conn: Connection) -
 
 def test_a_silent_host_alerts_once_then_recovers(conn: Connection) -> None:
     recorded(conn, STIG_RESULT.read_bytes())
-    conn.execute(update(compliance_scans).values(received_at=datetime.now(UTC) - timedelta(days=11)))
+    conn.execute(update(compliance_scans).values(received_at=func.now() - timedelta(days=11)))
 
     compliance.check(conn)
     compliance.check(conn)
+    assert open_incidents(conn) == ["compliance-stale:lab-rhel9"]
+
     recorded(conn, later())
 
-    assert titles(conn)[1:] == [
-        "Compliance results stale from lab-rhel9",
-        "Compliance results resumed from lab-rhel9",
-    ]
+    assert open_incidents(conn) == []
+    assert [kind for kind, _ in alerts(conn)] == ["finding", "health", "health"]
 
 
 def checklist(conn: Connection, scan_id: int) -> dict[str, Any]:

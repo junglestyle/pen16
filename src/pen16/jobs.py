@@ -26,6 +26,7 @@ log = logging.getLogger(__name__)
 DEADLINE = timedelta(minutes=30)
 MAX_ATTEMPTS = 2
 UNCLAIMED = timedelta(hours=1)
+FAILED_WINDOWS = 2
 
 
 class StaleJobError(Exception):
@@ -123,22 +124,32 @@ def complete(
     ]
     if seen:
         conn.execute(postgresql_insert(mac_sightings).values(seen).on_conflict_do_nothing())
-    silent = [str(network.gateway) for network in scope.networks if str(network.gateway) not in up]
+    silent = [network for network in scope.networks if str(network.gateway) not in up]
     opened = exposure.ingest(conn, scan, vantage="internal", closures=not silent)
     if opened:
         lines = [f"{f.asset_id} {f.port}/{f.protocol}" + (f": {f.why}" if f.why else "") for f in opened]
         notify.enqueue(
             conn, NotificationKind.FINDING, f"{len(opened)} unexpected service(s)", "\n".join(lines)
         )
-    if silent:
-        notify.enqueue(
-            conn,
-            NotificationKind.HEALTH,
-            "Gateway didn't answer",
-            f"Gateway {', '.join(silent)} was down during job {job_id}, so closed ports resolved nothing.",
+    for network in scope.networks:
+        if network in silent:
+            notify.raise_incident(
+                conn,
+                _gateway(network.name),
+                f"Gateway of {network.name} didn't answer",
+                f"Gateway {network.gateway} was down during job {job_id}, so closed ports resolved nothing.",
+            )
+        else:
+            notify.clear_incident(
+                conn,
+                _gateway(network.name),
+                f"Gateway of {network.name} answers again",
+                f"Gateway {network.gateway} answered during job {job_id}.",
+            )
+    if job.schedule is not None:
+        notify.clear_incident(
+            conn, _scheduled(job.schedule), "Scheduled scans recovered", f"Scheduled job {job_id} succeeded."
         )
-    if job.schedule is not None and _last_scheduled_status(conn, job.schedule) == JobStatus.FAILED:
-        notify.enqueue(conn, NotificationKind.HEALTH, "Scans recovered", f"Scheduled job {job_id} succeeded.")
     conn.execute(
         update(jobs)
         .where(jobs.c.id == job_id)
@@ -199,22 +210,36 @@ def _retry_or_fail(conn: Connection, job: Row[Any], error: str) -> None:
 
 
 def _finish_failed(conn: Connection, job: Row[Any], error: str) -> None:
+    """Fail the job for good. A requested scan's failure shows on the dashboard; a schedule alerts once its
+    last FAILED_WINDOWS runs have all failed, so one bad night stays quiet."""
     log.warning("job %s failed: %s", job.id, error)
     conn.execute(
         update(jobs)
         .where(jobs.c.id == job.id)
         .values(status=JobStatus.FAILED, finished_at=func.now(), error=error)
     )
-    notify.enqueue(
-        conn, NotificationKind.HEALTH, "Scan failed", f"Job {job.id} ({job.reason}) failed: {error}"
-    )
-
-
-def _last_scheduled_status(conn: Connection, schedule: str) -> str | None:
-    status: str | None = conn.scalar(
+    if job.schedule is None:
+        return
+    recent = conn.scalars(
         select(jobs.c.status)
-        .where(jobs.c.schedule == schedule, jobs.c.status.in_([JobStatus.SUCCEEDED, JobStatus.FAILED]))
-        .order_by(jobs.c.finished_at.desc())
-        .limit(1)
-    )
-    return status
+        .where(jobs.c.schedule == job.schedule, jobs.c.status.in_([JobStatus.SUCCEEDED, JobStatus.FAILED]))
+        .order_by(jobs.c.finished_at.desc(), jobs.c.id.desc())
+        .limit(FAILED_WINDOWS)
+    ).all()
+    if len(recent) == FAILED_WINDOWS and all(status == JobStatus.FAILED for status in recent):
+        notify.raise_incident(
+            conn,
+            _scheduled(job.schedule),
+            "Scheduled scans are failing",
+            f"The last {FAILED_WINDOWS} {job.schedule} scans failed. Job {job.id}: {error}",
+        )
+
+
+def _gateway(network: str) -> str:
+    """The incident key for a network whose gateway didn't answer."""
+    return f"gateway:{network}"
+
+
+def _scheduled(schedule: str) -> str:
+    """The incident key for a schedule whose runs keep failing."""
+    return f"schedule:{schedule}"

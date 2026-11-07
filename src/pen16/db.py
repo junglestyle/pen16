@@ -249,10 +249,31 @@ notifications = Table(
     Column("attempts", Integer, nullable=False, server_default="0"),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     Column("next_attempt_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    # Delivery retries until then; replaying a failed notification moves it on.
+    Column(
+        "retry_until",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now() + interval '24 hours'"),
+    ),
     Column("delivered_at", DateTime(timezone=True)),
     Column("last_error", Text),
     _one_of("kind", NotificationKind, "notification_kind"),
     _one_of("status", NotificationStatus, "notification_status"),
+)
+
+# Something wrong with monitoring itself, such as stale backups or a gateway that didn't answer. A key has at most
+# one open incident: opening it alerts once, and clearing it sends one recovery notice. Cleared ones stay as history.
+incidents = Table(
+    "incidents",
+    metadata,
+    Column("id", BigInteger, Identity(always=True), primary_key=True),
+    Column("key", Text, nullable=False),
+    Column("title", Text, nullable=False),
+    Column("detail", Text, nullable=False),
+    Column("opened_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("cleared_at", DateTime(timezone=True)),
+    Index("incidents_one_open", "key", unique=True, postgresql_where=text("cleared_at IS NULL")),
 )
 
 # One row per verified backup, written by deploy/pen16-backup through `pen16 backed-up`.
