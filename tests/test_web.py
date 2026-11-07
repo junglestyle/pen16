@@ -1,8 +1,8 @@
 from sqlalchemy import insert, select
 
-from pen16 import status
+from pen16 import exposure, status
 from pen16.db import DecisionKind, assets, bindings, expected_services, findings
-from tests.conftest import OWNER, SAME_ORIGIN, dashboard, lab_xml, scanned
+from tests.conftest import OWNER, OWNER_LOGIN, SAME_ORIGIN, dashboard, ingest, lab, lab_xml, scanned
 
 
 def post(client, path, data):
@@ -104,3 +104,36 @@ def test_input_the_services_refuse_is_a_bad_request(committed):
 
     assert (unnamed.status_code, blank.status_code, unknown.status_code) == (400, 400, 400)
     assert [f.id for f in view(committed).needs_attention if f.port == 8080] == [web_app]
+
+
+def test_a_private_mac_change_is_asked_about_and_same_device_rejoins(committed):
+    with committed.begin() as conn:
+        ingest(conn, lab(), {"192.0.2.10": "02:00:00:00:00:10"})
+        exposure.name_asset(conn, "new-192.0.2.10", "fileserver", OWNER_LOGIN)
+        ingest(conn, lab(shift=86400), {"192.0.2.10": "06:00:00:00:00:10"})
+    client = dashboard(committed)
+
+    page = client.get("/", headers=OWNER).text
+    same = post(client, "/assets/name", {"provisional_id": "new-192.0.2.10-2", "asset_id": "fileserver"})
+
+    assert "Took this address over from fileserver" in page
+    assert same.status_code == 303
+    seen = view(committed)
+    assert seen.unnamed == []
+    assert [(d.id, d.addresses) for d in seen.devices] == [
+        ("fileserver", [("192.0.2.10", "06:00:00:00:00:10")])
+    ]
+
+
+def test_retiring_a_device_from_the_dashboard(committed):
+    with committed.begin() as conn:
+        ingest(conn, lab())
+        exposure.name_asset(conn, "new-192.0.2.10", "fileserver", OWNER_LOGIN)
+    client = dashboard(committed)
+
+    blank = post(client, "/assets/retire", {"asset_id": "fileserver", "reason": " "})
+    retired = post(client, "/assets/retire", {"asset_id": "fileserver", "reason": "sold it"})
+
+    assert (blank.status_code, retired.status_code) == (400, 303)
+    seen = view(committed)
+    assert (seen.devices, seen.needs_attention) == ([], [])

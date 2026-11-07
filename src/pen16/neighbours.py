@@ -63,10 +63,14 @@ def read(file: Path) -> dict[str, Neighbour]:
     return found
 
 
+def is_private(mac: str) -> bool:
+    """A locally administered MAC: one a phone or laptop made up for privacy, and may make up again."""
+    return bool(int(mac[:2], 16) & 0b10)
+
+
 def vendor(mac: str) -> str | None:
-    """Who made the device, from the MAC's prefix. A locally administered MAC is one a phone or laptop made up
-    for privacy, so it names no manufacturer."""
-    if int(mac[:2], 16) & 0b10:
+    """Who made the device, from the MAC's prefix. A private MAC names no manufacturer."""
+    if is_private(mac):
         return "private address"
     return _vendors().get(mac.replace(":", "")[:6].upper())
 

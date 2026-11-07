@@ -2,11 +2,11 @@ import json
 import time
 
 import pytest
-from sqlalchemy import func, insert, select
+from sqlalchemy import select
 
 from pen16 import neighbours, status
 from pen16.db import mac_sightings
-from tests.conftest import OWNER, dashboard, lab_xml, queue, runner_client, scanned, upload
+from tests.conftest import OWNER, dashboard, lab_xml, queue, runner_client, upload
 
 
 def neighbour_table(path, *entries):
@@ -56,6 +56,23 @@ def test_a_scan_records_the_mac_the_host_confirmed_during_it(committed, tmp_path
     assert sightings(committed) == [("192.0.2.10", "02:00:00:00:00:10")]
 
 
+def test_a_scan_that_finds_a_different_mac_gives_the_address_to_a_new_device(committed, tmp_path):
+    client = runner_client(committed, tmp_path)
+    for shift, mac in ((0, "00:11:32:00:00:10"), (86400, "00:11:32:00:00:99")):
+        job_id = queue(committed)
+        client.post("/runner/v1/jobs/claim")
+        neighbour_table(tmp_path / "neighbours.json", ("192.0.2.10", mac, 0, "REACHABLE"))
+        assert upload(client, job_id, lab_xml(shift)) == 204
+
+    with committed.connect() as conn:
+        [device] = status.unnamed(conn)
+    assert (device.id, device.mac, device.took_over_from) == (
+        "new-192.0.2.10-2",
+        "00:11:32:00:00:99",
+        "new-192.0.2.10",
+    )
+
+
 def test_a_mac_confirmed_before_the_scan_isnt_recorded(committed, tmp_path):
     client = runner_client(committed, tmp_path)
     job_id = queue(committed)
@@ -89,14 +106,12 @@ def test_vendor_names_the_maker_or_a_private_address():
     assert neighbours.vendor("00:00:00:00:00:01") is None
 
 
-def test_the_dashboard_shows_each_address_mac(committed):
-    scanned(committed)
-    with committed.begin() as conn:
-        conn.execute(
-            insert(mac_sightings).values(
-                address="192.0.2.10", mac="02:00:00:00:00:10", confirmed_at=func.now(), evidence_digest="x"
-            )
-        )
+def test_the_dashboard_shows_each_address_mac(committed, tmp_path):
+    client = runner_client(committed, tmp_path)
+    job_id = queue(committed)
+    client.post("/runner/v1/jobs/claim")
+    neighbour_table(tmp_path / "neighbours.json", ("192.0.2.10", "02:00:00:00:00:10", 0, "REACHABLE"))
+    upload(client, job_id, lab_xml())
 
     with committed.connect() as conn:
         seen = status.dashboard(conn)

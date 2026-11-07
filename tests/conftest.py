@@ -58,9 +58,9 @@ def closed(*, gateway: bool = True) -> nmap.Scan:
     return nmap.parse(closed_xml(gateway=gateway))
 
 
-def ingest(conn, scan):
-    """Record a scan from the lab network, as a job does."""
-    return exposure.ingest(conn, scan, LAB.networks, "internal")
+def ingest(conn, scan, macs=None):
+    """Record a scan from the lab network, as a job does, with the MAC each address answered with, if any."""
+    return exposure.ingest(conn, scan, LAB.networks, "internal", macs or {})
 
 
 def open_incidents(conn):

@@ -61,6 +61,8 @@ class OpenFinding:
     seen: Seen
     # What changed, when a scan withdrew the owner's decision and brought it back.
     withdrawal: str | None
+    # The device isn't at the address this was seen at any more: another took it over, or it was retired.
+    away: bool
 
 
 @dataclass(frozen=True)
@@ -117,6 +119,18 @@ class Unnamed:
     id: str
     address: str
     mac: str | None
+    # The device this one took the address over from, when a different MAC answered there.
+    took_over_from: str | None
+    # Whether either MAC was a private one, so it may be the same device after all.
+    took_over_private: bool
+
+
+@dataclass(frozen=True)
+class Device:
+    """A named device that isn't retired, with each address it's at and the MAC that answers there."""
+
+    id: str
+    addresses: list[tuple[str, str | None]]
 
 
 @dataclass(frozen=True)
@@ -168,6 +182,7 @@ class Dashboard:
     exposed: list[Exposed]
     expected: list[Expected]
     unnamed: list[Unnamed]
+    devices: list[Device]
     compliance: list[HostCompliance]
 
 
@@ -190,6 +205,7 @@ def dashboard(conn: Connection) -> Dashboard:
             )
         ],
         unnamed=unnamed(conn),
+        devices=devices(conn),
         compliance=[
             HostCompliance(
                 result=result,
@@ -245,8 +261,9 @@ def needs_attention(conn: Connection) -> list[OpenFinding]:
         .limit(1)
         .scalar_subquery()
     )
+    here = exists().where(bindings.c.address == seen.c.address, bindings.c.asset_id == findings.c.asset_id)
     rows = conn.execute(
-        select(findings, *_seen_columns(seen), withdrawn.label("withdrawal"))
+        select(findings, *_seen_columns(seen), withdrawn.label("withdrawal"), here.label("here"))
         .join(seen, seen.c.id == findings.c.last_observation_id)
         .where(findings.c.status == FindingStatus.OPEN, ~exists().where(_active_decision()))
         .order_by(findings.c.opened_at.desc())
@@ -261,6 +278,7 @@ def needs_attention(conn: Connection) -> list[OpenFinding]:
             row.opened_at,
             _seen(row),
             row.withdrawal,
+            not row.here,
         )
         for row in rows
     ]
@@ -318,7 +336,8 @@ def resolved(conn: Connection) -> list[ResolvedFinding]:
 
 
 def exposed(conn: Connection) -> list[Exposed]:
-    """Every service whose latest observation saw it open, with why it's expected if it is."""
+    """Every service whose latest observation saw it open on a device still at that address, with why it's
+    expected if it is. A device that left or was retired has nothing reachable."""
     latest = (
         select(observations)
         .ext(
@@ -346,7 +365,10 @@ def exposed(conn: Connection) -> list[Exposed]:
             & (expected.c.vantage == latest.c.vantage)
             & expected.c.ended_at.is_(None),
         )
-        .where(latest.c.state == ObservationState.OPEN)
+        .where(
+            latest.c.state == ObservationState.OPEN,
+            exists().where(bindings.c.address == latest.c.address, bindings.c.asset_id == latest.c.asset_id),
+        )
         .order_by(latest.c.asset_id, latest.c.protocol, latest.c.port)
     )
     return [
@@ -369,13 +391,37 @@ def unnamed(conn: Connection) -> list[Unnamed]:
     """Provisional devices. Each is one address, so one row each."""
     rows = conn.execute(
         select(
-            assets.c.id, func.host(bindings.c.address).label("address"), _mac(bindings.c.address).label("mac")
+            assets.c.id,
+            assets.c.took_over_from,
+            assets.c.took_over_private,
+            func.host(bindings.c.address).label("address"),
+            cast(bindings.c.mac, Text).label("mac"),
         )
         .join(bindings, bindings.c.asset_id == assets.c.id)
         .where(assets.c.provisional)
         .order_by(bindings.c.address)
     )
-    return [Unnamed(row.id, row.address, row.mac) for row in rows]
+    return [Unnamed(row.id, row.address, row.mac, row.took_over_from, row.took_over_private) for row in rows]
+
+
+def devices(conn: Connection) -> list[Device]:
+    """Named devices that aren't retired, compliance hosts with no address included."""
+    rows = conn.execute(
+        select(
+            assets.c.id,
+            func.host(bindings.c.address).label("address"),
+            cast(bindings.c.mac, Text).label("mac"),
+        )
+        .outerjoin(bindings, bindings.c.asset_id == assets.c.id)
+        .where(~assets.c.provisional, assets.c.retired_at.is_(None))
+        .order_by(assets.c.id, bindings.c.address)
+    )
+    named: dict[str, list[tuple[str, str | None]]] = {}
+    for row in rows:
+        addresses = named.setdefault(row.id, [])
+        if row.address is not None:
+            addresses.append((row.address, row.mac))
+    return [Device(name, addresses) for name, addresses in named.items()]
 
 
 def _active_decision() -> ColumnElement[bool]:
