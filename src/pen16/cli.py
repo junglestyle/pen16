@@ -30,6 +30,9 @@ def main() -> None:
     token = commands.add_parser("token", help="create a token and print it once")
     token.add_argument("name", help="the runner, or for a compliance token the host's asset ID")
     token.add_argument("--kind", type=TokenKind, choices=list(TokenKind), default=TokenKind.RUNNER)
+    commands.add_parser("tokens", help="list every token: ID, kind, name, created, last used, revoked")
+    revoke = commands.add_parser("revoke", help="revoke a token, refusing it from the next request")
+    revoke.add_argument("token_id", help="the ID `pen16 tokens` lists, the part after pen16_ in the token")
     stig_import = commands.add_parser(
         "stig-import", help="import a DISA STIG's manual XCCDF, the rules a checklist lists"
     )
@@ -63,6 +66,22 @@ def main() -> None:
             )
         with db.connect().begin() as conn:
             print(tokens.create(conn, args.kind, args.name))
+    elif args.command == "tokens":
+        with db.connect().connect() as conn:
+            listed = tokens.listed(conn)
+        for t in listed:
+            times = (t.created_at, t.last_used_at, t.revoked_at)
+            print(
+                "\t".join(
+                    [t.id, t.kind, t.name, *(f"{when:%Y-%m-%d %H:%M}" if when else "-" for when in times)]
+                )
+            )
+    elif args.command == "revoke":
+        try:
+            with db.connect().begin() as conn:
+                tokens.revoke(conn, args.token_id)
+        except LookupError as error:
+            raise SystemExit(str(error)) from None
     elif args.command == "stig-import":
         imported = stig.parse(args.path.read_bytes())
         with db.connect().begin() as conn:

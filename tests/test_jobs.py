@@ -140,6 +140,19 @@ def test_only_a_runner_token_gets_in(committed, tmp_path):
         assert conn.scalar(select(jobs_table.c.status)) == "queued"
 
 
+def test_a_revoked_runner_token_is_refused_from_the_next_request(committed, tmp_path):
+    client = runner_client(committed, tmp_path)
+    assert client.post("/runner/v1/jobs/claim").status_code == 204
+    token_id = client.headers["Authorization"].split("_")[1]
+
+    with committed.begin() as conn:
+        tokens.revoke(conn, token_id)
+
+    assert client.post("/runner/v1/jobs/claim").status_code == 401
+    with committed.begin() as conn, pytest.raises(LookupError):
+        tokens.revoke(conn, token_id)
+
+
 def test_hostile_upload_fails_the_attempt(committed, tmp_path):
     client = runner_client(committed, tmp_path)
     job_id = queue(committed)

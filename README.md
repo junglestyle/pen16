@@ -49,7 +49,8 @@ secrets like [examples/pen16.env](examples/pen16.env), [examples/intake.env](exa
 enable the [pen16-backup](deploy/pen16-backup) timer. For compliance, serve the intake on the tailnet
 (`tailscale serve --bg --https=8444 http://127.0.0.1:8444`), import the DISA STIG's manual XCCDF with
 `pen16 stig-import`, and install [deploy/compliance](deploy/compliance) on each host with a token from
-`pen16 token --kind compliance <host>`. The image builds on the host, because nmap's license limits
+`pen16 token --kind compliance <host>`; `pen16 tokens` lists every token and `pen16 revoke <id>` revokes one. The
+image builds on the host, because nmap's license limits
 redistributing it. A private deployment repository with Ansible normally does all of this; the
 [architecture](docs/ARCHITECTURE.md#deployment-and-state-ownership) says what it owns.
 
