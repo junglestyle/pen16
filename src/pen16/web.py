@@ -24,6 +24,7 @@ from pen16.db import (
     JobStatus,
     NotificationStatus,
     ObservationState,
+    Profile,
     RuleResult,
     Severity,
     TokenKind,
@@ -83,7 +84,9 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
     @app.post("/scan")
     def scan_now(login: Owner) -> RedirectResponse:
         with engine.begin() as conn:
-            jobs.request(conn, settings.scope, f"owner:{login}", "requested from the dashboard")
+            jobs.request(
+                conn, settings.scope, f"owner:{login}", "requested from the dashboard", Profile.NIGHTLY
+            )
         return _back()
 
     @app.post("/findings/expect")

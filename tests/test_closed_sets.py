@@ -5,11 +5,13 @@ from sqlalchemy import text
 
 from pen16.db import (
     DecisionKind,
+    FindingChange,
     FindingStatus,
     JobStatus,
     NotificationKind,
     NotificationStatus,
     ObservationState,
+    Profile,
     RuleResult,
     Severity,
     TokenKind,
@@ -22,6 +24,9 @@ CLOSED_SETS = [
     ("finding_status", FindingStatus),
     ("decision_kind", DecisionKind),
     ("job_status", JobStatus),
+    ("job_profile", Profile),
+    ("schedule_profile", Profile),
+    ("finding_change", FindingChange),
     ("token_kind", TokenKind),
     ("notification_kind", NotificationKind),
     ("notification_status", NotificationStatus),

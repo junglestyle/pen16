@@ -56,7 +56,12 @@ class JobStatus(StrEnum):
     RUNNING = "running"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
-    CANCELLED = "cancelled"
+
+
+class Profile(StrEnum):
+    """The fixed scan profiles a job can ask for; the runner builds each one's nmap command itself."""
+
+    NIGHTLY = "nightly"
 
 
 class TokenKind(StrEnum):
@@ -236,6 +241,7 @@ schedules = Table(
     Column("every_hours", Integer, nullable=False),
     Column("next_run_at", DateTime(timezone=True), nullable=False),
     Column("enabled", Boolean, nullable=False),
+    _one_of("profile", Profile, "schedule_profile"),
 )
 
 jobs = Table(
@@ -259,6 +265,7 @@ jobs = Table(
     Column("error", Text),
     Column("evidence_digest", Text),
     _one_of("status", JobStatus, "job_status"),
+    _one_of("profile", Profile, "job_profile"),
 )
 
 tokens = Table(

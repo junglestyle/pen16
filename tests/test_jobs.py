@@ -8,7 +8,7 @@ from sqlalchemy import func, select, update
 
 from pen16 import jobs, listener, runner, scope, tokens
 from pen16.config import Config
-from pen16.db import findings
+from pen16.db import Profile, findings, schedules
 from pen16.db import jobs as jobs_table
 from pen16.scope import OutOfScopeError
 from tests.conftest import alerts, closed_xml, lab_xml, open_incidents
@@ -27,7 +27,7 @@ def runner_client(engine, scope, evidence):
 
 def queue(engine, scope, schedule=None):
     with engine.begin() as conn:
-        return jobs.request(conn, scope, "owner:test", "test", schedule=schedule)
+        return jobs.request(conn, scope, "owner:test", "test", Profile.NIGHTLY, schedule=schedule)
 
 
 def upload(client, job_id, raw):
@@ -129,6 +129,21 @@ def test_two_failed_nights_alert_once_and_a_good_one_recovers(committed, lab_sco
     incidents, sent = incidents_and_alerts(committed)
     assert incidents == []
     assert [kind for kind, _ in sent if kind == "health"] == ["health", "health"]
+
+
+def test_a_due_schedule_takes_a_waiting_requested_scan_as_its_run(committed, lab_scope):
+    requested = queue(committed, lab_scope)
+    with committed.begin() as conn:
+        conn.execute(update(schedules).values(next_run_at=func.now() - timedelta(days=3)))
+        jobs.run_due_schedules(conn, lab_scope)
+
+    with committed.connect() as conn:
+        rows = [tuple(row) for row in conn.execute(select(jobs_table.c.id, jobs_table.c.schedule))]
+        assert rows == [(requested, "nightly")]
+        # The missed windows don't each queue a scan: the next run is within one period from now.
+        assert conn.scalar(
+            select(schedules.c.next_run_at.between(func.now(), func.now() + timedelta(hours=24)))
+        )
 
 
 def test_runner_token_is_required(committed, lab_scope, tmp_path):

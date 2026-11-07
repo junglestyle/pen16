@@ -87,5 +87,5 @@ Where pen16 doesn't follow the org standards yet. These are debt to pay down, no
   (`conftest.py:19`), not a synthetic fixture.
 - Python testing: test files are named one per module (`test_backups.py`, `test_exposure.py`, `test_jobs.py`,
   `test_notify.py` and the rest), not for the behavior they cover.
-- SQL: closed sets with no `CHECK`: `findings.kind`, `stig_rules.severity`, `jobs.profile` and `schedules.profile`,
-  and `protocol` and `vantage` in `observations`, `findings` and `expected_services`.
+- SQL: closed sets with no `CHECK`: `findings.kind`, `stig_rules.severity`, and `protocol` and `vantage` in
+  `observations`, `findings` and `expected_services`.

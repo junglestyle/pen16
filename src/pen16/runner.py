@@ -17,6 +17,7 @@ from typing import Any
 import httpx
 
 from pen16 import config, profiles
+from pen16.db import Profile
 from pen16.evidence import MAX_EXPANDED
 from pen16.scope import OutOfScopeError, Scope
 
@@ -91,7 +92,7 @@ def run_job(client: httpx.Client, scope: Scope, job: dict[str, Any], services: P
 
 def _argv(scope: Scope, job: dict[str, Any], services: Path) -> list[str]:
     """The fixed nmap command for the job's profile, or OutOfScopeError if the job asks for anything else."""
-    if job["profile"] != "nightly":
+    if job["profile"] != Profile.NIGHTLY:
         raise OutOfScopeError(f"unknown profile {job['profile']!r}")
     scope.check(job["targets"], job["exclude"])
     return profiles.nightly_argv(job["targets"], job["exclude"], job["extra_tcp"], services)

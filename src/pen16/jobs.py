@@ -10,6 +10,7 @@ from pen16 import db, exposure, notify
 from pen16.db import (
     JobStatus,
     ObservationState,
+    Profile,
     expected_services,
     jobs,
     mac_sightings,
@@ -26,17 +27,27 @@ DEADLINE = timedelta(minutes=30)
 MAX_ATTEMPTS = 2
 UNCLAIMED = timedelta(hours=1)
 FAILED_WINDOWS = 2
+# Requests take this transaction-scoped advisory lock, so two at once can't both find nothing waiting and queue.
+REQUEST_LOCK = 0x70656E3136
 
 
 class StaleJobError(Exception):
     """The job isn't running on this runner any more, so its result can't change state."""
 
 
-def request(conn: Connection, scope: Scope, requester: str, reason: str, schedule: str | None = None) -> int:
-    """Queue a nightly-profile scan of the whole scope, or return the scan already waiting or running."""
-    waiting = conn.scalar(select(jobs.c.id).where(jobs.c.status.in_([JobStatus.QUEUED, JobStatus.RUNNING])))
+def request(
+    conn: Connection, scope: Scope, requester: str, reason: str, profile: Profile, schedule: str | None = None
+) -> int:
+    """Queue a scan of the whole scope, or return the scan already waiting or running. A schedule that comes due
+    while a requested scan waits takes that scan as its run."""
+    conn.execute(select(func.pg_advisory_xact_lock(REQUEST_LOCK)))
+    waiting = conn.execute(
+        select(jobs.c.id, jobs.c.schedule).where(jobs.c.status.in_([JobStatus.QUEUED, JobStatus.RUNNING]))
+    ).first()
     if waiting is not None:
-        return int(waiting)
+        if schedule is not None and waiting.schedule is None:
+            conn.execute(update(jobs).where(jobs.c.id == waiting.id).values(schedule=schedule))
+        return int(waiting.id)
     targets = [str(network.cidr) for network in scope.networks]
     exclude = [str(network) for network in scope.exclude]
     scope.check(targets, exclude)
@@ -54,7 +65,7 @@ def request(conn: Connection, scope: Scope, requester: str, reason: str, schedul
             schedule=schedule,
             requester=requester,
             reason=reason,
-            profile="nightly",
+            profile=profile,
             targets=targets,
             exclude=exclude,
             extra_tcp=sorted(conn.scalars(known)),
@@ -72,7 +83,14 @@ def run_due_schedules(conn: Connection, scope: Scope) -> None:
         select(schedules).where(schedules.c.enabled, schedules.c.next_run_at <= now).with_for_update()
     )
     for schedule in due.all():
-        request(conn, scope, f"schedule:{schedule.name}", "scheduled scan", schedule=schedule.name)
+        request(
+            conn,
+            scope,
+            f"schedule:{schedule.name}",
+            "scheduled scan",
+            Profile(schedule.profile),
+            schedule=schedule.name,
+        )
         next_run = schedule.next_run_at
         while next_run <= now:
             next_run += timedelta(hours=schedule.every_hours)
