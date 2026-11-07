@@ -7,18 +7,16 @@ import uvicorn
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-from pen16 import backups, db, exposure, nmap, runner, stig, tokens, worker
+from pen16 import backups, db, exposure, roles, runner, stig, tokens, worker
 from pen16.db import TokenKind
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="pen16")
     commands = parser.add_subparsers(dest="command", required=True)
-    ingest = commands.add_parser(
-        "ingest", help="record an internal nmap XML scan and report unexpected exposure"
+    commands.add_parser(
+        "migrate", help="bring the database schema up to date, and the listener's and intake's roles with it"
     )
-    ingest.add_argument("path", type=Path)
-    commands.add_parser("migrate", help="bring the database schema up to date")
     commands.add_parser("worker", help="run schedules, job deadlines, and notification delivery")
     commands.add_parser("runner", help="claim scan jobs from the listener and run them")
     for name, about, port in (
@@ -32,6 +30,9 @@ def main() -> None:
     token = commands.add_parser("token", help="create a token and print it once")
     token.add_argument("name", help="the runner, or for a compliance token the host's asset ID")
     token.add_argument("--kind", type=TokenKind, choices=list(TokenKind), default=TokenKind.RUNNER)
+    commands.add_parser("tokens", help="list every token: ID, kind, name, created, last used, revoked")
+    revoke = commands.add_parser("revoke", help="revoke a token, refusing it from the next request")
+    revoke.add_argument("token_id", help="the ID `pen16 tokens` lists, the part after pen16_ in the token")
     stig_import = commands.add_parser(
         "stig-import", help="import a DISA STIG's manual XCCDF, the rules a checklist lists"
     )
@@ -44,17 +45,12 @@ def main() -> None:
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
-    if args.command == "ingest":
-        scan = nmap.read(args.path)
-        with db.connect().begin() as conn:
-            opened = exposure.ingest(conn, scan, vantage="internal")
-        for finding in opened:
-            why = f": {finding.why}" if finding.why else ""
-            print(f"unexpected {finding.asset_id} {finding.port}/{finding.protocol} ({finding.vantage}){why}")
-    elif args.command == "migrate":
+    if args.command == "migrate":
         alembic = AlembicConfig()
         alembic.set_main_option("script_location", str(files("pen16") / "migrations"))
         command.upgrade(alembic, "head")
+        with db.connect().begin() as conn:
+            roles.ensure(conn)
     elif args.command == "worker":
         worker.run_forever()
     elif args.command == "runner":
@@ -70,6 +66,22 @@ def main() -> None:
             )
         with db.connect().begin() as conn:
             print(tokens.create(conn, args.kind, args.name))
+    elif args.command == "tokens":
+        with db.connect().connect() as conn:
+            listed = tokens.listed(conn)
+        for t in listed:
+            times = (t.created_at, t.last_used_at, t.revoked_at)
+            print(
+                "\t".join(
+                    [t.id, t.kind, t.name, *(f"{when:%Y-%m-%d %H:%M}" if when else "-" for when in times)]
+                )
+            )
+    elif args.command == "revoke":
+        try:
+            with db.connect().begin() as conn:
+                tokens.revoke(conn, args.token_id)
+        except LookupError as error:
+            raise SystemExit(str(error)) from None
     elif args.command == "stig-import":
         imported = stig.parse(args.path.read_bytes())
         with db.connect().begin() as conn:

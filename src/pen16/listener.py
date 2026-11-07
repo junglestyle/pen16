@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from sqlalchemy import Engine
 
@@ -53,29 +54,48 @@ def create(engine: Engine, settings: Config, evidence_dir: Path, neighbours_file
 
     @app.post("/runner/v1/jobs/{job_id}/result", status_code=204)
     async def result(job_id: int, request: Request, runner_id: Runner) -> None:
-        compressed = await request.body()
+        """Receive the gzipped XML here, on the event loop, and stop reading at the upload limit. Parsing,
+        storing and recording are blocking work, so they run in a worker thread."""
         try:
-            raw = evidence.expand(compressed)
-            scan = nmap.parse(raw)
-        except Exception as error:
-            # Hostile or broken output is the runner's failure, not ours: record it and retry the job.
-            log.warning("job %s: unusable upload: %s", job_id, type(error).__name__)
-            _fail(engine, job_id, runner_id, f"unusable scan output: {type(error).__name__}")
-            raise HTTPException(422, "unusable scan output") from error
-        evidence.store(evidence_dir, raw, compressed)
-        seen = neighbours.read(neighbours_file)
-        try:
-            with engine.begin() as conn:
-                opened = jobs.complete(conn, job_id, runner_id, scan, settings.scope, seen)
-        except jobs.StaleJobError as error:
-            raise HTTPException(409, str(error)) from error
-        log.info("job %s succeeded: %s hosts, %s new findings", job_id, len(scan.hosts), len(opened))
+            compressed = await evidence.receive(request.stream())
+        except evidence.TooLargeError as error:
+            await run_in_threadpool(_fail, engine, job_id, runner_id, "scan output over the upload limit")
+            raise HTTPException(413, "scan output over the upload limit") from error
+        await run_in_threadpool(
+            _record, engine, settings, evidence_dir, neighbours_file, job_id, runner_id, compressed
+        )
 
     @app.post("/runner/v1/jobs/{job_id}/failure", status_code=204)
     def failure(job_id: int, body: Failure, runner_id: Runner) -> None:
         _fail(engine, job_id, runner_id, body.error[:500])
 
     return app
+
+
+def _record(
+    engine: Engine,
+    settings: Config,
+    evidence_dir: Path,
+    neighbours_file: Path,
+    job_id: int,
+    runner_id: str,
+    compressed: bytes,
+) -> None:
+    try:
+        scan = nmap.parse(evidence.expand(compressed))
+    except Exception as error:
+        # Hostile or broken output is the runner's failure, not ours: record it and retry the job.
+        log.warning("job %s: unusable upload: %s", job_id, type(error).__name__)
+        _fail(engine, job_id, runner_id, f"unusable scan output: {type(error).__name__}")
+        raise HTTPException(422, "unusable scan output") from error
+    evidence.store(evidence_dir, scan.digest, compressed)
+    seen = neighbours.read(neighbours_file)
+    try:
+        with engine.begin() as conn:
+            opened = jobs.complete(conn, job_id, runner_id, scan, settings.scope, seen)
+    except jobs.StaleJobError as error:
+        raise HTTPException(409, str(error)) from error
+    log.info("job %s succeeded: %s hosts, %s new findings", job_id, len(scan.hosts), len(opened))
 
 
 def _fail(engine: Engine, job_id: int, runner_id: str, error: str) -> None:

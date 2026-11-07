@@ -1,5 +1,6 @@
-# pen16 on one host. Ansible renders /etc/pen16 (pen16.toml, pen16.env, runner.token, runner-scope.nft),
-# runs the pen16-egress timer, and starts this file. See docs/ARCHITECTURE.md#deployment-and-state-ownership.
+# pen16 on one host. Ansible renders /etc/pen16 (pen16.toml, pen16.env, listener.env, intake.env, runner.token,
+# runner-scope.nft), runs the pen16-egress timer, and starts this file. See
+# docs/ARCHITECTURE.md#deployment-and-state-ownership.
 name: pen16
 
 x-logging: &logging
@@ -35,7 +36,7 @@ services:
     env_file: /etc/pen16/pen16.env
     volumes:
       - db:/var/lib/postgresql/data
-    networks: [core]
+    networks: [core, owner]
     healthcheck:
       test: pg_isready -U pen16
       interval: 5s
@@ -56,7 +57,9 @@ services:
     command: [worker]
     networks: [core]
 
-  # tailscale serve on the host proxies the tailnet to this localhost port and adds identity headers.
+  # tailscale serve on the host proxies the tailnet to this localhost port and adds identity headers. It sits on
+  # its own network with the database, so the intake and listener, which other machines reach, can't send it
+  # identity headers of their own.
   web:
     <<: *core
     command: [web, --host, 0.0.0.0, --port, "8080"]
@@ -65,12 +68,14 @@ services:
     volumes:
       - /etc/pen16/pen16.toml:/etc/pen16/pen16.toml:ro
       - /var/lib/pen16/evidence:/var/lib/pen16/evidence:ro
-    networks: [core]
+    networks: [owner]
 
   # Hosts push compliance results here. tailscale serve puts it on its own tailnet port; it takes compliance
-  # tokens only and serves nothing else.
+  # tokens only and serves nothing else. It logs in to the database as its own role (pen16.roles), so
+  # intake.env holds that role's URL and nothing else.
   intake:
     <<: *core
+    env_file: /etc/pen16/intake.env
     command: [intake, --host, 0.0.0.0, --port, "8444"]
     ports:
       - 127.0.0.1:8444:8444
@@ -83,8 +88,10 @@ services:
       - /tmp:size=64m,mode=1777
     networks: [core]
 
+  # The runner's only way in. Like the intake, it logs in as its own role, from listener.env.
   listener:
     <<: *core
+    env_file: /etc/pen16/listener.env
     command: [listener, --host, 0.0.0.0, --port, "8443"]
     volumes:
       - /etc/pen16/pen16.toml:/etc/pen16/pen16.toml:ro
@@ -117,6 +124,8 @@ services:
 
 networks:
   core: {}
+  # The dashboard and the database only.
+  owner: {}
   runner:
     driver_opts:
       com.docker.network.bridge.name: pen16-runner

@@ -8,11 +8,19 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection, Engine, func, select, update
 
-from pen16 import arf, compliance, intake, stig, tokens
-from pen16.db import compliance_results, compliance_scans, notifications
-from pen16.scope import Scope
-from tests.conftest import DISA_STIG, STIG_RESULT
-from tests.test_web import OWNER, dashboard
+from pen16 import arf, compliance, intake, status, stig, tokens
+from pen16.db import TokenKind, compliance_results, compliance_scans, compliance_waivers
+from tests.conftest import (
+    DISA_STIG,
+    OWNER,
+    OWNER_LOGIN,
+    SAME_ORIGIN,
+    STIG_RESULT,
+    alerts,
+    as_role,
+    dashboard,
+    open_incidents,
+)
 
 RULE = "xccdf_org.ssgproject.content_rule_"
 GPGCHECK = f"{RULE}ensure_gpgcheck_globally_activated"
@@ -38,10 +46,6 @@ def recorded(conn: Connection, raw: bytes, host: str = "lab-rhel9") -> complianc
     return compliance.record(conn, host, result, result.digest, None)
 
 
-def titles(conn: Connection) -> list[str]:
-    return list(conn.scalars(select(notifications.c.title).order_by(notifications.c.id)))
-
-
 def test_parse_reads_profile_results_and_stig_references() -> None:
     result = arf.parse(STIG_RESULT.read_bytes())
 
@@ -60,58 +64,64 @@ def test_parse_reads_profile_results_and_stig_references() -> None:
     assert "SC-13" in crypto.nist
 
 
-@pytest.mark.parametrize(
-    "raw",
-    [
-        b"<nmaprun/>",
-        b'<!DOCTYPE x [<!ENTITY e "boom">]><x>&e;</x>',
-        b'<asset-report-collection xmlns="http://scap.nist.gov/schema/asset-reporting-format/1.1"/>',
-    ],
-)
-def test_parse_refuses_what_isnt_a_result(raw: bytes) -> None:
-    with pytest.raises(Exception):  # noqa: B017, PT011 - any refusal will do; the intake turns it into a 422
-        arf.parse(raw)
-
-
 def test_first_result_alerts_once_with_the_pass_rate(conn: Connection) -> None:
     recorded(conn, STIG_RESULT.read_bytes())
 
-    assert titles(conn) == ["First compliance result from lab-rhel9"]
-    body = conn.scalar(select(notifications.c.body))
-    assert body == "DISA STIG for Red Hat Enterprise Linux 9: 53% passing, 8 failing."
+    [(kind, body)] = alerts(conn)
+    assert kind == "finding"
+    assert "53%" in body
 
 
 def test_regression_alerts_with_the_rule_and_a_fix_alone_stays_quiet(conn: Connection) -> None:
     recorded(conn, STIG_RESULT.read_bytes())
     recorded(conn, later(days=7, accounts_umask_etc_bashrc="pass"))
-    assert len(titles(conn)) == 1
+    assert len(alerts(conn)) == 1
 
     recorded(
         conn, later(days=14, accounts_umask_etc_bashrc="pass", ensure_gpgcheck_globally_activated="fail")
     )
 
-    assert titles(conn)[-1] == "1 compliance regression on lab-rhel9"
-    body = conn.scalar(select(notifications.c.body).order_by(notifications.c.id.desc()).limit(1))
-    assert body is not None
-    assert body.endswith("[high] Ensure gpgcheck Enabled In Main dnf Configuration")
+    kind, body = alerts(conn)[-1]
+    assert kind == "finding"
+    assert "Ensure gpgcheck Enabled In Main dnf Configuration" in body
+    assert "umask" not in body.lower()
 
 
 def test_a_waived_rule_regresses_quietly_and_stays_failing(conn: Connection) -> None:
     recorded(conn, STIG_RESULT.read_bytes())
-    compliance.waive(conn, "lab-rhel9", GPGCHECK, "local repo mirror signs nothing")
+    compliance.waive(conn, "lab-rhel9", GPGCHECK, "local repo mirror signs nothing", OWNER_LOGIN)
 
     scan = recorded(conn, later(ensure_gpgcheck_globally_activated="fail"))
 
-    assert len(titles(conn)) == 1
+    assert len(alerts(conn)) == 1
     waived = [row for row in compliance.failing(conn, scan.scan_id) if row.rule_id == GPGCHECK]
     assert waived[0].waiver == "local repo mirror signs nothing"
     with pytest.raises(ValueError, match="needs a reason"):
-        compliance.waive(conn, "lab-rhel9", UMASK, " ")
+        compliance.waive(conn, "lab-rhel9", UMASK, " ", OWNER_LOGIN)
+
+
+def test_a_removed_waiver_stays_in_history_and_its_rule_alerts_again(conn: Connection) -> None:
+    recorded(conn, STIG_RESULT.read_bytes())
+    compliance.waive(conn, "lab-rhel9", GPGCHECK, "mirror signs nothing", OWNER_LOGIN)
+    compliance.waive(conn, "lab-rhel9", GPGCHECK, "mirror signs nothing yet", OWNER_LOGIN)
+    compliance.unwaive(conn, "lab-rhel9", GPGCHECK, "mirror signs now", OWNER_LOGIN)
+
+    recorded(conn, later(ensure_gpgcheck_globally_activated="fail"))
+
+    assert alerts(conn)[-1][0] == "finding"
+    assert len(alerts(conn)) == 2
+    history = conn.execute(
+        select(compliance_waivers.c.reason, compliance_waivers.c.end_reason).order_by(compliance_waivers.c.id)
+    )
+    assert [tuple(row) for row in history] == [
+        ("mirror signs nothing", "replaced by a new waiver"),
+        ("mirror signs nothing yet", "mirror signs now"),
+    ]
 
 
 def test_failing_lists_unwaived_worst_first(conn: Connection) -> None:
     scan = recorded(conn, STIG_RESULT.read_bytes())
-    compliance.waive(conn, "lab-rhel9", f"{RULE}configure_crypto_policy", "FIPS breaks the lab")
+    compliance.waive(conn, "lab-rhel9", f"{RULE}configure_crypto_policy", "FIPS breaks the lab", OWNER_LOGIN)
 
     rows = compliance.failing(conn, scan.scan_id)
 
@@ -132,16 +142,16 @@ def test_duplicate_is_a_no_op_and_an_older_result_is_refused(conn: Connection) -
 
 def test_a_silent_host_alerts_once_then_recovers(conn: Connection) -> None:
     recorded(conn, STIG_RESULT.read_bytes())
-    conn.execute(update(compliance_scans).values(received_at=datetime.now(UTC) - timedelta(days=11)))
+    conn.execute(update(compliance_scans).values(received_at=func.now() - timedelta(days=11)))
 
     compliance.check(conn)
     compliance.check(conn)
+    assert open_incidents(conn) == ["compliance-stale:lab-rhel9"]
+
     recorded(conn, later())
 
-    assert titles(conn)[1:] == [
-        "Compliance results stale from lab-rhel9",
-        "Compliance results resumed from lab-rhel9",
-    ]
+    assert open_incidents(conn) == []
+    assert [kind for kind, _ in alerts(conn)] == ["finding", "health", "health"]
 
 
 def checklist(conn: Connection, scan_id: int) -> dict[str, Any]:
@@ -153,7 +163,7 @@ def checklist(conn: Connection, scan_id: int) -> dict[str, Any]:
 
 def test_checklist_lists_every_stig_rule_with_its_scap_status(conn: Connection) -> None:
     scan = recorded(conn, STIG_RESULT.read_bytes())
-    compliance.waive(conn, "lab-rhel9", f"{RULE}rootfiles_configured", "image default")
+    compliance.waive(conn, "lab-rhel9", f"{RULE}rootfiles_configured", "image default", OWNER_LOGIN)
 
     rules = checklist(conn, scan.scan_id)
 
@@ -181,8 +191,10 @@ def test_no_checklist_without_a_matching_stig(conn: Connection) -> None:
 
 def intake_client(engine: Engine, evidence: Path) -> tuple[TestClient, dict[str, str]]:
     with engine.begin() as conn:
-        token = tokens.create(conn, "compliance", "lab-rhel9")
-    return TestClient(intake.create(engine, evidence)), {"Authorization": f"Bearer {token}"}
+        token = tokens.create(conn, TokenKind.COMPLIANCE, "lab-rhel9")
+    return TestClient(intake.create(as_role(engine, "pen16_intake"), evidence)), {
+        "Authorization": f"Bearer {token}"
+    }
 
 
 def upload(client: TestClient, headers: dict[str, str], raw: bytes, playbook: bytes | None = None) -> Any:
@@ -195,7 +207,7 @@ def upload(client: TestClient, headers: dict[str, str], raw: bytes, playbook: by
 def test_intake_takes_a_result_for_the_tokens_host_only(committed: Engine, tmp_path: Path) -> None:
     client, headers = intake_client(committed, tmp_path)
     with committed.begin() as conn:
-        runner = tokens.create(conn, "runner", "lab-rhel9")
+        runner = tokens.create(conn, TokenKind.RUNNER, "lab-rhel9")
 
     assert upload(client, {}, STIG_RESULT.read_bytes()).status_code == 401
     assert upload(client, {"Authorization": f"Bearer {runner}"}, STIG_RESULT.read_bytes()).status_code == 401
@@ -215,42 +227,75 @@ def test_intake_takes_a_result_for_the_tokens_host_only(committed: Engine, tmp_p
         assert conn.scalar(select(func.count()).select_from(compliance_results)) == 20
 
 
-def test_intake_refuses_garbage(committed: Engine, tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "body",
+    [
+        b"not gzip",
+        gzip.compress(b"<nmaprun/>"),
+        gzip.compress(b'<!DOCTYPE x [<!ENTITY e "boom">]><x>&e;</x>'),
+        gzip.compress(
+            b'<asset-report-collection xmlns="http://scap.nist.gov/schema/asset-reporting-format/1.1"/>'
+        ),
+        # Its times without their offset.
+        gzip.compress(STIG_RESULT.read_bytes().replace(b"+00:00", b"")),
+    ],
+)
+def test_intake_refuses_what_isnt_a_result(committed: Engine, tmp_path: Path, body: bytes) -> None:
     client, headers = intake_client(committed, tmp_path)
 
-    response = client.post(
-        "/compliance/v1/results", files={"result": ("arf.xml.gz", b"not gzip")}, headers=headers
-    )
+    response = client.post("/compliance/v1/results", files={"result": ("arf.xml.gz", body)}, headers=headers)
 
     assert response.status_code == 422
     assert list(tmp_path.iterdir()) == []
 
 
-def test_dashboard_shows_waives_and_downloads(committed: Engine, lab_scope: Scope, tmp_path: Path) -> None:
+PLAYBOOK = b"- hosts: all\n  tasks: []\n"
+
+
+@pytest.fixture
+def uploaded(committed: Engine, tmp_path: Path) -> int:
+    """The fixture's result, sent through the intake with a playbook, and its DISA STIG imported."""
     client, headers = intake_client(committed, tmp_path)
-    scan_id = upload(client, headers, STIG_RESULT.read_bytes(), b"- hosts: all\n  tasks: []\n").json()[
-        "result"
-    ]
+    scan_id: int = upload(client, headers, STIG_RESULT.read_bytes(), PLAYBOOK).json()["result"]
     with committed.begin() as conn:
         stig.load(conn, stig.parse(DISA_STIG.read_bytes()))
-    owner = dashboard(committed, lab_scope, tmp_path)
-    same_origin = {**OWNER, "Origin": "https://pen16.example.ts.net"}
+    return scan_id
 
-    page = owner.get("/", headers=OWNER).text
+
+def test_the_dashboard_shows_a_hosts_result_and_takes_a_waiver(committed: Engine, uploaded: int) -> None:
+    owner = dashboard(committed)
+
     waived = owner.post(
         "/compliance/waive",
         data={"asset_id": "lab-rhel9", "rule_id": UMASK, "reason": "set by the container image"},
-        headers=same_origin,
+        headers=SAME_ORIGIN,
         follow_redirects=False,
     )
-    cklb = owner.get(f"/compliance/{scan_id}/checklist.cklb", headers=OWNER)
-    playbook = owner.get(f"/compliance/{scan_id}/playbook.yml", headers=OWNER)
 
-    assert "53%" in page
-    assert "Configure System Cryptography Policy" in page
     assert waived.status_code == 303
-    assert "set by the container image" in owner.get("/", headers=OWNER).text
+    with committed.connect() as conn:
+        [host] = status.dashboard(conn).compliance
+    assert (host.result.scan_id, host.rate, host.checklist, host.result.has_playbook) == (
+        uploaded,
+        "53%",
+        True,
+        True,
+    )
+    assert [rule.waiver for rule in host.failing if rule.rule_id == UMASK] == ["set by the container image"]
+    assert "Configure System Cryptography Policy" in owner.get("/", headers=OWNER).text
+
+
+def test_the_owner_downloads_the_checklist_and_playbook(
+    committed: Engine, uploaded: int, tmp_path: Path
+) -> None:
+    owner = dashboard(committed, tmp_path)
+
+    cklb = owner.get(f"/compliance/{uploaded}/checklist.cklb", headers=OWNER)
+    playbook = owner.get(f"/compliance/{uploaded}/playbook.yml", headers=OWNER)
+
     assert cklb.json()["stigs"][0]["stig_id"] == "RHEL_9_STIG"
     assert "attachment" in cklb.headers["content-disposition"]
-    assert playbook.text == "- hosts: all\n  tasks: []\n"
-    assert owner.get(f"/compliance/{scan_id}/checklist.cklb").status_code == 403
+    assert playbook.content == PLAYBOOK
+    assert owner.get(f"/compliance/{uploaded}/checklist.cklb").status_code == 403
+    assert owner.get(f"/compliance/{uploaded}/playbook.yml").status_code == 403
+    assert owner.get(f"/compliance/{uploaded + 1}/playbook.yml", headers=OWNER).status_code == 404

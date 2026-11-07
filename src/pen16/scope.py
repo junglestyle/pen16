@@ -22,8 +22,8 @@ class Scope:
     def check(self, targets: list[str], exclude: list[str]) -> None:
         """Raise OutOfScopeError unless every target sits inside a scope network and every exclusion is kept.
 
-        The worker runs this before dispatch and the runner again before nmap starts. The host egress
-        policy is the boundary that doesn't depend on either.
+        Requesting a job runs this, and the runner again before nmap starts. The host egress policy is the
+        boundary that doesn't depend on either.
         """
         if not targets:
             raise OutOfScopeError("no targets")

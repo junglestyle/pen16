@@ -33,26 +33,26 @@ def create(engine: Engine, evidence_dir: Path) -> FastAPI:
     Host = Annotated[str, Depends(host)]  # noqa: N806  # a type alias, named like one
 
     @app.post("/compliance/v1/results", status_code=201)
-    async def upload(
+    def upload(
         asset_id: Host, response: Response, result: UploadFile, playbook: UploadFile | None = None
     ) -> dict[str, Any]:
-        """Take one gzipped ARF and, optionally, the gzipped playbook `oscap xccdf generate fix` made."""
+        """Take one gzipped ARF and, optionally, the gzipped playbook `oscap xccdf generate fix` made. The upload
+        is already spooled to a size-capped /tmp; reading stops at the upload limit."""
         try:
-            compressed = await result.read()
-            raw = evidence.expand(compressed)
-            parsed = arf.parse(raw)
+            compressed = _bounded(result)
+            parsed = arf.parse(evidence.expand(compressed))
             fix = None
             if playbook is not None:
-                fix_compressed = await playbook.read()
-                fix = (evidence.expand(fix_compressed), fix_compressed)
+                fix_compressed = _bounded(playbook)
+                fix = (hashlib.sha256(evidence.expand(fix_compressed)).hexdigest(), fix_compressed)
         except Exception as error:
             log.warning("%s: unusable compliance upload: %s", asset_id, type(error).__name__)
             raise HTTPException(422, "unusable compliance result") from error
-        evidence.store(evidence_dir, raw, compressed)
+        evidence.store(evidence_dir, parsed.digest, compressed)
         playbook_digest = None
         if fix is not None:
-            evidence.store(evidence_dir, *fix, suffix=".yml.gz")
-            playbook_digest = hashlib.sha256(fix[0]).hexdigest()
+            playbook_digest, fix_compressed = fix
+            evidence.store(evidence_dir, playbook_digest, fix_compressed, suffix=".yml.gz")
         try:
             with engine.begin() as conn:
                 recorded = compliance.record(conn, asset_id, parsed, parsed.digest, playbook_digest)
@@ -70,6 +70,13 @@ def create(engine: Engine, evidence_dir: Path) -> FastAPI:
         return {"result": recorded.scan_id, "passed": parsed.passed, "failed": parsed.failed}
 
     return app
+
+
+def _bounded(upload: UploadFile) -> bytes:
+    data = upload.file.read(evidence.MAX_COMPRESSED + 1)
+    if len(data) > evidence.MAX_COMPRESSED:
+        raise evidence.TooLargeError(f"upload is larger than {evidence.MAX_COMPRESSED} bytes")
+    return data
 
 
 def app() -> FastAPI:

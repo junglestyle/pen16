@@ -3,7 +3,6 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="refresh" content="300">
 <title>pen16</title>
 <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
@@ -40,50 +39,60 @@ form.inline { display: inline; }
 <body>
 <h1>pen16</h1>
 
+{% set h = d.health %}
 <h2>Monitoring health</h2>
 <dl>
   <dt>Last good scan</dt>
-  <dd class="{{ 'bad' if stale else 'ok' }}">
-    {% if last_success %}{{ last_success.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}never{% endif %}
-    {% if stale %}(stale){% endif %}
+  <dd class="{{ 'bad' if h.scans_stale else 'ok' }}">
+    {% if h.last_scan %}{{ h.last_scan.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}never{% endif %}
+    {% if h.scans_stale %}(stale){% endif %}
   </dd>
   <dt>Last backup</dt>
-  <dd class="{{ 'bad' if backup_stale else 'ok' }}">
-    {% if last_backup %}{{ last_backup.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}never{% endif %}
-    {% if last_backup and backup_stale %}(stale){% endif %}
+  <dd class="{{ 'bad' if h.backup_stale else 'ok' }}">
+    {% if h.last_backup %}{{ h.last_backup.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}never{% endif %}
+    {% if h.last_backup and h.backup_stale %}(stale){% endif %}
   </dd>
   <dt>Latest job</dt>
   <dd>
-    {% if latest %}#{{ latest.id }} {{ latest.status }}{% if latest.error %} <span class="{{ 'bad' if latest.status == JobStatus.FAILED else 'muted' }}">({{ latest.error }})</span>{% endif %}
+    {% if h.latest_job %}{% set j = h.latest_job %}#{{ j.id }} {{ j.status }}{% if j.error %} <span class="{{ 'bad' if j.status == JobStatus.FAILED else 'muted' }}">({{ j.error }})</span>{% endif %}
     {% else %}none yet{% endif %}
   </dd>
   <dt>Next scheduled</dt>
-  <dd>{% if next_run %}{{ next_run.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}no schedule enabled{% endif %}</dd>
+  <dd>{% if h.next_run %}{{ h.next_run.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}no schedule enabled{% endif %}</dd>
   <dt>Runner last seen</dt>
-  <dd>{% if runner_seen %}{{ runner_seen.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}<span class="bad">never</span>{% endif %}</dd>
+  <dd>{% if h.runner_seen %}{{ h.runner_seen.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}<span class="bad">never</span>{% endif %}</dd>
+  <dt>Worker last ran</dt>
+  <dd class="{{ 'bad' if h.worker_stale else 'ok' }}">{% if h.worker_seen %}{{ h.worker_seen.strftime('%Y-%m-%d %H:%M:%S UTC') }}{% else %}never{% endif %}{% if h.worker_stale %} (stopped?){% endif %}</dd>
   <dt>Compliance</dt>
   <dd>
-    {% set stale_hosts = compliance|selectattr('stale')|list %}
-    {% if compliance %}{{ compliance|length }} result{{ 's' if compliance|length != 1 }}{% if stale_hosts %}, <span class="bad">{{ stale_hosts|length }} stale</span>{% endif %}
+    {% set stale_hosts = d.compliance|selectattr('stale')|list %}
+    {% if d.compliance %}{{ d.compliance|length }} result{{ 's' if d.compliance|length != 1 }}{% if stale_hosts %}, <span class="bad">{{ stale_hosts|length }} stale</span>{% endif %}
     {% else %}<span class="muted">no host has reported</span>{% endif %}
   </dd>
   <dt>Alerts</dt>
-  <dd>{{ pending }} queued{% if failed %}, <span class="bad">{{ failed }} failed to send</span>{% endif %}</dd>
+  <dd>{{ h.alerts_pending }} queued{% if h.alerts_failed %}, <span class="bad">{{ h.alerts_failed }} failed to send</span>
+    <form class="inline" method="post" action="/alerts/replay"><button>Resend</button></form>{% endif %}</dd>
+  <dt>Problems</dt>
+  <dd>
+    {% for i in h.incidents %}<span class="bad">{{ i.title }}</span> <span class="muted">since {{ i.opened_at.strftime('%Y-%m-%d %H:%M UTC') }}: {{ i.detail }}</span><br>
+    {% else %}<span class="ok">none</span>{% endfor %}
+  </dd>
 </dl>
 <form method="post" action="/scan"><p><button>Scan now</button></p></form>
 
 {% macro mac(m) %}{% if m %}<br><span class="muted">{{ m }}{% if vendor(m) %} · {{ vendor(m) }}{% endif %}</span>{% endif %}{% endmacro %}
-<h2>Needs attention ({{ findings|length }})</h2>
-{% if findings %}
+{% macro service(s) %}{{ s.service or '' }} <span class="muted">{{ s.product or '' }} {{ s.version or '' }}</span>{% endmacro %}
+<h2>Needs attention ({{ d.needs_attention|length }})</h2>
+{% if d.needs_attention %}
 <form method="post" action="/findings/expect">
 <div class="scroll"><table>
   <tr><th></th><th>Asset</th><th>Port</th><th>Service</th><th>Since</th></tr>
-  {% for f in findings %}
+  {% for f in d.needs_attention %}
   <tr>
     <td><input type="checkbox" name="finding" value="{{ f.id }}" id="f{{ f.id }}" aria-label="select {{ f.asset_id }} {{ f.port }}/{{ f.protocol }}"></td>
-    <td><label for="f{{ f.id }}">{{ f.asset_id }}</label><br><span class="muted">{{ f.address }}</span>{{ mac(f.mac) }}</td>
+    <td><label for="f{{ f.id }}">{{ f.asset_id }}</label><br><span class="muted">{{ f.seen.address }}</span>{{ mac(f.seen.mac) }}</td>
     <td>{{ f.port }}/{{ f.protocol }}</td>
-    <td>{{ f.service or '' }} <span class="muted">{{ f.product or '' }} {{ f.version or '' }}</span>
+    <td>{{ service(f.seen) }}
       {% if f.withdrawal %}<br><span class="bad">Decision withdrawn: {{ f.withdrawal }}</span>{% endif %}</td>
     <td>{{ f.opened_at.strftime('%Y-%m-%d') }}</td>
   </tr>
@@ -107,20 +116,20 @@ form.inline { display: inline; }
 <p class="muted">Nothing unexpected is open.</p>
 {% endif %}
 
-<h2>Accepted risks and false positives ({{ decided|length }})</h2>
-{% if decided %}
+<h2>Accepted risks and false positives ({{ d.decided|length }})</h2>
+{% if d.decided %}
 <div class="scroll"><table>
   <tr><th>Asset</th><th>Port</th><th>Service</th><th>Decision</th><th></th></tr>
-  {% for d in decided %}
+  {% for f in d.decided %}
   <tr>
-    <td>{{ d.asset_id }}<br><span class="muted">{{ d.address }}</span>{{ mac(d.mac) }}</td>
-    <td>{{ d.port }}/{{ d.protocol }}{% if d.status == FindingStatus.RESOLVED %} <span class="muted">(resolved)</span>{% endif %}</td>
-    <td>{{ d.service or '' }} <span class="muted">{{ d.product or '' }} {{ d.version or '' }}</span></td>
-    <td>{{ 'Accepted risk' if d.decision_kind == DecisionKind.ACCEPTED_RISK else 'False positive' }}: {{ d.reason }}
-      <br><span class="muted">{{ d.decided_at.strftime('%Y-%m-%d') }}</span></td>
+    <td>{{ f.asset_id }}<br><span class="muted">{{ f.seen.address }}</span>{{ mac(f.seen.mac) }}</td>
+    <td>{{ f.port }}/{{ f.protocol }}{% if f.resolved %} <span class="muted">(resolved)</span>{% endif %}</td>
+    <td>{{ service(f.seen) }}</td>
+    <td>{{ f.kind.label|capitalize }}: {{ f.reason }}
+      <br><span class="muted">{{ f.decided_at.strftime('%Y-%m-%d') }}</span></td>
     <td>
       <form class="inline" method="post" action="/decisions/withdraw">
-        <input type="hidden" name="decision" value="{{ d.decision_id }}">
+        <input type="hidden" name="decision" value="{{ f.decision_id }}">
         <button>Withdraw</button>
       </form>
     </td>
@@ -131,20 +140,20 @@ form.inline { display: inline; }
 <p class="muted">None.</p>
 {% endif %}
 
-{% if resolved %}
+{% if d.resolved %}
 <details>
-<summary>Recently resolved ({{ resolved|length }})</summary>
+<summary>Recently resolved ({{ d.resolved|length }})</summary>
 <div class="scroll"><table>
   <tr><th>Asset</th><th>Port</th><th>Service</th><th>Resolved</th><th></th></tr>
-  {% for r in resolved %}
+  {% for f in d.resolved %}
   <tr>
-    <td>{{ r.asset_id }}</td>
-    <td>{{ r.port }}/{{ r.protocol }}</td>
-    <td>{{ r.service or '' }} <span class="muted">{{ r.product or '' }} {{ r.version or '' }}</span></td>
-    <td>{{ r.resolved_at.strftime('%Y-%m-%d') }}<br><span class="muted">{{ r.resolution }}</span></td>
+    <td>{{ f.asset_id }}</td>
+    <td>{{ f.port }}/{{ f.protocol }}</td>
+    <td>{{ service(f.seen) }}</td>
+    <td>{{ f.resolved_at.strftime('%Y-%m-%d') }}<br><span class="muted">{{ f.resolution }}</span></td>
     <td>
       <form class="inline" method="post" action="/findings/reopen">
-        <input type="hidden" name="finding" value="{{ r.id }}">
+        <input type="hidden" name="finding" value="{{ f.id }}">
         <button>Reopen</button>
       </form>
     </td>
@@ -155,16 +164,16 @@ form.inline { display: inline; }
 {% endif %}
 
 <h2>Exposure</h2>
-{% if exposed %}
+{% if d.exposed %}
 <div class="scroll"><table>
   <tr><th>Asset</th><th>Port</th><th>Service</th><th>Seen</th><th>Expected</th></tr>
-  {% for o in exposed %}
+  {% for o in d.exposed %}
   <tr>
     <td>{{ o.asset_id }}<br><span class="muted">{{ o.address }}</span></td>
     <td>{{ o.port }}/{{ o.protocol }}</td>
-    <td>{{ o.service or '' }} <span class="muted">{{ o.product or '' }} {{ o.version or '' }}</span></td>
+    <td>{{ service(o) }}</td>
     <td>{{ o.observed_at.strftime('%Y-%m-%d %H:%M') }}</td>
-    <td>{% if o.reason %}<span class="ok">yes</span> <span class="muted">{{ o.reason }}</span>{% else %}<span class="bad">no</span>{% endif %}</td>
+    <td>{% if o.expected %}<span class="ok">yes</span> <span class="muted">{{ o.expected }}</span>{% else %}<span class="bad">no</span>{% endif %}</td>
   </tr>
   {% endfor %}
 </table></div>
@@ -173,20 +182,21 @@ form.inline { display: inline; }
 {% endif %}
 
 <h2 id="compliance">Compliance</h2>
-{% if compliance %}
-{% for c in compliance %}
-<h3>{{ c.scan.asset_id }} <span class="muted">· {{ c.scan.profile_title }}</span></h3>
+{% if d.compliance %}
+{% for c in d.compliance %}
+{% set s = c.result %}
+<h3>{{ s.asset_id }} <span class="muted">· {{ s.profile_title }}</span></h3>
 <dl>
   <dt>Pass rate</dt>
-  <dd>{{ c.rate }} <span class="muted">({{ c.scan.passed }} passed, {{ c.scan.failed }} failing)</span></dd>
+  <dd>{{ c.rate }} <span class="muted">({{ s.passed }} passed, {{ s.failed }} failing)</span></dd>
   <dt>Evaluated</dt>
-  <dd class="{{ 'bad' if c.stale else '' }}">{{ c.scan.finished_at.strftime('%Y-%m-%d %H:%M UTC') }}{% if c.stale %} (stale){% endif %}</dd>
+  <dd class="{{ 'bad' if c.stale else '' }}">{{ s.finished_at.strftime('%Y-%m-%d %H:%M UTC') }}{% if c.stale %} (stale){% endif %}</dd>
   <dt>Content</dt>
-  <dd class="muted">{{ c.scan.benchmark_id }} {{ c.scan.benchmark_version }} · {{ c.scan.tool_version }}</dd>
+  <dd class="muted">{{ s.benchmark_id }} {{ s.benchmark_version }} · {{ s.tool_version }}</dd>
   <dt>Downloads</dt>
   <dd>
-    {% if c.checklist %}<a href="/compliance/{{ c.scan.id }}/checklist.cklb">STIG checklist</a>{% else %}<span class="muted">no matching STIG imported</span>{% endif %}
-    · {% if c.scan.playbook_digest %}<a href="/compliance/{{ c.scan.id }}/playbook.yml">remediation playbook</a>{% else %}<span class="muted">no playbook</span>{% endif %}
+    {% if c.checklist %}<a href="/compliance/{{ s.scan_id }}/checklist.cklb">STIG checklist</a>{% else %}<span class="muted">no matching STIG imported</span>{% endif %}
+    · {% if s.has_playbook %}<a href="/compliance/{{ s.scan_id }}/playbook.yml">remediation playbook</a>{% else %}<span class="muted">no playbook</span>{% endif %}
   </dd>
 </dl>
 {% if c.failing %}
@@ -201,13 +211,14 @@ form.inline { display: inline; }
       {% if r.waiver %}
       {{ r.waiver }}
       <form class="inline" method="post" action="/compliance/unwaive">
-        <input type="hidden" name="asset_id" value="{{ c.scan.asset_id }}">
+        <input type="hidden" name="asset_id" value="{{ s.asset_id }}">
         <input type="hidden" name="rule_id" value="{{ r.rule_id }}">
+        <input type="text" name="reason" required aria-label="reason to remove the waiver of {{ r.title }}" placeholder="why it no longer applies">
         <button>Remove</button>
       </form>
       {% else %}
       <form class="inline" method="post" action="/compliance/waive">
-        <input type="hidden" name="asset_id" value="{{ c.scan.asset_id }}">
+        <input type="hidden" name="asset_id" value="{{ s.asset_id }}">
         <input type="hidden" name="rule_id" value="{{ r.rule_id }}">
         <input type="text" name="reason" required aria-label="reason to waive {{ r.title }}" placeholder="why it fails on purpose">
         <button>Waive</button>
@@ -226,10 +237,10 @@ form.inline { display: inline; }
 {% endif %}
 
 <h2>Expected services</h2>
-{% if expected %}
+{% if d.expected %}
 <div class="scroll"><table>
   <tr><th>Asset</th><th>Port</th><th>Reason</th><th></th></tr>
-  {% for e in expected %}
+  {% for e in d.expected %}
   <tr>
     <td>{{ e.asset_id }}</td>
     <td>{{ e.port }}/{{ e.protocol }}</td>
@@ -240,6 +251,7 @@ form.inline { display: inline; }
         <input type="hidden" name="protocol" value="{{ e.protocol }}">
         <input type="hidden" name="port" value="{{ e.port }}">
         <input type="hidden" name="vantage" value="{{ e.vantage }}">
+        <input type="text" name="reason" required aria-label="reason to stop expecting {{ e.asset_id }} {{ e.port }}/{{ e.protocol }}" placeholder="why">
         <button>Stop expecting</button>
       </form>
     </td>
@@ -250,11 +262,11 @@ form.inline { display: inline; }
 <p class="muted">None declared. Mark findings expected above.</p>
 {% endif %}
 
-<h2>Unnamed devices ({{ provisional|length }})</h2>
-{% if provisional %}
+<h2>Unnamed devices ({{ d.unnamed|length }})</h2>
+{% if d.unnamed %}
 <div class="scroll"><table>
   <tr><th>Address</th><th>Name it</th></tr>
-  {% for a in provisional %}
+  {% for a in d.unnamed %}
   <tr>
     <td>{{ a.address }}{{ mac(a.mac) }}</td>
     <td>
@@ -271,6 +283,15 @@ form.inline { display: inline; }
 <p class="muted">Every device has a name.</p>
 {% endif %}
 
-<p class="muted">Signed in as {{ owner }} · {{ now.strftime('%Y-%m-%d %H:%M UTC') }}</p>
+<p class="muted">Signed in as {{ owner }} · {{ h.now.strftime('%Y-%m-%d %H:%M UTC') }}</p>
+<script>
+// Reload every five minutes for fresh status, but not over a reason being typed or findings being ticked.
+setInterval(() => {
+  const busy = [...document.querySelectorAll("input[type=text], input[type=checkbox]")].some(
+    (input) => (input.type === "checkbox" ? input.checked : input.value),
+  );
+  if (!busy && document.activeElement?.tagName !== "INPUT") location.reload();
+}, 300000);
+</script>
 </body>
 </html>

@@ -35,11 +35,13 @@ The dashboard and versioned API share application services. The dashboard is rea
 
 An assistant client receives read and scan. Each request selects one registered asset, an approved profile, and a reason. Tokens cannot change intent, findings, scope, or deployment policy. Apply a simple per-token rate limit, initially six scan requests/hour. Return the API schema with permissions documented.
 
+The runner listener and the compliance intake are the services other machines reach, so each logs in to the database as its own role with only the table privileges its requests use ([roles.py](../src/pen16/roles.py)): neither can read settings or schedules, change intent, waivers or token revocation, or touch the other's data. `pen16 migrate` creates the roles and resets their grants after every upgrade. The dashboard sits on a container network with only the database, so neither service can reach it to send identity headers.
+
 ## Evidence flow
 
 1. A schedule, owner, or permitted client requests work. Record targets, bindings, profile, vantage, requester, and deadline.
 2. Split large work into bounded jobs. Validate scope at dispatch; the runner checks recipient, expiry, and local scope over authenticated TLS.
-3. Store raw output durably before parsing and database finalization.
+3. Bound and parse raw output, then store it durably before database finalization. Output that doesn't parse fails the attempt and isn't kept.
 4. Commit observations, finding changes, and notification retry rows in a transaction.
 5. Deliver grouped notifications and update dashboard freshness independently of finding counts.
 
@@ -51,11 +53,11 @@ Observations record asset/address binding, protocol/port, vantage, time, tool/pr
 
 Gateway failure blocks negative conclusions for that network. Sleeping clients show availability gaps without repeated health alarms. Failed execution/parser work degrades schedule health. Positive evidence remains usable.
 
-Settings, expected exposure, bindings, labels, and decisions have change history. Corrections preserve evidence. Findings are keyed by asset, service, check/advisory identity, and vantage. Automatic closure requires newer compatible closed-port evidence for every applicable binding. Internal results cannot close external findings. Manual resolution, intent changes, and asset retirement record their reasons. Filtered results follow [FR-6](SPEC.md#requirements).
+Settings, expected exposure, bindings, labels, and decisions have change history. Each finding keeps every status change with who made it (the owner, or a scan and the observation that caused it) and why; expected services and waivers end with who ended them and why instead of being deleted. Corrections preserve evidence. Findings are keyed by asset, service, check/advisory identity, and vantage. Automatic closure requires newer compatible closed-port evidence for every applicable binding, and a scan reopens a resolved finding only with evidence newer than the observation it was resolved on. Internal results cannot close external findings. Manual resolution, intent changes, and asset retirement record their reasons. Filtered results follow [FR-6](SPEC.md#requirements).
 
 Accepted-risk and false-positive decisions suppress notifications for their precise scope: one finding, so one asset, service and vantage. Each records the service, product and version it was decided on; a scan that reports a different one withdraws it with what changed, and the finding alerts and returns to needs attention. A field the scan didn't report isn't a change. A new vantage is a separate finding with no decision. Changed identity and severity/exploitation evidence will invalidate decisions too, with asset corrections and advisories. Only named assets take decisions, so a reused address carries none. Withdrawn decisions stay as history. Unchanged observations update history quietly.
 
-A compliance result belongs to a host and a benchmark. Rules are stored once per benchmark with their title, severity and references, and each result stores every rule's outcome, so the latest result per host and benchmark is the current state. A pass-to-fail change between a host's consecutive results is a regression; waivers are owner decisions about one rule on one host and record a reason. A checklist lists every rule of the imported DISA STIG release (its manual XCCDF, loaded with `pen16 stig-import`), with the status its SCAP rules give it: rules no SCAP rule checks stay not reviewed. Within a vulnerability ID, any failing rule makes the vulnerability open, all passing makes it not a finding, and all not-applicable makes it not applicable.
+A compliance result belongs to a host and a benchmark. Rules are stored once per benchmark with their title, severity and references, and each result stores every rule's outcome, so the latest result per host and benchmark is the current state. A compliance host is a named asset with no address until the owner names a scanned device after it, which joins the two; a name another device holds is refused. A pass-to-fail change between a host's consecutive results is a regression; waivers are owner decisions about one rule on one host and record a reason. A checklist lists every rule of the imported DISA STIG release (its manual XCCDF, loaded with `pen16 stig-import`), with the status its SCAP rules give it: rules no SCAP rule checks stay not reviewed. Within a vulnerability ID, any failing rule makes the vulnerability open, all passing makes it not a finding, and all not-applicable makes it not applicable.
 
 M2 matches explicit product identifiers/aliases and affected versions. Ambiguous versions remain potentially affected. Deduplicate by advisory and asset; retain source identity for non-CVE items. Feed disappearance and port closure leave advisory findings open.
 
@@ -71,9 +73,9 @@ Group related alerts by asset/vantage over five minutes. Start with a short ntfy
 | --- | --- |
 | Success | Mark delivered |
 | Transient failure | Back off automatically, capped at one hour, for up to 24 hours |
-| Permanent failure or retry exhaustion | Show failed delivery and one health incident; allow replay |
+| Permanent failure or retry exhaustion | Show failed delivery and one health incident; resend from the dashboard, with a fresh 24 hours |
 
-Alert after two missed/failed scheduled windows; gateway failure alerts immediately. M2 feed health degrades after two missed daily fetches. M3 heartbeats run every minute and alert after five minutes missing. An optional independent monitor receives a heartbeat while database, scheduler, and notification health pass.
+Problems with monitoring itself are incidents, one per subject: a network's gateway, a schedule, backups, a compliance host, alert delivery, a background task. Opening one alerts once, clearing it sends one recovery notice, and the open ones show under monitoring health; cleared ones stay as history. The worker runs each background task on its own, so one that keeps failing opens its incident while the rest, alert delivery included, go on; the dashboard shows when the worker last finished a round. A scheduled scan alerts after two missed/failed windows in a row, and a requested one shows its failure on the dashboard only; gateway failure alerts immediately. M2 feed health degrades after two missed daily fetches. M3 heartbeats run every minute and alert after five minutes missing. An optional independent monitor receives a heartbeat while database, scheduler, and notification health pass.
 
 ## Deployment and state ownership
 

@@ -1,16 +1,17 @@
 import logging
 from collections.abc import Mapping
-from datetime import UTC, datetime, timedelta
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import Connection, Row, func, insert, select, union, update
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 
-from pen16 import exposure, notify
+from pen16 import db, exposure, notify
 from pen16.db import (
     JobStatus,
-    NotificationKind,
     ObservationState,
+    Profile,
     expected_services,
     jobs,
     mac_sightings,
@@ -26,22 +27,35 @@ log = logging.getLogger(__name__)
 DEADLINE = timedelta(minutes=30)
 MAX_ATTEMPTS = 2
 UNCLAIMED = timedelta(hours=1)
+FAILED_WINDOWS = 2
+# Requests take this transaction-scoped advisory lock, so two at once can't both find nothing waiting and queue.
+REQUEST_LOCK = 0x70656E3136
 
 
 class StaleJobError(Exception):
     """The job isn't running on this runner any more, so its result can't change state."""
 
 
-def request(conn: Connection, scope: Scope, requester: str, reason: str, schedule: str | None = None) -> int:
-    """Queue a nightly-profile scan of the whole scope, or return the scan already waiting or running."""
-    waiting = conn.scalar(select(jobs.c.id).where(jobs.c.status.in_([JobStatus.QUEUED, JobStatus.RUNNING])))
+def request(
+    conn: Connection, scope: Scope, requester: str, reason: str, profile: Profile, schedule: str | None = None
+) -> int:
+    """Queue a scan of the whole scope, or return the scan already waiting or running. A schedule that comes due
+    while a requested scan waits takes that scan as its run."""
+    conn.execute(select(func.pg_advisory_xact_lock(REQUEST_LOCK)))
+    waiting = conn.execute(
+        select(jobs.c.id, jobs.c.schedule).where(jobs.c.status.in_([JobStatus.QUEUED, JobStatus.RUNNING]))
+    ).first()
     if waiting is not None:
-        return int(waiting)
+        if schedule is not None and waiting.schedule is None:
+            conn.execute(update(jobs).where(jobs.c.id == waiting.id).values(schedule=schedule))
+        return int(waiting.id)
     targets = [str(network.cidr) for network in scope.networks]
     exclude = [str(network) for network in scope.exclude]
     scope.check(targets, exclude)
     known = union(
-        select(expected_services.c.port).where(expected_services.c.protocol == "tcp"),
+        select(expected_services.c.port).where(
+            expected_services.c.protocol == "tcp", expected_services.c.ended_at.is_(None)
+        ),
         select(observations.c.port).where(
             observations.c.protocol == "tcp", observations.c.state == ObservationState.OPEN
         ),
@@ -52,7 +66,7 @@ def request(conn: Connection, scope: Scope, requester: str, reason: str, schedul
             schedule=schedule,
             requester=requester,
             reason=reason,
-            profile="nightly",
+            profile=profile,
             targets=targets,
             exclude=exclude,
             extra_tcp=sorted(conn.scalars(known)),
@@ -65,19 +79,38 @@ def request(conn: Connection, scope: Scope, requester: str, reason: str, schedul
 
 
 def run_due_schedules(conn: Connection, scope: Scope) -> None:
-    now = datetime.now(UTC)
+    now = db.now(conn)
     due = conn.execute(
         select(schedules).where(schedules.c.enabled, schedules.c.next_run_at <= now).with_for_update()
     )
     for schedule in due.all():
-        request(conn, scope, f"schedule:{schedule.name}", "scheduled scan", schedule=schedule.name)
+        request(
+            conn,
+            scope,
+            f"schedule:{schedule.name}",
+            "scheduled scan",
+            Profile(schedule.profile),
+            schedule=schedule.name,
+        )
         next_run = schedule.next_run_at
         while next_run <= now:
             next_run += timedelta(hours=schedule.every_hours)
         conn.execute(update(schedules).where(schedules.c.name == schedule.name).values(next_run_at=next_run))
 
 
-def claim(conn: Connection, runner: str) -> Row[Any] | None:
+@dataclass(frozen=True)
+class Assignment:
+    """What a runner is told to scan: everything it needs, and nothing it could widen."""
+
+    id: int
+    profile: Profile
+    targets: list[str]
+    exclude: list[str]
+    extra_tcp: list[int]
+    deadline_at: datetime
+
+
+def claim(conn: Connection, runner: str) -> Assignment | None:
     """Hand the runner the oldest queued job. Anything it was already running was lost in a restart."""
     abandoned = conn.execute(
         select(jobs).where(jobs.c.status == JobStatus.RUNNING, jobs.c.runner == runner).with_for_update()
@@ -92,7 +125,7 @@ def claim(conn: Connection, runner: str) -> Row[Any] | None:
         .with_for_update(skip_locked=True)
         .scalar_subquery()
     )
-    return conn.execute(
+    claimed = conn.execute(
         update(jobs)
         .where(jobs.c.id == next_id)
         .values(
@@ -104,6 +137,16 @@ def claim(conn: Connection, runner: str) -> Row[Any] | None:
         )
         .returning(jobs)
     ).first()
+    if claimed is None:
+        return None
+    return Assignment(
+        claimed.id,
+        Profile(claimed.profile),
+        claimed.targets,
+        claimed.exclude,
+        claimed.extra_tcp,
+        claimed.deadline_at,
+    )
 
 
 def complete(
@@ -115,7 +158,7 @@ def complete(
     the kernel confirmed it after this job started, so an entry left from before can't be pinned on this scan.
     """
     job = _running(conn, job_id, runner)
-    up = {host.address for host in scan.hosts if host.up}
+    up = scan.up()
     seen = [
         {"address": address, "mac": n.mac, "confirmed_at": n.confirmed_at, "evidence_digest": scan.digest}
         for address in sorted(up)
@@ -123,22 +166,27 @@ def complete(
     ]
     if seen:
         conn.execute(postgresql_insert(mac_sightings).values(seen).on_conflict_do_nothing())
-    silent = [str(network.gateway) for network in scope.networks if str(network.gateway) not in up]
-    opened = exposure.ingest(conn, scan, vantage="internal", closures=not silent)
-    if opened:
-        lines = [f"{f.asset_id} {f.port}/{f.protocol}" + (f": {f.why}" if f.why else "") for f in opened]
-        notify.enqueue(
-            conn, NotificationKind.FINDING, f"{len(opened)} unexpected service(s)", "\n".join(lines)
+    opened = exposure.ingest(conn, scan, scope.networks, vantage="internal")
+    for network in scope.networks:
+        if str(network.gateway) in up:
+            notify.clear_incident(
+                conn,
+                _gateway(network.name),
+                f"Gateway of {network.name} answers again",
+                f"Gateway {network.gateway} answered during job {job_id}.",
+            )
+        else:
+            notify.raise_incident(
+                conn,
+                _gateway(network.name),
+                f"Gateway of {network.name} didn't answer",
+                f"Gateway {network.gateway} was down during job {job_id}, so closed ports in {network.cidr} "
+                "resolve nothing until it answers.",
+            )
+    if job.schedule is not None:
+        notify.clear_incident(
+            conn, _scheduled(job.schedule), "Scheduled scans recovered", f"Scheduled job {job_id} succeeded."
         )
-    if silent:
-        notify.enqueue(
-            conn,
-            NotificationKind.HEALTH,
-            "Gateway didn't answer",
-            f"Gateway {', '.join(silent)} was down during job {job_id}, so closed ports resolved nothing.",
-        )
-    if job.schedule is not None and _last_scheduled_status(conn, job.schedule) == JobStatus.FAILED:
-        notify.enqueue(conn, NotificationKind.HEALTH, "Scans recovered", f"Scheduled job {job_id} succeeded.")
     conn.execute(
         update(jobs)
         .where(jobs.c.id == job_id)
@@ -153,7 +201,7 @@ def fail(conn: Connection, job_id: int, runner: str, error: str) -> None:
 
 def expire(conn: Connection) -> None:
     """Retry or fail jobs past their deadline, and fail jobs no runner picked up."""
-    now = datetime.now(UTC)
+    now = db.now(conn)
     late = conn.execute(
         select(jobs)
         .where(jobs.c.status == JobStatus.RUNNING, jobs.c.deadline_at < now)
@@ -199,22 +247,36 @@ def _retry_or_fail(conn: Connection, job: Row[Any], error: str) -> None:
 
 
 def _finish_failed(conn: Connection, job: Row[Any], error: str) -> None:
+    """Fail the job for good. A requested scan's failure shows on the dashboard; a schedule alerts once its
+    last FAILED_WINDOWS runs have all failed, so one bad night stays quiet."""
     log.warning("job %s failed: %s", job.id, error)
     conn.execute(
         update(jobs)
         .where(jobs.c.id == job.id)
         .values(status=JobStatus.FAILED, finished_at=func.now(), error=error)
     )
-    notify.enqueue(
-        conn, NotificationKind.HEALTH, "Scan failed", f"Job {job.id} ({job.reason}) failed: {error}"
-    )
-
-
-def _last_scheduled_status(conn: Connection, schedule: str) -> str | None:
-    status: str | None = conn.scalar(
+    if job.schedule is None:
+        return
+    recent = conn.scalars(
         select(jobs.c.status)
-        .where(jobs.c.schedule == schedule, jobs.c.status.in_([JobStatus.SUCCEEDED, JobStatus.FAILED]))
-        .order_by(jobs.c.finished_at.desc())
-        .limit(1)
-    )
-    return status
+        .where(jobs.c.schedule == job.schedule, jobs.c.status.in_([JobStatus.SUCCEEDED, JobStatus.FAILED]))
+        .order_by(jobs.c.finished_at.desc(), jobs.c.id.desc())
+        .limit(FAILED_WINDOWS)
+    ).all()
+    if len(recent) == FAILED_WINDOWS and all(status == JobStatus.FAILED for status in recent):
+        notify.raise_incident(
+            conn,
+            _scheduled(job.schedule),
+            "Scheduled scans are failing",
+            f"The last {FAILED_WINDOWS} {job.schedule} scans failed. Job {job.id}: {error}",
+        )
+
+
+def _gateway(network: str) -> str:
+    """The incident key for a network whose gateway didn't answer."""
+    return f"gateway:{network}"
+
+
+def _scheduled(schedule: str) -> str:
+    """The incident key for a schedule whose runs keep failing."""
+    return f"schedule:{schedule}"

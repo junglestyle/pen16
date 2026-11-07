@@ -1,4 +1,6 @@
 import os
+import re
+from datetime import datetime
 from enum import StrEnum
 
 from sqlalchemy import (
@@ -6,6 +8,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
+    Connection,
     DateTime,
     Engine,
     ForeignKey,
@@ -19,6 +22,7 @@ from sqlalchemy import (
     UniqueConstraint,
     create_engine,
     func,
+    select,
     text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, INET, MACADDR
@@ -37,9 +41,20 @@ class FindingStatus(StrEnum):
     RESOLVED = "resolved"
 
 
+class FindingChange(StrEnum):
+    OPENED = "opened"
+    RESOLVED = "resolved"
+    REOPENED = "reopened"
+
+
 class DecisionKind(StrEnum):
     ACCEPTED_RISK = "accepted-risk"
     FALSE_POSITIVE = "false-positive"
+
+    @property
+    def label(self) -> str:
+        """How the dashboard and alerts name it."""
+        return self.value.replace("-", " ")
 
 
 class JobStatus(StrEnum):
@@ -47,7 +62,12 @@ class JobStatus(StrEnum):
     RUNNING = "running"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
-    CANCELLED = "cancelled"
+
+
+class Profile(StrEnum):
+    """The fixed scan profiles a job can ask for; the runner builds each one's nmap command itself."""
+
+    NIGHTLY = "nightly"
 
 
 class TokenKind(StrEnum):
@@ -86,9 +106,30 @@ class RuleResult(StrEnum):
 
 
 def _one_of(column: str, names: type[StrEnum], constraint: str) -> CheckConstraint:
-    """The CHECK for a column holding a closed set of names, built from its StrEnum so the two can't drift."""
+    """The CHECK for a column holding a closed set of names, built from its StrEnum so the two can't drift. The
+    StrEnum rides along in the constraint's info, for closed_set_drift."""
     listed = ", ".join(f"'{name}'" for name in names)
-    return CheckConstraint(f"{column} IN ({listed})", name=constraint)
+    return CheckConstraint(f"{column} IN ({listed})", name=constraint, info={"names": names})
+
+
+def closed_set_drift(conn: Connection) -> list[str]:
+    """The CHECKs the database has that don't list exactly their StrEnum's names, or that it lacks. Migrations
+    are never edited, so this compares the code with what the migrations built."""
+    drifted = []
+    for table in metadata.sorted_tables:
+        for constraint in table.constraints:
+            names = constraint.info.get("names")
+            if not isinstance(constraint, CheckConstraint) or names is None:
+                continue
+            definition = conn.scalar(
+                text("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = :name"),
+                {"name": constraint.name},
+            )
+            if definition is None or set(re.findall(r"'([^']*)'", definition)) != {
+                str(name) for name in names
+            }:
+                drifted.append(str(constraint.name))
+    return drifted
 
 
 assets = Table(
@@ -104,18 +145,34 @@ bindings = Table(
     metadata,
     Column("address", INET, primary_key=True),
     Column("asset_id", Text, ForeignKey("assets.id"), nullable=False),
+    Index("bindings_asset", "asset_id"),
 )
 
+# Intent: a service the owner expects. Stopping expecting it ends the row with a reason; ended rows stay as history,
+# and at most one row per service is current.
 expected_services = Table(
     "expected_services",
     metadata,
+    Column("id", BigInteger, Identity(always=True), primary_key=True),
     Column("asset_id", Text, ForeignKey("assets.id"), nullable=False),
     Column("protocol", Text, nullable=False),
     Column("port", Integer, nullable=False),
     Column("vantage", Text, nullable=False),
     Column("reason", Text, nullable=False),
+    Column("declared_by", Text),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
-    PrimaryKeyConstraint("asset_id", "protocol", "port", "vantage"),
+    Column("ended_at", DateTime(timezone=True)),
+    Column("ended_by", Text),
+    Column("end_reason", Text),
+    Index(
+        "expected_services_current",
+        "asset_id",
+        "protocol",
+        "port",
+        "vantage",
+        unique=True,
+        postgresql_where=text("ended_at IS NULL"),
+    ),
 )
 
 observations = Table(
@@ -137,6 +194,7 @@ observations = Table(
     Column("evidence_digest", Text, nullable=False),
     _one_of("state", ObservationState, "observation_state"),
     UniqueConstraint("evidence_digest", "address", "protocol", "port", "vantage"),
+    Index("observations_latest", "asset_id", "protocol", "port", "vantage", "observed_at"),
 )
 
 findings = Table(
@@ -157,6 +215,21 @@ findings = Table(
     UniqueConstraint("kind", "asset_id", "protocol", "port", "vantage"),
 )
 
+# Every change to a finding's status, by a scan (with the observation that caused it) or by the owner (with
+# their reason). The finding row holds only the current state.
+finding_events = Table(
+    "finding_events",
+    metadata,
+    Column("id", BigInteger, Identity(always=True), primary_key=True),
+    Column("finding_id", BigInteger, ForeignKey("findings.id"), nullable=False),
+    Column("change", Text, nullable=False),
+    Column("at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("by", Text, nullable=False),
+    Column("reason", Text),
+    Column("observation_id", BigInteger, ForeignKey("observations.id")),
+    _one_of("change", FindingChange, "finding_change"),
+)
+
 # Which MAC answered at an address during a scan, from the scanner host's neighbour table (pen16.neighbours).
 mac_sightings = Table(
     "mac_sightings",
@@ -166,6 +239,7 @@ mac_sightings = Table(
     Column("confirmed_at", DateTime(timezone=True), nullable=False),
     Column("evidence_digest", Text, nullable=False),
     PrimaryKeyConstraint("evidence_digest", "address"),
+    Index("mac_sightings_address", "address", "confirmed_at"),
 )
 
 # The owner's decision about one finding: its risk is accepted, or it's a false positive. It records the service
@@ -197,6 +271,7 @@ schedules = Table(
     Column("every_hours", Integer, nullable=False),
     Column("next_run_at", DateTime(timezone=True), nullable=False),
     Column("enabled", Boolean, nullable=False),
+    _one_of("profile", Profile, "schedule_profile"),
 )
 
 jobs = Table(
@@ -220,6 +295,7 @@ jobs = Table(
     Column("error", Text),
     Column("evidence_digest", Text),
     _one_of("status", JobStatus, "job_status"),
+    _one_of("profile", Profile, "job_profile"),
 )
 
 tokens = Table(
@@ -246,10 +322,39 @@ notifications = Table(
     Column("attempts", Integer, nullable=False, server_default="0"),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     Column("next_attempt_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    # Delivery retries until then; replaying a failed notification moves it on.
+    Column(
+        "retry_until",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now() + interval '24 hours'"),
+    ),
     Column("delivered_at", DateTime(timezone=True)),
     Column("last_error", Text),
     _one_of("kind", NotificationKind, "notification_kind"),
     _one_of("status", NotificationStatus, "notification_status"),
+)
+
+# Something wrong with monitoring itself, such as stale backups or a gateway that didn't answer. A key has at most
+# one open incident: opening it alerts once, and clearing it sends one recovery notice. Cleared ones stay as history.
+incidents = Table(
+    "incidents",
+    metadata,
+    Column("id", BigInteger, Identity(always=True), primary_key=True),
+    Column("key", Text, nullable=False),
+    Column("title", Text, nullable=False),
+    Column("detail", Text, nullable=False),
+    Column("opened_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("cleared_at", DateTime(timezone=True)),
+    Index("incidents_one_open", "key", unique=True, postgresql_where=text("cleared_at IS NULL")),
+)
+
+# When each long-running component last finished a round of its work, for the dashboard to tell it's alive.
+heartbeats = Table(
+    "heartbeats",
+    metadata,
+    Column("component", Text, primary_key=True),
+    Column("at", DateTime(timezone=True), nullable=False, server_default=func.now()),
 )
 
 # One row per verified backup, written by deploy/pen16-backup through `pen16 backed-up`.
@@ -315,15 +420,27 @@ compliance_results = Table(
     _one_of("result", RuleResult, "compliance_result"),
 )
 
-# Owner decisions: a rule that fails on purpose on one host. It stays failing; the reason travels with it.
+# Owner decisions: a rule that fails on purpose on one host. It stays failing; the reason travels with it. Removing
+# or replacing one ends it with a reason; ended rows stay as history, and at most one per rule and host is current.
 compliance_waivers = Table(
     "compliance_waivers",
     metadata,
+    Column("id", BigInteger, Identity(always=True), primary_key=True),
     Column("asset_id", Text, ForeignKey("assets.id"), nullable=False),
     Column("rule_id", Text, nullable=False),
     Column("reason", Text, nullable=False),
+    Column("waived_by", Text),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
-    PrimaryKeyConstraint("asset_id", "rule_id"),
+    Column("ended_at", DateTime(timezone=True)),
+    Column("ended_by", Text),
+    Column("end_reason", Text),
+    Index(
+        "compliance_waivers_current",
+        "asset_id",
+        "rule_id",
+        unique=True,
+        postgresql_where=text("ended_at IS NULL"),
+    ),
 )
 
 # DISA STIG releases, imported from the manual XCCDF in DISA's zip. A checklist lists every rule of the STIG,
@@ -367,3 +484,10 @@ def database_url() -> str:
 
 def connect() -> Engine:
     return create_engine(database_url())
+
+
+def now(conn: Connection) -> datetime:
+    """The database's time, the one clock pen16 compares stored times with. The worker, web and listener may run
+    on clocks a little off from it, and a row stamped by now() mustn't look like it's from the future."""
+    current: datetime = conn.execute(select(func.now())).scalar_one()
+    return current

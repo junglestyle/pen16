@@ -12,18 +12,22 @@ import subprocess
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 
 import httpx
 
 from pen16 import config, profiles
-from pen16.evidence import MAX_EXPANDED
+from pen16.db import Profile
+from pen16.evidence import MAX_COMPRESSED, MAX_EXPANDED
 from pen16.scope import OutOfScopeError, Scope
 
 log = logging.getLogger(__name__)
 
 IDLE = 30
 WAIT_FOR_EGRESS = 5
+CHUNK = 64 * 1024
+# How much of nmap's stderr a failed job reports.
+ERROR_TAIL = 300
 
 
 def egress_ready(marker: Path, process: Path = Path("/proc/1")) -> bool:
@@ -47,7 +51,9 @@ def stamp(process: Path) -> str:
 
 def run_forever() -> None:
     stop = threading.Event()
-    signal.signal(signal.SIGTERM, lambda *_: stop.set())  # a scan in progress finishes first
+    # SIGTERM stops claiming. A scan in progress runs until compose's stop timeout kills the container, and
+    # the listener retries that job when this runner next claims.
+    signal.signal(signal.SIGTERM, lambda *_: stop.set())
     scope = config.load().scope
     url = os.environ.get("PEN16_LISTENER_URL")
     if not url:
@@ -76,39 +82,80 @@ def run_job(client: httpx.Client, scope: Scope, job: dict[str, Any], services: P
     job_id = job["id"]
     log.info("running job %s", job_id)
     try:
-        argv = _argv(scope, job, services)
-        deadline = datetime.fromisoformat(job["deadline_at"])
-        xml = scan(argv, (deadline - datetime.now(UTC)).total_seconds())
+        compressed = _scanned(scope, job, services)
     except (OutOfScopeError, ScanFailedError) as error:
         log.warning("job %s failed: %s", job_id, error)
-        client.post(f"/runner/v1/jobs/{job_id}/failure", json={"error": str(error)})
+        reported = client.post(f"/runner/v1/jobs/{job_id}/failure", json={"error": str(error)})
+        if reported.is_error:
+            log.warning("job %s: the listener refused its failure: HTTP %s", job_id, reported.status_code)
         return
-    client.post(f"/runner/v1/jobs/{job_id}/result", content=gzip.compress(xml)).raise_for_status()
+    client.post(f"/runner/v1/jobs/{job_id}/result", content=compressed).raise_for_status()
     log.info("job %s uploaded", job_id)
+
+
+def _scanned(scope: Scope, job: dict[str, Any], services: Path) -> bytes:
+    """The job's scan output, gzipped for upload. Raises OutOfScopeError or ScanFailedError."""
+    deadline = datetime.fromisoformat(job["deadline_at"])
+    compressed = gzip.compress(
+        scan(_argv(scope, job, services), (deadline - datetime.now(UTC)).total_seconds())
+    )
+    if len(compressed) > MAX_COMPRESSED:
+        raise ScanFailedError("nmap output is over the upload limit")
+    return compressed
 
 
 def _argv(scope: Scope, job: dict[str, Any], services: Path) -> list[str]:
     """The fixed nmap command for the job's profile, or OutOfScopeError if the job asks for anything else."""
-    if job["profile"] != "nightly":
+    if job["profile"] != Profile.NIGHTLY:
         raise OutOfScopeError(f"unknown profile {job['profile']!r}")
     scope.check(job["targets"], job["exclude"])
     return profiles.nightly_argv(job["targets"], job["exclude"], job["extra_tcp"], services)
 
 
 class ScanFailedError(Exception):
-    pass
+    """nmap couldn't produce a usable result for the job: the job fails, and the listener may retry it."""
 
 
 def scan(argv: list[str], timeout: float) -> bytes:
-    """Run nmap with a fixed argument list, no shell, a deadline, and bounded output."""
+    """Run nmap with a fixed argument list and no shell, killing it at the deadline or as soon as its output
+    passes the upload limit, so neither its runtime nor this process's memory can grow without bound."""
     if timeout <= 0:
         raise ScanFailedError("deadline already passed")
-    try:
-        done = subprocess.run(argv, capture_output=True, timeout=timeout, check=False, shell=False)
-    except subprocess.TimeoutExpired as error:
-        raise ScanFailedError("nmap ran past the job deadline") from error
-    if done.returncode != 0:
-        raise ScanFailedError(f"nmap exited {done.returncode}: {done.stderr.decode(errors='replace')[-300:]}")
-    if len(done.stdout) > MAX_EXPANDED:
-        raise ScanFailedError("nmap output is over the upload limit")
-    return done.stdout
+    with subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False) as nmap:
+        stdout, stderr = nmap.stdout, nmap.stderr
+        if stdout is None or stderr is None:
+            raise RuntimeError("nmap's output isn't piped")
+        expired = threading.Event()
+
+        def expire() -> None:
+            expired.set()
+            nmap.kill()
+
+        timer = threading.Timer(timeout, expire)
+        errors = bytearray()
+        drain = threading.Thread(target=_tail, args=(stderr, errors), daemon=True)
+        timer.start()
+        drain.start()
+        output = bytearray()
+        try:
+            while chunk := stdout.read(CHUNK):
+                output += chunk
+                if len(output) > MAX_EXPANDED:
+                    nmap.kill()
+                    raise ScanFailedError("nmap output is over the upload limit")
+            returncode = nmap.wait()
+        finally:
+            timer.cancel()
+            drain.join()
+    if expired.is_set():
+        raise ScanFailedError("nmap ran past the job deadline")
+    if returncode != 0:
+        raise ScanFailedError(f"nmap exited {returncode}: {errors.decode(errors='replace')}")
+    return bytes(output)
+
+
+def _tail(stream: IO[bytes], kept: bytearray) -> None:
+    """Read a stream to its end, keeping its last ERROR_TAIL bytes."""
+    while chunk := stream.read(CHUNK):
+        kept += chunk
+        del kept[:-ERROR_TAIL]

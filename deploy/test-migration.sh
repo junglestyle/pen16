@@ -32,7 +32,8 @@ migrate() { (cd "$repo" && PEN16_DATABASE_URL=$url uv run --frozen alembic "$@")
     -p "127.0.0.1:$port:5432" "$image" >/dev/null
 # Over TCP: the image's first-start server listens only on its socket.
 for _ in $(seq 60); do "$engine" exec "$name" pg_isready -h 127.0.0.1 -U pen16 -q && break; sleep 1; done
-"$engine" exec -i "$name" pg_restore -U pen16 -d pen16 --no-owner --exit-on-error < "$dump"
+# Without grants: the intake's and listener's roles aren't in this throwaway cluster.
+"$engine" exec -i "$name" pg_restore -U pen16 -d pen16 --no-owner --no-privileges --exit-on-error < "$dump"
 
 start=$(sql 'SELECT version_num FROM alembic_version')
 echo "restored at revision $start"
@@ -65,19 +66,15 @@ for t in "${tables[@]}"; do
     (( next > max )) || fail "$t's next id $next doesn't clear its max $max"
     echo "  $t: identity, next id $next, max $max"
 done
-# Each CHECK the migrations built matches the code's StrEnum, as tests/test_closed_sets.py asserts on a test
-# database. Read-only: the test's own fixtures would wipe this one.
+# Each CHECK the migrations built matches the code's StrEnum (pen16.db.closed_set_drift, which the tests run on
+# a test database). Read-only.
 (cd "$repo" && PEN16_DATABASE_URL=$url uv run --frozen python - <<'EOF'
-import re
-from sqlalchemy import text
 from pen16 import db
-from tests.test_closed_sets import CLOSED_SETS
 with db.connect().connect() as conn:
-    for constraint, names in CLOSED_SETS:
-        found = conn.scalar(text("SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = :n"),
-                            {"n": constraint})
-        assert found and set(re.findall(r"'([^']*)'", found)) == {str(n) for n in names}, constraint
-print(f"  {len(CLOSED_SETS)} CHECKs match their StrEnums")
+    drifted = db.closed_set_drift(conn)
+if drifted:
+    raise SystemExit(f"  CHECKs that don't match their StrEnums: {', '.join(drifted)}")
+print("  every CHECK matches its StrEnum")
 EOF
 ) || fail "a CHECK doesn't match its StrEnum"
 

@@ -9,8 +9,8 @@ an org rule, it says so, and it wins.
 ## Scanning and evidence
 
 - Run fixed executables with argument arrays and `shell=False`. Bound runtime and output, and support cancellation.
-- Change observations, findings, and notifications in one transaction. Store UTC timestamps. Migrations preserve
-  evidence.
+- Change observations, findings, and notifications in one transaction. Store UTC timestamps, and compare stored
+  times with the database's clock (`func.now()`, `db.now`), never the process's. Migrations preserve evidence.
 - Escape untrusted tool and feed output everywhere it's shown.
 - Log requester, operation, job, outcome, and safe errors. Never log tokens, full request bodies, or raw evidence.
 - Pin runtime and tool images by digest, and record tool and parser versions with their fixtures.
@@ -25,7 +25,8 @@ an org rule, it says so, and it wins.
 - Scope checks and finding closure are critical invariants: one implementation each.
 - Routes call application services that the dashboard and API share. Background jobs enforce the same permissions.
 - Identity, coverage, findings, intent, and authorization don't know about HTTP or the scanner process. The scanner,
-  parser, notifier, and feeds sit behind small typed interfaces.
+  parser, notifier, and feeds are plain typed functions; one gets a `Protocol` seam when a second implementation of
+  it is real.
 
 ## Errors and recovery
 
@@ -47,9 +48,10 @@ an org rule, it says so, and it wins.
 
 ## Privacy
 
-- Config shape lives in `examples/`: `pen16.toml` for the deployment config and `pen16.env`, in place of
-  `.env.example`, for the environment. Deployment config, addresses, and real network evidence live in the private
-  deployment repository. Examples and fixtures are fictional.
+- Config shape lives in `examples/`: `pen16.toml` for the deployment config, and `pen16.env`, in place of
+  `.env.example`, for the environment, with `intake.env` and `listener.env` for the two services that get only
+  their own database URL. Deployment config, addresses, and real network evidence live in the private deployment
+  repository. Examples and fixtures are fictional.
 
 ## Docs
 
@@ -76,15 +78,13 @@ Where pen16 doesn't follow the org standards yet. These are debt to pay down, no
   have no `Status:` or `Delivers:` line.
 - Docs: the shipped slices "Owner dashboard over Tailscale" and "Verified nightly backups" (`ROADMAP.md:24-28`) have
   no done-when.
-- Docs: slice C3 (`ROADMAP.md:151`) names no spec requirement, and slice 9 (`ROADMAP.md:107`) names "M1's
+- Docs: slice C3 (`ROADMAP.md:152`) names no spec requirement, and slice 9 (`ROADMAP.md:108`) names "M1's
   demonstration" instead of the part of FR-11 it delivers.
 - Docs: the deferred requirements under the spec's "After the pilot" (`SPEC.md:50`) have no slices; the roadmap's
-  "After the pilot" (`ROADMAP.md:205`) holds them back until the pilot has run.
-- Python typing: `compliance.latest`, `failing` and `_regressions` return driver rows as `list[Any]`, which go on to
-  `web.py` and the template unparsed, and `web._count` takes a SQL expression as `Any`.
+  "After the pilot" (`ROADMAP.md:206`) holds them back until the pilot has run.
 - Python testing: `arf-rhel9-stig.xml` is a real OpenSCAP evaluation of a UBI 9 filesystem, trimmed
-  (`conftest.py:19`), not a synthetic fixture.
+  (`conftest.py:22`), not a synthetic fixture.
 - Python testing: test files are named one per module (`test_backups.py`, `test_exposure.py`, `test_jobs.py`,
   `test_notify.py` and the rest), not for the behavior they cover.
-- SQL: closed sets with no `CHECK`: `findings.kind`, `stig_rules.severity`, `jobs.profile` and `schedules.profile`,
-  and `protocol` and `vantage` in `observations`, `findings` and `expected_services`.
+- SQL: closed sets with no `CHECK`: `findings.kind`, `stig_rules.severity`, and `protocol` and `vantage` in
+  `observations`, `findings` and `expected_services`.

@@ -2,13 +2,14 @@
 
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import Connection, case, delete, exists, func, insert, select
+from sqlalchemy import Connection, case, exists, func, insert, select, update
+from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.dialects.postgresql import insert as upsert
 
-from pen16 import arf, notify
+from pen16 import arf, db, notify
 from pen16.arf import FAILING, PASSING, Result
 from pen16.db import (
     NotificationKind,
@@ -19,7 +20,6 @@ from pen16.db import (
     compliance_rules,
     compliance_scans,
     compliance_waivers,
-    notifications,
     stig_rules,
     stigs,
 )
@@ -71,8 +71,6 @@ def record(
         raise StaleResultError(
             f"{asset_id} already has a result from {previous.finished_at:%Y-%m-%d %H:%M} UTC"
         )
-    was_stale = _stale_warned(conn, asset_id)
-
     for rule in result.rules:
         values = {
             "title": rule.title,
@@ -123,7 +121,7 @@ def record(
     else:
         regressed = _regressions(conn, asset_id, previous.id, scan_id)
         if regressed:
-            lines = [f"[{row.severity}] {row.title}" for row in regressed[:10]]
+            lines = [f"[{severity}] {title}" for title, severity in regressed[:10]]
             if len(regressed) > 10:
                 lines.append(f"and {len(regressed) - 10} more")
             notify.enqueue(
@@ -132,54 +130,106 @@ def record(
                 f"{len(regressed)} compliance regression{'s' if len(regressed) > 1 else ''} on {asset_id}",
                 "\n".join([summary, *lines]),
             )
-    if was_stale:
-        notify.enqueue(conn, NotificationKind.HEALTH, f"Compliance results resumed from {asset_id}", summary)
+    notify.clear_incident(conn, _stale(asset_id), f"Compliance results resumed from {asset_id}", summary)
     return Recorded(scan_id, duplicate=False)
 
 
-def waive(conn: Connection, asset_id: str, rule_id: str, reason: str) -> None:
-    """Accept a failing rule on one host. It stays failing, with the reason beside it, and stops alerting."""
+def waive(conn: Connection, asset_id: str, rule_id: str, reason: str, by: str) -> None:
+    """Accept a failing rule on one host. It stays failing, with the reason beside it, and stops alerting. A new
+    reason for a rule already waived replaces the old waiver, which stays in the history."""
     if not reason.strip():
         raise ValueError("a waiver needs a reason")
+    evaluated = conn.scalar(
+        select(
+            exists().where(
+                compliance_scans.c.asset_id == asset_id,
+                compliance_results.c.scan_id == compliance_scans.c.id,
+                compliance_results.c.rule_id == rule_id,
+            )
+        )
+    )
+    if not evaluated:
+        raise ValueError(f"no result from {asset_id!r} evaluates {rule_id!r}")
+    _end_waiver(conn, asset_id, rule_id, "replaced by a new waiver", by)
     conn.execute(
-        upsert(compliance_waivers)
-        .values(asset_id=asset_id, rule_id=rule_id, reason=reason.strip())
-        .on_conflict_do_update(
-            index_elements=["asset_id", "rule_id"], set_={"reason": reason.strip(), "created_at": func.now()}
+        insert(compliance_waivers).values(
+            asset_id=asset_id, rule_id=rule_id, reason=reason.strip(), waived_by=by
         )
     )
 
 
-def unwaive(conn: Connection, asset_id: str, rule_id: str) -> None:
+def unwaive(conn: Connection, asset_id: str, rule_id: str, reason: str, by: str) -> None:
+    """End a host's waiver for a rule, with the reason. A regression of the rule alerts again."""
+    if not reason.strip():
+        raise ValueError("removing a waiver needs a reason")
+    _end_waiver(conn, asset_id, rule_id, reason.strip(), by)
+
+
+def _end_waiver(conn: Connection, asset_id: str, rule_id: str, reason: str, by: str) -> None:
     conn.execute(
-        delete(compliance_waivers).where(
-            compliance_waivers.c.asset_id == asset_id, compliance_waivers.c.rule_id == rule_id
+        update(compliance_waivers)
+        .where(
+            compliance_waivers.c.asset_id == asset_id,
+            compliance_waivers.c.rule_id == rule_id,
+            compliance_waivers.c.ended_at.is_(None),
         )
+        .values(ended_at=func.now(), ended_by=by, end_reason=reason)
     )
 
 
 def check(conn: Connection) -> None:
-    """Alert once for each host whose newest result is older than STALE."""
-    now = datetime.now(UTC)
+    """Open a stale incident for each host whose newest result is older than STALE."""
+    now = db.now(conn)
     for asset_id, last in conn.execute(
         select(compliance_scans.c.asset_id, func.max(compliance_scans.c.received_at)).group_by(
             compliance_scans.c.asset_id
         )
     ):
-        if now - last > STALE and not _stale_warned(conn, asset_id, since=last):
-            notify.enqueue(
+        if now - last > STALE:
+            notify.raise_incident(
                 conn,
-                NotificationKind.HEALTH,
-                _stale_title(asset_id),
+                _stale(asset_id),
+                f"Compliance results stale from {asset_id}",
                 f"The last compliance result from {asset_id} arrived {last:%Y-%m-%d %H:%M} UTC.",
             )
 
 
-def latest(conn: Connection) -> list[Any]:
+@dataclass(frozen=True)
+class Latest:
+    """A host's newest result for one benchmark and profile."""
+
+    scan_id: int
+    asset_id: str
+    benchmark_id: str
+    benchmark_version: str
+    profile_title: str
+    tool_version: str
+    finished_at: datetime
+    received_at: datetime
+    passed: int
+    failed: int
+    has_playbook: bool
+
+
+@dataclass(frozen=True)
+class FailingRule:
+    rule_id: str
+    result: RuleResult
+    title: str
+    severity: Severity
+    stig_ids: list[str]
+    waiver: str | None
+
+
+def latest(conn: Connection) -> list[Latest]:
     """Each host's newest result per benchmark and profile."""
     newest = (
         select(compliance_scans)
-        .distinct(compliance_scans.c.asset_id, compliance_scans.c.benchmark_id, compliance_scans.c.profile_id)
+        .ext(
+            distinct_on(
+                compliance_scans.c.asset_id, compliance_scans.c.benchmark_id, compliance_scans.c.profile_id
+            )
+        )
         .order_by(
             compliance_scans.c.asset_id,
             compliance_scans.c.benchmark_id,
@@ -188,36 +238,56 @@ def latest(conn: Connection) -> list[Any]:
         )
         .subquery()
     )
-    return list(conn.execute(select(newest).order_by(newest.c.asset_id, newest.c.benchmark_id)).all())
+    return [
+        Latest(
+            scan_id=row.id,
+            asset_id=row.asset_id,
+            benchmark_id=row.benchmark_id,
+            benchmark_version=row.benchmark_version,
+            profile_title=row.profile_title,
+            tool_version=row.tool_version,
+            finished_at=row.finished_at,
+            received_at=row.received_at,
+            passed=row.passed,
+            failed=row.failed,
+            has_playbook=row.playbook_digest is not None,
+        )
+        for row in conn.execute(select(newest).order_by(newest.c.asset_id, newest.c.benchmark_id))
+    ]
 
 
-def failing(conn: Connection, scan_id: int) -> list[Any]:
+def failing(conn: Connection, scan_id: int) -> list[FailingRule]:
     """A result's failing rules, unwaived first, then worst first, with any waiver's reason."""
     scan = conn.execute(select(compliance_scans).where(compliance_scans.c.id == scan_id)).one()
-    return list(
-        conn.execute(
-            select(
-                compliance_results.c.rule_id,
-                compliance_results.c.result,
-                compliance_rules.c.title,
-                compliance_rules.c.severity,
-                compliance_rules.c.stig_ids,
-                compliance_waivers.c.reason.label("waiver"),
-            )
-            .join(
-                compliance_rules,
-                (compliance_rules.c.benchmark_id == scan.benchmark_id)
-                & (compliance_rules.c.rule_id == compliance_results.c.rule_id),
-            )
-            .outerjoin(
-                compliance_waivers,
-                (compliance_waivers.c.asset_id == scan.asset_id)
-                & (compliance_waivers.c.rule_id == compliance_results.c.rule_id),
-            )
-            .where(compliance_results.c.scan_id == scan_id, compliance_results.c.result.in_(FAILING))
-            .order_by(compliance_waivers.c.reason.is_not(None), SEVERITY_ORDER, compliance_rules.c.title)
-        ).all()
+    rows = conn.execute(
+        select(
+            compliance_results.c.rule_id,
+            compliance_results.c.result,
+            compliance_rules.c.title,
+            compliance_rules.c.severity,
+            compliance_rules.c.stig_ids,
+            compliance_waivers.c.reason.label("waiver"),
+        )
+        .join(
+            compliance_rules,
+            (compliance_rules.c.benchmark_id == scan.benchmark_id)
+            & (compliance_rules.c.rule_id == compliance_results.c.rule_id),
+        )
+        .outerjoin(
+            compliance_waivers,
+            (compliance_waivers.c.asset_id == scan.asset_id)
+            & (compliance_waivers.c.rule_id == compliance_results.c.rule_id)
+            & compliance_waivers.c.ended_at.is_(None),
+        )
+        .where(compliance_results.c.scan_id == scan_id, compliance_results.c.result.in_(FAILING))
+        .order_by(compliance_waivers.c.reason.is_not(None), SEVERITY_ORDER, compliance_rules.c.title)
     )
+    return [
+        FailingRule(
+            row.rule_id, RuleResult(row.result), row.title, Severity(row.severity), row.stig_ids, row.waiver
+        )
+        for row in rows
+    ]
 
 
 def matching_stig(conn: Connection, scan_id: int) -> str | None:
@@ -239,6 +309,14 @@ def matching_stig(conn: Connection, scan_id: int) -> str | None:
         .limit(1)
     )
     return stig_id
+
+
+def playbook(conn: Connection, scan_id: int) -> tuple[str, str]:
+    """The download name and evidence digest of the remediation playbook a host sent with a result."""
+    scan = conn.execute(select(compliance_scans).where(compliance_scans.c.id == scan_id)).first()
+    if scan is None or scan.playbook_digest is None:
+        raise LookupError("no playbook for this result")
+    return f"{scan.asset_id}-remediation-{scan.finished_at:%Y%m%d}.yml", scan.playbook_digest
 
 
 def checklist(conn: Connection, scan_id: int) -> tuple[str, dict[str, Any]]:
@@ -267,7 +345,8 @@ def checklist(conn: Connection, scan_id: int) -> tuple[str, dict[str, Any]]:
         .outerjoin(
             compliance_waivers,
             (compliance_waivers.c.asset_id == scan.asset_id)
-            & (compliance_waivers.c.rule_id == compliance_rules.c.rule_id),
+            & (compliance_waivers.c.rule_id == compliance_rules.c.rule_id)
+            & compliance_waivers.c.ended_at.is_(None),
         )
         .where(compliance_rules.c.benchmark_id == scan.benchmark_id, compliance_rules.c.vuln_id.is_not(None))
         .order_by(compliance_rules.c.rule_id)
@@ -379,12 +458,14 @@ def _status(results: list[str]) -> str:
     return NOT_REVIEWED
 
 
-def _regressions(conn: Connection, asset_id: str, previous_id: int, scan_id: int) -> list[Any]:
+def _regressions(conn: Connection, asset_id: str, previous_id: int, scan_id: int) -> list[tuple[str, str]]:
+    """The title and severity of each unwaived rule that passed in the previous result and fails in this one."""
     before = compliance_results.alias("before")
     now = compliance_results.alias("now")
     scan = select(compliance_scans.c.benchmark_id).where(compliance_scans.c.id == scan_id).scalar_subquery()
-    return list(
-        conn.execute(
+    return [
+        (row.title, row.severity)
+        for row in conn.execute(
             select(compliance_rules.c.title, compliance_rules.c.severity)
             .select_from(now)
             .join(before, (before.c.rule_id == now.c.rule_id) & (before.c.scan_id == previous_id))
@@ -397,37 +478,19 @@ def _regressions(conn: Connection, asset_id: str, previous_id: int, scan_id: int
                 now.c.result.in_(FAILING),
                 before.c.result.in_(PASSING),
                 ~exists().where(
-                    compliance_waivers.c.asset_id == asset_id, compliance_waivers.c.rule_id == now.c.rule_id
+                    compliance_waivers.c.asset_id == asset_id,
+                    compliance_waivers.c.rule_id == now.c.rule_id,
+                    compliance_waivers.c.ended_at.is_(None),
                 ),
             )
             .order_by(SEVERITY_ORDER, compliance_rules.c.title)
-        ).all()
-    )
-
-
-def _stale_title(asset_id: str) -> str:
-    return f"Compliance results stale from {asset_id}"
-
-
-def _stale_warned(conn: Connection, asset_id: str, since: datetime | None = None) -> bool:
-    """Whether a stale warning went out for this host after its newest result (or after `since`)."""
-    if since is None:
-        since = conn.scalar(
-            select(func.max(compliance_scans.c.received_at)).where(compliance_scans.c.asset_id == asset_id)
         )
-        if since is None:
-            return False
-    return bool(
-        conn.scalar(
-            select(
-                exists().where(
-                    notifications.c.kind == NotificationKind.HEALTH,
-                    notifications.c.title == _stale_title(asset_id),
-                    notifications.c.created_at > since,
-                )
-            )
-        )
-    )
+    ]
+
+
+def _stale(asset_id: str) -> str:
+    """The incident key for a host that has stopped reporting."""
+    return f"compliance-stale:{asset_id}"
 
 
 def pass_rate(passed: int, failed: int) -> str:

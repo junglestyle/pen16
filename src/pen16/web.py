@@ -2,48 +2,27 @@
 
 import json
 import os
-from datetime import UTC, datetime, timedelta
+from collections.abc import Iterator
+from contextlib import contextmanager
 from importlib.resources import files
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated
 from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import ColumnElement, Connection, Engine, ScalarSelect, Text, cast, exists, func, select
+from sqlalchemy import Engine
 
-from pen16 import backups, compliance, config, db, evidence, exposure, jobs, neighbours
+from pen16 import compliance, config, db, evidence, exposure, jobs, neighbours, notify, status
 from pen16.config import Config
-from pen16.db import (
-    DecisionKind,
-    FindingStatus,
-    JobStatus,
-    NotificationStatus,
-    ObservationState,
-    RuleResult,
-    Severity,
-    TokenKind,
-    assets,
-    bindings,
-    compliance_scans,
-    decisions,
-    expected_services,
-    findings,
-    mac_sightings,
-    notifications,
-    observations,
-    schedules,
-    tokens,
-)
+from pen16.db import DecisionKind, JobStatus, Profile, RuleResult, Severity
 
-STALE = timedelta(hours=48)
 templates = Jinja2Templates(directory=str(files("pen16") / "templates"))
 # The template compares states by name, not by quoted string.
 templates.env.globals.update(
     DecisionKind=DecisionKind,
-    FindingStatus=FindingStatus,
     JobStatus=JobStatus,
     RuleResult=RuleResult,
     Severity=Severity,
@@ -71,21 +50,23 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     def dashboard(request: Request, login: Owner) -> HTMLResponse:
         with engine.connect() as conn:
-            context = _dashboard(conn)
-        return templates.TemplateResponse(request, "dashboard.html", {"owner": login, **context})
+            view = status.dashboard(conn)
+        return templates.TemplateResponse(request, "dashboard.html", {"owner": login, "d": view})
 
     @app.post("/scan")
     def scan_now(login: Owner) -> RedirectResponse:
         with engine.begin() as conn:
-            jobs.request(conn, settings.scope, f"owner:{login}", "requested from the dashboard")
+            jobs.request(
+                conn, settings.scope, f"owner:{login}", "requested from the dashboard", Profile.NIGHTLY
+            )
         return _back()
 
     @app.post("/findings/expect")
     def expect(
-        _login: Owner, finding: Annotated[list[int], Form()], reason: Annotated[str, Form()]
+        login: Owner, finding: Annotated[list[int], Form()], reason: Annotated[str, Form()]
     ) -> RedirectResponse:
-        with engine.begin() as conn:
-            exposure.expect(conn, finding, reason)
+        with _refusing(), engine.begin() as conn:
+            exposure.expect(conn, finding, reason, login)
         return _back()
 
     @app.post("/findings/decide")
@@ -95,28 +76,22 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
         kind: Annotated[DecisionKind, Form()],
         reason: Annotated[str, Form()],
     ) -> RedirectResponse:
-        try:
-            with engine.begin() as conn:
-                exposure.decide(conn, finding, kind, reason, login)
-        except ValueError as error:
-            raise HTTPException(400, str(error)) from error
+        with _refusing(), engine.begin() as conn:
+            exposure.decide(conn, finding, kind, reason, login)
         return _back()
 
     @app.post("/findings/resolve")
     def resolve(
-        _login: Owner, finding: Annotated[list[int], Form()], reason: Annotated[str, Form()]
+        login: Owner, finding: Annotated[list[int], Form()], reason: Annotated[str, Form()]
     ) -> RedirectResponse:
-        try:
-            with engine.begin() as conn:
-                exposure.resolve(conn, finding, reason)
-        except ValueError as error:
-            raise HTTPException(400, str(error)) from error
+        with _refusing(), engine.begin() as conn:
+            exposure.resolve(conn, finding, reason, login)
         return _back()
 
     @app.post("/findings/reopen")
-    def reopen(_login: Owner, finding: Annotated[int, Form()]) -> RedirectResponse:
+    def reopen(login: Owner, finding: Annotated[int, Form()]) -> RedirectResponse:
         with engine.begin() as conn:
-            exposure.reopen(conn, finding)
+            exposure.reopen(conn, finding, login)
         return _back()
 
     @app.post("/decisions/withdraw")
@@ -127,48 +102,52 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
 
     @app.post("/expected/remove")
     def unexpect(
-        _login: Owner,
+        login: Owner,
         asset_id: Annotated[str, Form()],
         protocol: Annotated[str, Form()],
         port: Annotated[int, Form()],
         vantage: Annotated[str, Form()],
+        reason: Annotated[str, Form()],
     ) -> RedirectResponse:
-        with engine.begin() as conn:
-            exposure.unexpect(conn, asset_id, protocol, port, vantage)
+        with _refusing(), engine.begin() as conn:
+            exposure.unexpect(conn, asset_id, protocol, port, vantage, reason, login)
         return _back()
 
     @app.post("/assets/name")
     def name_asset(
         _login: Owner, provisional_id: Annotated[str, Form()], asset_id: Annotated[str, Form()]
     ) -> RedirectResponse:
-        try:
-            with engine.begin() as conn:
-                exposure.name_asset(conn, provisional_id, asset_id)
-        except ValueError as error:
-            raise HTTPException(400, str(error)) from error
+        with _refusing(), engine.begin() as conn:
+            exposure.name_asset(conn, provisional_id, asset_id)
         return _back()
 
     @app.post("/compliance/waive")
     def waive(
-        _login: Owner,
+        login: Owner,
         asset_id: Annotated[str, Form()],
         rule_id: Annotated[str, Form()],
         reason: Annotated[str, Form()],
     ) -> RedirectResponse:
-        try:
-            with engine.begin() as conn:
-                compliance.waive(conn, asset_id, rule_id, reason)
-        except ValueError as error:
-            raise HTTPException(400, str(error)) from error
+        with _refusing(), engine.begin() as conn:
+            compliance.waive(conn, asset_id, rule_id, reason, login)
         return _back("#compliance")
 
     @app.post("/compliance/unwaive")
     def unwaive(
-        _login: Owner, asset_id: Annotated[str, Form()], rule_id: Annotated[str, Form()]
+        login: Owner,
+        asset_id: Annotated[str, Form()],
+        rule_id: Annotated[str, Form()],
+        reason: Annotated[str, Form()],
     ) -> RedirectResponse:
-        with engine.begin() as conn:
-            compliance.unwaive(conn, asset_id, rule_id)
+        with _refusing(), engine.begin() as conn:
+            compliance.unwaive(conn, asset_id, rule_id, reason, login)
         return _back("#compliance")
+
+    @app.post("/alerts/replay")
+    def replay(_login: Owner) -> RedirectResponse:
+        with engine.begin() as conn:
+            notify.replay_failed(conn)
+        return _back()
 
     @app.get("/compliance/{scan_id}/checklist.cklb")
     def checklist(_login: Owner, scan_id: int) -> Response:
@@ -183,13 +162,13 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
 
     @app.get("/compliance/{scan_id}/playbook.yml")
     def playbook(_login: Owner, scan_id: int) -> Response:
-        with engine.connect() as conn:
-            scan = conn.execute(select(compliance_scans).where(compliance_scans.c.id == scan_id)).first()
-        if scan is None or scan.playbook_digest is None:
-            raise HTTPException(404, "no playbook for this result")
-        name = f"{scan.asset_id}-remediation-{scan.finished_at:%Y%m%d}.yml"
+        try:
+            with engine.connect() as conn:
+                name, digest = compliance.playbook(conn, scan_id)
+        except LookupError as error:
+            raise HTTPException(404, str(error)) from error
         return Response(
-            evidence.read(evidence_dir, scan.playbook_digest, ".yml.gz"),
+            evidence.read(evidence_dir, digest, ".yml.gz"),
             media_type="text/plain; charset=utf-8",
             headers=_download(name),
         )
@@ -197,140 +176,13 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
     return app
 
 
-def _dashboard(conn: Connection) -> dict[str, Any]:
-    now = datetime.now(UTC)
-    last_success = conn.scalar(
-        select(func.max(db.jobs.c.finished_at)).where(db.jobs.c.status == JobStatus.SUCCEEDED)
-    )
-    latest = conn.execute(select(db.jobs).order_by(db.jobs.c.id.desc()).limit(1)).first()
-    seen = observations.alias("seen")
-    service = (
-        seen.c.address,
-        _mac(seen.c.address).label("mac"),
-        seen.c.service,
-        seen.c.product,
-        seen.c.version,
-        seen.c.observed_at,
-    )
-    active = (decisions.c.finding_id == findings.c.id) & decisions.c.withdrawn_at.is_(None)
-    # The latest withdrawn decision, shown on a finding that's back in Needs attention.
-    withdrawn = (
-        select(decisions.c.withdrawal)
-        .where(decisions.c.finding_id == findings.c.id, decisions.c.withdrawn_at.is_not(None))
-        .order_by(decisions.c.withdrawn_at.desc())
-        .limit(1)
-        .scalar_subquery()
-    )
-    open_findings = conn.execute(
-        select(findings, *service, withdrawn.label("withdrawal"))
-        .join(seen, seen.c.id == findings.c.last_observation_id)
-        .where(findings.c.status == FindingStatus.OPEN, ~exists().where(active))
-        .order_by(findings.c.opened_at.desc())
-    ).all()
-    decided = conn.execute(
-        select(
-            findings,
-            *service,
-            decisions.c.id.label("decision_id"),
-            decisions.c.kind.label("decision_kind"),
-            decisions.c.reason,
-            decisions.c.decided_at,
-        )
-        .join(seen, seen.c.id == findings.c.last_observation_id)
-        .join(decisions, active)
-        .order_by(findings.c.asset_id, findings.c.protocol, findings.c.port)
-    ).all()
-    resolved = conn.execute(
-        select(findings, *service)
-        .join(seen, seen.c.id == findings.c.last_observation_id)
-        .where(findings.c.status == FindingStatus.RESOLVED)
-        .order_by(findings.c.resolved_at.desc())
-        .limit(20)
-    ).all()
-    latest_state = (
-        select(observations)
-        .distinct(
-            observations.c.asset_id, observations.c.protocol, observations.c.port, observations.c.vantage
-        )
-        .order_by(
-            observations.c.asset_id,
-            observations.c.protocol,
-            observations.c.port,
-            observations.c.vantage,
-            observations.c.observed_at.desc(),
-        )
-        .subquery()
-    )
-    expected = expected_services.alias("expected")
-    exposed = conn.execute(
-        select(latest_state, expected.c.reason)
-        .outerjoin(
-            expected,
-            (expected.c.asset_id == latest_state.c.asset_id)
-            & (expected.c.protocol == latest_state.c.protocol)
-            & (expected.c.port == latest_state.c.port)
-            & (expected.c.vantage == latest_state.c.vantage),
-        )
-        .where(latest_state.c.state == ObservationState.OPEN)
-        .order_by(latest_state.c.asset_id, latest_state.c.protocol, latest_state.c.port)
-    ).all()
-    last_backup = backups.latest(conn)
-    results = compliance.latest(conn)
-    return {
-        "compliance": [
-            {
-                "scan": scan,
-                "rate": compliance.pass_rate(scan.passed, scan.failed),
-                "stale": now - scan.received_at > compliance.STALE,
-                "failing": compliance.failing(conn, scan.id),
-                "checklist": compliance.matching_stig(conn, scan.id) is not None,
-            }
-            for scan in results
-        ],
-        "now": now,
-        "last_backup": last_backup,
-        "backup_stale": last_backup is None or now - last_backup > backups.STALE,
-        "last_success": last_success,
-        "stale": last_success is None or now - last_success > STALE,
-        "latest": latest,
-        "next_run": conn.scalar(select(func.min(schedules.c.next_run_at)).where(schedules.c.enabled)),
-        "runner_seen": conn.scalar(
-            select(func.max(tokens.c.last_used_at)).where(tokens.c.kind == TokenKind.RUNNER)
-        ),
-        "pending": _count(conn, notifications.c.status == NotificationStatus.PENDING),
-        "failed": _count(conn, notifications.c.status == NotificationStatus.FAILED),
-        "findings": open_findings,
-        "decided": decided,
-        "resolved": resolved,
-        "exposed": exposed,
-        "expected": conn.execute(select(expected_services).order_by(expected_services.c.asset_id)).all(),
-        # A provisional asset is one address, so one row each.
-        "provisional": conn.execute(
-            select(
-                assets.c.id,
-                func.host(bindings.c.address).label("address"),
-                _mac(bindings.c.address).label("mac"),
-            )
-            .join(bindings, bindings.c.asset_id == assets.c.id)
-            .where(assets.c.provisional)
-            .order_by(bindings.c.address)
-        ).all(),
-    }
-
-
-def _mac(address: ColumnElement[Any]) -> ScalarSelect[str]:
-    """The MAC most recently seen at an address, if any scan saw one."""
-    return (
-        select(cast(mac_sightings.c.mac, Text))
-        .where(mac_sightings.c.address == address)
-        .order_by(mac_sightings.c.confirmed_at.desc())
-        .limit(1)
-        .scalar_subquery()
-    )
-
-
-def _count(conn: Connection, condition: ColumnElement[bool]) -> int:
-    return int(conn.scalar(select(func.count()).select_from(notifications).where(condition)) or 0)
+@contextmanager
+def _refusing() -> Iterator[None]:
+    """The services raise ValueError when the owner's input can't be taken, such as a missing reason: a 400."""
+    try:
+        yield
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
 
 
 def _same_origin(request: Request) -> bool:

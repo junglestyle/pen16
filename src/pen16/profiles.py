@@ -6,7 +6,7 @@ NMAP_SERVICES = Path("/usr/share/nmap/nmap-services")
 # Where home devices leak over UDP: DNS, DHCP, TFTP, NTP, NetBIOS, SNMP, IKE, SSDP, mDNS, memcached.
 NIGHTLY_UDP = [53, 67, 69, 123, 137, 161, 500, 1900, 5353, 11211]
 TOP_TCP = 1000
-# Internal probe ceiling. The host egress policy enforces the same rate on the runner's interface.
+# Internal probe rate, under the 500 packets/s ceiling the host egress policy enforces on the runner's interface.
 MAX_RATE = 400
 
 
