@@ -39,7 +39,7 @@ An assistant client receives read and scan. Each request selects one registered 
 
 1. A schedule, owner, or permitted client requests work. Record targets, bindings, profile, vantage, requester, and deadline.
 2. Split large work into bounded jobs. Validate scope at dispatch; the runner checks recipient, expiry, and local scope over authenticated TLS.
-3. Store raw output durably before parsing and database finalization.
+3. Bound and parse raw output, then store it durably before database finalization. Output that doesn't parse fails the attempt and isn't kept.
 4. Commit observations, finding changes, and notification retry rows in a transaction.
 5. Deliver grouped notifications and update dashboard freshness independently of finding counts.
 
@@ -55,7 +55,7 @@ Settings, expected exposure, bindings, labels, and decisions have change history
 
 Accepted-risk and false-positive decisions suppress notifications for their precise scope: one finding, so one asset, service and vantage. Each records the service, product and version it was decided on; a scan that reports a different one withdraws it with what changed, and the finding alerts and returns to needs attention. A field the scan didn't report isn't a change. A new vantage is a separate finding with no decision. Changed identity and severity/exploitation evidence will invalidate decisions too, with asset corrections and advisories. Only named assets take decisions, so a reused address carries none. Withdrawn decisions stay as history. Unchanged observations update history quietly.
 
-A compliance result belongs to a host and a benchmark. Rules are stored once per benchmark with their title, severity and references, and each result stores every rule's outcome, so the latest result per host and benchmark is the current state. A pass-to-fail change between a host's consecutive results is a regression; waivers are owner decisions about one rule on one host and record a reason. A checklist lists every rule of the imported DISA STIG release (its manual XCCDF, loaded with `pen16 stig-import`), with the status its SCAP rules give it: rules no SCAP rule checks stay not reviewed. Within a vulnerability ID, any failing rule makes the vulnerability open, all passing makes it not a finding, and all not-applicable makes it not applicable.
+A compliance result belongs to a host and a benchmark. Rules are stored once per benchmark with their title, severity and references, and each result stores every rule's outcome, so the latest result per host and benchmark is the current state. A compliance host is a named asset with no address until the owner names a scanned device after it, which joins the two; a name another device holds is refused. A pass-to-fail change between a host's consecutive results is a regression; waivers are owner decisions about one rule on one host and record a reason. A checklist lists every rule of the imported DISA STIG release (its manual XCCDF, loaded with `pen16 stig-import`), with the status its SCAP rules give it: rules no SCAP rule checks stay not reviewed. Within a vulnerability ID, any failing rule makes the vulnerability open, all passing makes it not a finding, and all not-applicable makes it not applicable.
 
 M2 matches explicit product identifiers/aliases and affected versions. Ambiguous versions remain potentially affected. Deduplicate by advisory and asset; retain source identity for non-CVE items. Feed disappearance and port closure leave advisory findings open.
 

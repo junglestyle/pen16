@@ -141,6 +141,17 @@ def waive(conn: Connection, asset_id: str, rule_id: str, reason: str) -> None:
     """Accept a failing rule on one host. It stays failing, with the reason beside it, and stops alerting."""
     if not reason.strip():
         raise ValueError("a waiver needs a reason")
+    evaluated = conn.scalar(
+        select(
+            exists().where(
+                compliance_scans.c.asset_id == asset_id,
+                compliance_results.c.scan_id == compliance_scans.c.id,
+                compliance_results.c.rule_id == rule_id,
+            )
+        )
+    )
+    if not evaluated:
+        raise ValueError(f"no result from {asset_id!r} evaluates {rule_id!r}")
     conn.execute(
         upsert(compliance_waivers)
         .values(asset_id=asset_id, rule_id=rule_id, reason=reason.strip())

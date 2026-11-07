@@ -2,6 +2,8 @@
 
 import json
 import os
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from importlib.resources import files
 from pathlib import Path
@@ -84,7 +86,7 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
     def expect(
         _login: Owner, finding: Annotated[list[int], Form()], reason: Annotated[str, Form()]
     ) -> RedirectResponse:
-        with engine.begin() as conn:
+        with _refusing(), engine.begin() as conn:
             exposure.expect(conn, finding, reason)
         return _back()
 
@@ -95,22 +97,16 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
         kind: Annotated[DecisionKind, Form()],
         reason: Annotated[str, Form()],
     ) -> RedirectResponse:
-        try:
-            with engine.begin() as conn:
-                exposure.decide(conn, finding, kind, reason, login)
-        except ValueError as error:
-            raise HTTPException(400, str(error)) from error
+        with _refusing(), engine.begin() as conn:
+            exposure.decide(conn, finding, kind, reason, login)
         return _back()
 
     @app.post("/findings/resolve")
     def resolve(
         _login: Owner, finding: Annotated[list[int], Form()], reason: Annotated[str, Form()]
     ) -> RedirectResponse:
-        try:
-            with engine.begin() as conn:
-                exposure.resolve(conn, finding, reason)
-        except ValueError as error:
-            raise HTTPException(400, str(error)) from error
+        with _refusing(), engine.begin() as conn:
+            exposure.resolve(conn, finding, reason)
         return _back()
 
     @app.post("/findings/reopen")
@@ -141,11 +137,8 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
     def name_asset(
         _login: Owner, provisional_id: Annotated[str, Form()], asset_id: Annotated[str, Form()]
     ) -> RedirectResponse:
-        try:
-            with engine.begin() as conn:
-                exposure.name_asset(conn, provisional_id, asset_id)
-        except ValueError as error:
-            raise HTTPException(400, str(error)) from error
+        with _refusing(), engine.begin() as conn:
+            exposure.name_asset(conn, provisional_id, asset_id)
         return _back()
 
     @app.post("/compliance/waive")
@@ -155,11 +148,8 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
         rule_id: Annotated[str, Form()],
         reason: Annotated[str, Form()],
     ) -> RedirectResponse:
-        try:
-            with engine.begin() as conn:
-                compliance.waive(conn, asset_id, rule_id, reason)
-        except ValueError as error:
-            raise HTTPException(400, str(error)) from error
+        with _refusing(), engine.begin() as conn:
+            compliance.waive(conn, asset_id, rule_id, reason)
         return _back("#compliance")
 
     @app.post("/compliance/unwaive")
@@ -331,6 +321,15 @@ def _mac(address: ColumnElement[Any]) -> ScalarSelect[str]:
 
 def _count(conn: Connection, condition: ColumnElement[bool]) -> int:
     return int(conn.scalar(select(func.count()).select_from(notifications).where(condition)) or 0)
+
+
+@contextmanager
+def _refusing() -> Iterator[None]:
+    """The services raise ValueError when the owner's input can't be taken, such as a missing reason: a 400."""
+    try:
+        yield
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
 
 
 def _same_origin(request: Request) -> bool:

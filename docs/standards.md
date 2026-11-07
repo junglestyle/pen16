@@ -25,7 +25,8 @@ an org rule, it says so, and it wins.
 - Scope checks and finding closure are critical invariants: one implementation each.
 - Routes call application services that the dashboard and API share. Background jobs enforce the same permissions.
 - Identity, coverage, findings, intent, and authorization don't know about HTTP or the scanner process. The scanner,
-  parser, notifier, and feeds sit behind small typed interfaces.
+  parser, notifier, and feeds are plain typed functions; one gets a `Protocol` seam when a second implementation of
+  it is real.
 
 ## Errors and recovery
 

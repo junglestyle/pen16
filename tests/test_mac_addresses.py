@@ -5,7 +5,7 @@ from sqlalchemy import func, insert, select
 
 from pen16 import neighbours
 from pen16.db import mac_sightings
-from tests.conftest import LAB_SCAN
+from tests.conftest import lab_xml
 from tests.test_jobs import queue, runner_client, upload
 from tests.test_web import OWNER, dashboard, scanned
 
@@ -41,7 +41,7 @@ def test_a_scan_records_the_mac_the_host_confirmed_during_it(committed, lab_scop
         ("192.0.2.99", "02:00:00:00:00:99", 0, "REACHABLE"),
     )
 
-    assert upload(client, job_id, LAB_SCAN) == 204
+    assert upload(client, job_id, lab_xml()) == 204
 
     assert sightings(committed) == [("192.0.2.10", "02:00:00:00:00:10")]
 
@@ -52,7 +52,7 @@ def test_a_mac_confirmed_before_the_scan_isnt_recorded(committed, lab_scope, tmp
     client.post("/runner/v1/jobs/claim")
     neighbour_table(tmp_path / "neighbours.json", ("192.0.2.10", "02:00:00:00:00:10", 3600, "STALE"))
 
-    assert upload(client, job_id, LAB_SCAN) == 204
+    assert upload(client, job_id, lab_xml()) == 204
 
     assert sightings(committed) == []
 

@@ -2,7 +2,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import Connection, delete, func, select, update
+from sqlalchemy import Connection, delete, exists, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 
 from pen16.db import (
@@ -181,7 +181,8 @@ def name_asset(conn: Connection, provisional_id: str, asset_id: str) -> None:
     """Give a provisional asset an owner-chosen ID, carrying its history and findings along.
 
     Only provisional assets can be renamed: they carry no owner decisions that a reused address could
-    wrongly inherit.
+    wrongly inherit. The name can't belong to another device. It can be a compliance host's, which has no
+    address of its own until then: naming the device after it joins the two.
     """
     if not ASSET_ID.fullmatch(asset_id) or asset_id.startswith("new-"):
         raise ValueError(
@@ -190,6 +191,8 @@ def name_asset(conn: Connection, provisional_id: str, asset_id: str) -> None:
     provisional = conn.scalar(select(assets.c.provisional).where(assets.c.id == provisional_id))
     if provisional is not True:
         raise ValueError(f"{provisional_id!r} isn't a provisional asset")
+    if conn.scalar(select(exists().where(bindings.c.asset_id == asset_id))):
+        raise ValueError(f"{asset_id!r} already names another device")
     conn.execute(insert(assets).values(id=asset_id, provisional=False).on_conflict_do_nothing())
     for table in (bindings, observations, findings, expected_services):
         conn.execute(update(table).where(table.c.asset_id == provisional_id).values(asset_id=asset_id))

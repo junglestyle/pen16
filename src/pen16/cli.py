@@ -7,17 +7,13 @@ import uvicorn
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-from pen16 import backups, db, exposure, nmap, runner, stig, tokens, worker
+from pen16 import backups, db, exposure, runner, stig, tokens, worker
 from pen16.db import TokenKind
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="pen16")
     commands = parser.add_subparsers(dest="command", required=True)
-    ingest = commands.add_parser(
-        "ingest", help="record an internal nmap XML scan and report unexpected exposure"
-    )
-    ingest.add_argument("path", type=Path)
     commands.add_parser("migrate", help="bring the database schema up to date")
     commands.add_parser("worker", help="run schedules, job deadlines, and notification delivery")
     commands.add_parser("runner", help="claim scan jobs from the listener and run them")
@@ -44,14 +40,7 @@ def main() -> None:
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
-    if args.command == "ingest":
-        scan = nmap.read(args.path)
-        with db.connect().begin() as conn:
-            opened = exposure.ingest(conn, scan, vantage="internal")
-        for finding in opened:
-            why = f": {finding.why}" if finding.why else ""
-            print(f"unexpected {finding.asset_id} {finding.port}/{finding.protocol} ({finding.vantage}){why}")
-    elif args.command == "migrate":
+    if args.command == "migrate":
         alembic = AlembicConfig()
         alembic.set_main_option("script_location", str(files("pen16") / "migrations"))
         command.upgrade(alembic, "head")

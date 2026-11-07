@@ -1,4 +1,5 @@
 import os
+import re
 import uuid
 from pathlib import Path
 
@@ -9,7 +10,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError
 
-from pen16 import db, scope
+from pen16 import db, nmap, scope
 
 FIXTURES = Path(__file__).parent / "fixtures"
 LAB_SCAN = FIXTURES / "nmap-lab.xml"
@@ -18,6 +19,31 @@ CLOSED_SCAN = FIXTURES / "nmap-lab-closed.xml"
 # the target's facts and OVAL results removed. The DISA RHEL 9 STIG V2R9 manual benchmark is trimmed to match.
 STIG_RESULT = FIXTURES / "arf-rhel9-stig.xml"
 DISA_STIG = FIXTURES / "disa-rhel9-stig-xccdf.xml"
+LAB_FINISHED = 1767225612
+
+
+def lab_xml(shift: int = 0, version: bytes = b'version="3.0.1"') -> bytes:
+    """The lab scan, `shift` seconds later, with 8080's version attribute replaced."""
+    raw = LAB_SCAN.read_bytes().replace(
+        b'<finished time="%d"' % LAB_FINISHED, b'<finished time="%d"' % (LAB_FINISHED + shift)
+    )
+    return raw.replace(b'version="3.0.1"', version)
+
+
+def closed_xml(*, gateway: bool = True) -> bytes:
+    """A day after the lab scan, with 8080 closed. Without the gateway, as if it didn't answer."""
+    raw = CLOSED_SCAN.read_bytes()
+    if not gateway:
+        raw = re.sub(rb'<host [^\n]*\n<address addr="192\.0\.2\.1".*?</host>\n', b"", raw, flags=re.DOTALL)
+    return raw
+
+
+def lab(shift: int = 0, version: bytes = b'version="3.0.1"') -> nmap.Scan:
+    return nmap.parse(lab_xml(shift, version))
+
+
+def closed(*, gateway: bool = True) -> nmap.Scan:
+    return nmap.parse(closed_xml(gateway=gateway))
 
 
 # Each run creates its own scratch database through this admin URL and drops it afterwards. make test sets it to
@@ -74,14 +100,9 @@ def conn(engine):
 def committed(engine):
     """For tests that go through a service's own transactions. Wipes everything but schedules afterwards."""
     yield engine
+    tables = ", ".join(table.name for table in db.metadata.sorted_tables if table.name != "schedules")
     with engine.begin() as connection:
-        connection.execute(
-            text(
-                "TRUNCATE assets, bindings, expected_services, observations, findings, jobs, tokens, "
-                "notifications, backups, compliance_scans, compliance_rules, compliance_results, "
-                "compliance_waivers, stigs, stig_rules, decisions, mac_sightings CASCADE"
-            )
-        )
+        connection.execute(text(f"TRUNCATE {tables} CASCADE"))
 
 
 @pytest.fixture

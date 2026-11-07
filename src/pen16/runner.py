@@ -47,7 +47,9 @@ def stamp(process: Path) -> str:
 
 def run_forever() -> None:
     stop = threading.Event()
-    signal.signal(signal.SIGTERM, lambda *_: stop.set())  # a scan in progress finishes first
+    # SIGTERM stops claiming. A scan in progress runs until compose's stop timeout kills the container, and
+    # the listener retries that job when this runner next claims.
+    signal.signal(signal.SIGTERM, lambda *_: stop.set())
     scope = config.load().scope
     url = os.environ.get("PEN16_LISTENER_URL")
     if not url:

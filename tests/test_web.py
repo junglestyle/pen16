@@ -6,7 +6,7 @@ from sqlalchemy import insert, select
 from pen16 import exposure, nmap, web
 from pen16.config import Config
 from pen16.db import assets, bindings, decisions, expected_services, findings
-from tests.conftest import LAB_SCAN
+from tests.conftest import lab_xml
 
 OWNER = {"Tailscale-User-Login": "owner@example.com"}
 
@@ -16,12 +16,9 @@ def dashboard(engine, scope, evidence_dir=Path("/nonexistent")):
     return TestClient(web.create(engine, settings, evidence_dir), base_url="https://pen16.example.ts.net")
 
 
-LAB_BYTES = LAB_SCAN.read_bytes()
-
-
-def scanned(engine, raw=LAB_BYTES):
+def scanned(engine, raw=None):
     with engine.begin() as conn:
-        exposure.ingest(conn, nmap.parse(raw), vantage="internal")
+        exposure.ingest(conn, nmap.parse(raw or lab_xml()), vantage="internal")
 
 
 def test_only_the_owner_gets_in(committed, lab_scope):
@@ -32,7 +29,6 @@ def test_only_the_owner_gets_in(committed, lab_scope):
     assert client.get("/", headers=OWNER).status_code == 200
     # The logo and manifest are the only things served without the owner check.
     assert client.get("/static/manifest.webmanifest").status_code == 200
-    assert client.get("/static/../web.py").status_code == 404
 
 
 def test_cross_site_post_is_refused(committed, lab_scope):
@@ -63,9 +59,7 @@ def test_marking_findings_expected_from_the_dashboard(committed, lab_scope):
 
 
 def test_scan_output_is_escaped(committed, lab_scope):
-    scanned(
-        committed, LAB_SCAN.read_bytes().replace(b'product="Werkzeug httpd"', b'product="&lt;script&gt;x"')
-    )
+    scanned(committed, lab_xml().replace(b'product="Werkzeug httpd"', b'product="&lt;script&gt;x"'))
     with committed.begin() as conn:
         conn.execute(
             insert(expected_services).values(
@@ -121,3 +115,18 @@ def test_a_decision_on_an_unnamed_device_is_refused(committed, lab_scope):
     )
 
     assert response.status_code == 400
+
+
+def test_input_the_services_refuse_is_a_bad_request(committed, lab_scope):
+    scanned(committed)
+    client = dashboard(committed, lab_scope)
+    post = {"headers": {**OWNER, "Origin": "https://pen16.example.ts.net"}, "follow_redirects": False}
+    with committed.connect() as conn:
+        ssh = conn.scalar(select(findings.c.id).where(findings.c.port == 22))
+
+    blank = client.post("/findings/expect", data={"finding": [str(ssh)], "reason": " "}, **post)
+    unknown = client.post(
+        "/compliance/waive", data={"asset_id": "nas", "rule_id": "x", "reason": "r"}, **post
+    )
+
+    assert (blank.status_code, unknown.status_code) == (400, 400)

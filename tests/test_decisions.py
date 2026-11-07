@@ -1,18 +1,10 @@
 import pytest
 from sqlalchemy import exists, insert, select
 
-from pen16 import exposure, nmap
+from pen16 import exposure
 from pen16.db import DecisionKind, assets, bindings, decisions, expected_services, findings
 from pen16.exposure import Finding
-from tests.conftest import CLOSED_SCAN, LAB_SCAN
-
-FINISHED = b'<finished time="1767225612"'
-
-
-def lab(shift=0, version=b'version="3.0.1"'):
-    """The lab scan, `shift` seconds later, with 8080's version attribute replaced."""
-    raw = LAB_SCAN.read_bytes().replace(FINISHED, b'<finished time="%d"' % (1767225612 + shift))
-    return nmap.parse(raw.replace(b'version="3.0.1"', version))
+from tests.conftest import closed, lab
 
 
 def web_app_open(conn):
@@ -54,7 +46,7 @@ def test_accepted_risk_leaves_needs_attention_and_stays_quiet(conn):
     assert needs_attention(conn) == []
     assert exposure.ingest(conn, lab(shift=3600), vantage="internal") == []
     # Closed, then open again with the same service: still decided, no alert.
-    exposure.ingest(conn, nmap.read(CLOSED_SCAN), vantage="internal")
+    exposure.ingest(conn, closed(), vantage="internal")
     assert exposure.ingest(conn, lab(shift=2 * 86400), vantage="internal") == []
     assert needs_attention(conn) == []
 

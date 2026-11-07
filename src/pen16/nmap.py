@@ -1,7 +1,6 @@
 import hashlib
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 from defusedxml import ElementTree
@@ -9,7 +8,6 @@ from defusedxml import ElementTree
 from pen16.db import ObservationState
 
 PARSER_VERSION = "2"
-MAX_XML_BYTES = 250 * 1024 * 1024
 
 # open|filtered is what UDP reports for silence. pen16 can't tell it from a drop, so it stays filtered.
 STATES = {
@@ -57,12 +55,6 @@ class Scan:
             if host.address == address:
                 return host.unlisted.get((protocol, port))
         return None
-
-
-def read(path: Path) -> Scan:
-    if path.stat().st_size > MAX_XML_BYTES:
-        raise ValueError(f"{path} is larger than {MAX_XML_BYTES} bytes")
-    return parse(path.read_bytes())
 
 
 def parse(raw: bytes) -> Scan:

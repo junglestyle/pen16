@@ -11,7 +11,7 @@ from pen16.config import Config
 from pen16.db import findings, notifications
 from pen16.db import jobs as jobs_table
 from pen16.scope import OutOfScopeError
-from tests.conftest import CLOSED_SCAN, LAB_SCAN
+from tests.conftest import closed_xml, lab_xml
 
 SERVICES = Path(__file__).parent / "fixtures" / "nmap-services"
 
@@ -30,8 +30,8 @@ def queue(engine, scope):
         return jobs.request(conn, scope, "owner:test", "test")
 
 
-def upload(client, job_id, path):
-    response = client.post(f"/runner/v1/jobs/{job_id}/result", content=gzip.compress(path.read_bytes()))
+def upload(client, job_id, raw):
+    response = client.post(f"/runner/v1/jobs/{job_id}/result", content=gzip.compress(raw))
     return int(response.status_code)
 
 
@@ -47,7 +47,7 @@ def test_scan_round_trip_opens_one_alerted_finding(committed, lab_scope, tmp_pat
     job = client.post("/runner/v1/jobs/claim").json()
     assert job["id"] == job_id
     assert job["exclude"] == ["192.0.2.12/32"]
-    assert upload(client, job_id, LAB_SCAN) == 204
+    assert upload(client, job_id, lab_xml()) == 204
 
     assert len(list(tmp_path.glob("*.xml.gz"))) == 1
     assert ("finding", "3 unexpected service(s)") in notices(committed)
@@ -59,29 +59,31 @@ def test_late_or_repeated_upload_is_refused(committed, lab_scope, tmp_path):
     client = runner_client(committed, lab_scope, tmp_path)
     job_id = queue(committed, lab_scope)
     client.post("/runner/v1/jobs/claim")
-    upload(client, job_id, LAB_SCAN)
+    upload(client, job_id, lab_xml())
 
-    assert upload(client, job_id, CLOSED_SCAN) == 409
+    assert upload(client, job_id, closed_xml()) == 409
     with committed.connect() as conn:
         assert conn.scalar(select(findings.c.status).where(findings.c.port == 8080)) == "open"
 
 
 def test_silent_gateway_blocks_closure_and_says_so(committed, lab_scope, tmp_path):
     client = runner_client(committed, lab_scope, tmp_path)
-    for path in (LAB_SCAN, LAB_SCAN):
+    for raw in (lab_xml(), closed_xml(gateway=False)):
         job_id = queue(committed, lab_scope)
         client.post("/runner/v1/jobs/claim")
-        upload(client, job_id, path)
+        upload(client, job_id, raw)
 
+    with committed.connect() as conn:
+        assert conn.scalar(select(findings.c.status).where(findings.c.port == 8080)) == "open"
     assert ("health", "Gateway didn't answer") in notices(committed)
 
 
 def test_gateway_up_lets_closed_ports_resolve(committed, lab_scope, tmp_path):
     client = runner_client(committed, lab_scope, tmp_path)
-    for path in (LAB_SCAN, CLOSED_SCAN):
+    for raw in (lab_xml(), closed_xml()):
         job_id = queue(committed, lab_scope)
         client.post("/runner/v1/jobs/claim")
-        upload(client, job_id, path)
+        upload(client, job_id, raw)
 
     with committed.connect() as conn:
         assert conn.scalar(select(findings.c.status).where(findings.c.port == 8080)) == "resolved"

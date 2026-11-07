@@ -60,19 +60,6 @@ def test_parse_reads_profile_results_and_stig_references() -> None:
     assert "SC-13" in crypto.nist
 
 
-@pytest.mark.parametrize(
-    "raw",
-    [
-        b"<nmaprun/>",
-        b'<!DOCTYPE x [<!ENTITY e "boom">]><x>&e;</x>',
-        b'<asset-report-collection xmlns="http://scap.nist.gov/schema/asset-reporting-format/1.1"/>',
-    ],
-)
-def test_parse_refuses_what_isnt_a_result(raw: bytes) -> None:
-    with pytest.raises(Exception):  # noqa: B017, PT011 - any refusal will do; the intake turns it into a 422
-        arf.parse(raw)
-
-
 def test_first_result_alerts_once_with_the_pass_rate(conn: Connection) -> None:
     recorded(conn, STIG_RESULT.read_bytes())
 
@@ -215,12 +202,21 @@ def test_intake_takes_a_result_for_the_tokens_host_only(committed: Engine, tmp_p
         assert conn.scalar(select(func.count()).select_from(compliance_results)) == 20
 
 
-def test_intake_refuses_garbage(committed: Engine, tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "body",
+    [
+        b"not gzip",
+        gzip.compress(b"<nmaprun/>"),
+        gzip.compress(b'<!DOCTYPE x [<!ENTITY e "boom">]><x>&e;</x>'),
+        gzip.compress(
+            b'<asset-report-collection xmlns="http://scap.nist.gov/schema/asset-reporting-format/1.1"/>'
+        ),
+    ],
+)
+def test_intake_refuses_what_isnt_a_result(committed: Engine, tmp_path: Path, body: bytes) -> None:
     client, headers = intake_client(committed, tmp_path)
 
-    response = client.post(
-        "/compliance/v1/results", files={"result": ("arf.xml.gz", b"not gzip")}, headers=headers
-    )
+    response = client.post("/compliance/v1/results", files={"result": ("arf.xml.gz", body)}, headers=headers)
 
     assert response.status_code == 422
     assert list(tmp_path.iterdir()) == []
