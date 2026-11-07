@@ -1,11 +1,13 @@
 import gzip
+import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 
 import pytest
 from sqlalchemy import func, select, update
 
-from pen16 import jobs, runner, scope, tokens
+from pen16 import evidence, jobs, runner, scope, tokens
 from pen16.db import TokenKind, findings, schedules
 from pen16.db import jobs as jobs_table
 from pen16.scope import OutOfScopeError
@@ -149,6 +151,35 @@ def test_hostile_upload_fails_the_attempt(committed, tmp_path):
     assert response.status_code == 422
     with committed.connect() as conn:
         assert conn.scalar(select(jobs_table.c.status)) == "queued"
+
+
+def test_an_upload_past_the_limit_is_cut_off_and_fails_the_attempt(committed, tmp_path, monkeypatch):
+    monkeypatch.setattr(evidence, "MAX_COMPRESSED", 1024)
+    client = runner_client(committed, tmp_path)
+    job_id = queue(committed)
+    client.post("/runner/v1/jobs/claim")
+
+    response = client.post(f"/runner/v1/jobs/{job_id}/result", content=os.urandom(4096))
+
+    assert response.status_code == 413
+    assert list(tmp_path.glob("*.gz")) == []
+    with committed.connect() as conn:
+        assert tuple(conn.execute(select(jobs_table.c.status, jobs_table.c.error)).one()) == (
+            "queued",
+            "scan output over the upload limit",
+        )
+
+
+def test_a_scan_is_killed_at_its_deadline_or_its_output_limit(monkeypatch):
+    with pytest.raises(runner.ScanFailedError, match="deadline"):
+        runner.scan([sys.executable, "-c", "import time; time.sleep(10)"], 0.2)
+
+    monkeypatch.setattr(runner, "MAX_EXPANDED", 1024)
+    with pytest.raises(runner.ScanFailedError, match="limit"):
+        runner.scan([sys.executable, "-c", "import sys; sys.stdout.write('x' * 100_000)"], 10)
+
+    with pytest.raises(runner.ScanFailedError, match="exited 3: no route"):
+        runner.scan([sys.executable, "-c", "import sys; sys.stderr.write('no route'); sys.exit(3)"], 10)
 
 
 def test_runner_refuses_a_job_outside_its_own_scope(committed, tmp_path):
