@@ -10,7 +10,7 @@ from sqlalchemy import create_engine, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError
 
-from pen16 import db, nmap, scope
+from pen16 import db, exposure, nmap, scope
 
 FIXTURES = Path(__file__).parent / "fixtures"
 LAB_SCAN = FIXTURES / "nmap-lab.xml"
@@ -20,6 +20,8 @@ CLOSED_SCAN = FIXTURES / "nmap-lab-closed.xml"
 STIG_RESULT = FIXTURES / "arf-rhel9-stig.xml"
 DISA_STIG = FIXTURES / "disa-rhel9-stig-xccdf.xml"
 LAB_FINISHED = 1767225612
+# The lab network: its gateway answers in the closed scan, not the first one, and one host inside it is excluded.
+LAB = scope.parse([{"name": "lab", "cidr": "192.0.2.0/24", "gateway": "192.0.2.1"}], ["192.0.2.12/32"])
 
 
 def lab_xml(shift: int = 0, version: bytes = b'version="3.0.1"') -> bytes:
@@ -44,6 +46,11 @@ def lab(shift: int = 0, version: bytes = b'version="3.0.1"') -> nmap.Scan:
 
 def closed(*, gateway: bool = True) -> nmap.Scan:
     return nmap.parse(closed_xml(gateway=gateway))
+
+
+def ingest(conn, scan):
+    """Record a scan from the lab network, as a job does."""
+    return exposure.ingest(conn, scan, LAB.networks, "internal")
 
 
 def open_incidents(conn):
@@ -120,4 +127,4 @@ def committed(engine):
 
 @pytest.fixture
 def lab_scope():
-    return scope.parse([{"name": "lab", "cidr": "192.0.2.0/24", "gateway": "192.0.2.1"}], ["192.0.2.12/32"])
+    return LAB

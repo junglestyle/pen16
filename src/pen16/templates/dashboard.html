@@ -61,6 +61,8 @@ form.inline { display: inline; }
   <dd>{% if next_run %}{{ next_run.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}no schedule enabled{% endif %}</dd>
   <dt>Runner last seen</dt>
   <dd>{% if runner_seen %}{{ runner_seen.strftime('%Y-%m-%d %H:%M UTC') }}{% else %}<span class="bad">never</span>{% endif %}</dd>
+  <dt>Worker last ran</dt>
+  <dd class="{{ 'bad' if worker_stale else 'ok' }}">{% if worker_seen %}{{ worker_seen.strftime('%Y-%m-%d %H:%M:%S UTC') }}{% else %}never{% endif %}{% if worker_stale %} (stopped?){% endif %}</dd>
   <dt>Compliance</dt>
   <dd>
     {% set stale_hosts = compliance|selectattr('stale')|list %}

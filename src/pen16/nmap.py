@@ -46,6 +46,10 @@ class Scan:
     ports: list[Port]
     hosts: list[Host]
 
+    def up(self) -> set[str]:
+        """The addresses this scan found up."""
+        return {host.address for host in self.hosts if host.up}
+
     def state(self, address: str, protocol: str, port: int) -> ObservationState | None:
         """What this scan saw on one port, or None when it didn't cover it."""
         for listed in self.ports:

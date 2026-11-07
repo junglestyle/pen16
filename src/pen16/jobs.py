@@ -9,7 +9,6 @@ from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from pen16 import db, exposure, notify
 from pen16.db import (
     JobStatus,
-    NotificationKind,
     ObservationState,
     expected_services,
     jobs,
@@ -118,7 +117,7 @@ def complete(
     the kernel confirmed it after this job started, so an entry left from before can't be pinned on this scan.
     """
     job = _running(conn, job_id, runner)
-    up = {host.address for host in scan.hosts if host.up}
+    up = scan.up()
     seen = [
         {"address": address, "mac": n.mac, "confirmed_at": n.confirmed_at, "evidence_digest": scan.digest}
         for address in sorted(up)
@@ -126,27 +125,22 @@ def complete(
     ]
     if seen:
         conn.execute(postgresql_insert(mac_sightings).values(seen).on_conflict_do_nothing())
-    silent = [network for network in scope.networks if str(network.gateway) not in up]
-    opened = exposure.ingest(conn, scan, vantage="internal", closures=not silent)
-    if opened:
-        lines = [f"{f.asset_id} {f.port}/{f.protocol}" + (f": {f.why}" if f.why else "") for f in opened]
-        notify.enqueue(
-            conn, NotificationKind.FINDING, f"{len(opened)} unexpected service(s)", "\n".join(lines)
-        )
+    opened = exposure.ingest(conn, scan, scope.networks, vantage="internal")
     for network in scope.networks:
-        if network in silent:
-            notify.raise_incident(
-                conn,
-                _gateway(network.name),
-                f"Gateway of {network.name} didn't answer",
-                f"Gateway {network.gateway} was down during job {job_id}, so closed ports resolved nothing.",
-            )
-        else:
+        if str(network.gateway) in up:
             notify.clear_incident(
                 conn,
                 _gateway(network.name),
                 f"Gateway of {network.name} answers again",
                 f"Gateway {network.gateway} answered during job {job_id}.",
+            )
+        else:
+            notify.raise_incident(
+                conn,
+                _gateway(network.name),
+                f"Gateway of {network.name} didn't answer",
+                f"Gateway {network.gateway} was down during job {job_id}, so closed ports in {network.cidr} "
+                "resolve nothing until it answers.",
             )
     if job.schedule is not None:
         notify.clear_incident(

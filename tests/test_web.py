@@ -3,10 +3,10 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 from sqlalchemy import insert, select
 
-from pen16 import exposure, nmap, web
+from pen16 import nmap, web
 from pen16.config import Config
 from pen16.db import assets, bindings, decisions, expected_services, findings
-from tests.conftest import lab_xml
+from tests.conftest import ingest, lab_xml
 
 OWNER = {"Tailscale-User-Login": "owner@example.com"}
 
@@ -18,7 +18,7 @@ def dashboard(engine, scope, evidence_dir=Path("/nonexistent")):
 
 def scanned(engine, raw=None):
     with engine.begin() as conn:
-        exposure.ingest(conn, nmap.parse(raw or lab_xml()), vantage="internal")
+        ingest(conn, nmap.parse(raw or lab_xml()))
 
 
 def test_only_the_owner_gets_in(committed, lab_scope):

@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import ColumnElement, Connection, Engine, ScalarSelect, Text, cast, exists, func, select
 
-from pen16 import backups, compliance, config, db, evidence, exposure, jobs, neighbours, notify
+from pen16 import backups, compliance, config, db, evidence, exposure, jobs, neighbours, notify, worker
 from pen16.config import Config
 from pen16.db import (
     DecisionKind,
@@ -33,6 +33,7 @@ from pen16.db import (
     decisions,
     expected_services,
     findings,
+    heartbeats,
     incidents,
     mac_sightings,
     notifications,
@@ -42,6 +43,8 @@ from pen16.db import (
 )
 
 STALE = timedelta(hours=48)
+# The worker ticks every 15 seconds; this many minutes without one means it has stopped.
+WORKER_STALE = timedelta(minutes=2)
 templates = Jinja2Templates(directory=str(files("pen16") / "templates"))
 # The template compares states by name, not by quoted string.
 templates.env.globals.update(
@@ -277,6 +280,7 @@ def _dashboard(conn: Connection) -> dict[str, Any]:
         .order_by(latest_state.c.asset_id, latest_state.c.protocol, latest_state.c.port)
     ).all()
     last_backup = backups.latest(conn)
+    worker_seen = conn.scalar(select(heartbeats.c.at).where(heartbeats.c.component == worker.COMPONENT))
     results = compliance.latest(conn)
     return {
         "compliance": [
@@ -299,6 +303,8 @@ def _dashboard(conn: Connection) -> dict[str, Any]:
         "runner_seen": conn.scalar(
             select(func.max(tokens.c.last_used_at)).where(tokens.c.kind == TokenKind.RUNNER)
         ),
+        "worker_seen": worker_seen,
+        "worker_stale": worker_seen is None or now - worker_seen > WORKER_STALE,
         "pending": _count(conn, notifications.c.status == NotificationStatus.PENDING),
         "failed": _count(conn, notifications.c.status == NotificationStatus.FAILED),
         "incidents": conn.execute(

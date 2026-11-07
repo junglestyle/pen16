@@ -312,6 +312,14 @@ incidents = Table(
     Index("incidents_one_open", "key", unique=True, postgresql_where=text("cleared_at IS NULL")),
 )
 
+# When each long-running component last finished a round of its work, for the dashboard to tell it's alive.
+heartbeats = Table(
+    "heartbeats",
+    metadata,
+    Column("component", Text, primary_key=True),
+    Column("at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+)
+
 # One row per verified backup, written by deploy/pen16-backup through `pen16 backed-up`.
 backups = Table(
     "backups",

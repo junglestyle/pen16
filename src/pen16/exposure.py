@@ -1,14 +1,18 @@
+import ipaddress
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import Connection, delete, exists, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 
+from pen16 import notify
 from pen16.db import (
     DecisionKind,
     FindingChange,
     FindingStatus,
+    NotificationKind,
     ObservationState,
     assets,
     bindings,
@@ -19,6 +23,7 @@ from pen16.db import (
     observations,
 )
 from pen16.nmap import PARSER_VERSION, Port, Scan
+from pen16.scope import Network
 
 UNEXPECTED_EXPOSURE = "unexpected-exposure"
 ASSET_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,62}")
@@ -36,14 +41,17 @@ class Finding:
     why: str | None = None
 
 
-def ingest(conn: Connection, scan: Scan, vantage: str, *, closures: bool = True) -> list[Finding]:
-    """Record a scan's observations, open findings for unexpected open ports, and resolve closed ones.
+def ingest(conn: Connection, scan: Scan, networks: Sequence[Network], vantage: str) -> list[Finding]:
+    """Record a scan's observations, open findings for unexpected open ports, resolve closed ones, and queue one
+    alert for what's news.
 
     Returns the findings this scan newly opened or reopened, and those whose decision it withdrew: the ones
-    worth an alert. A finding the owner decided about stays quiet while the service matches what they decided
-    on. Run it inside one transaction, so the observations and finding changes land together. Re-ingesting the
-    same evidence changes nothing. closures=False records everything but resolves nothing, for scans whose
-    negative results can't be trusted, such as when the gateway didn't answer.
+    alerted. A finding the owner decided about stays quiet while the service matches what they decided on. Run
+    it inside one transaction, so the observations, finding changes and alert land together. Re-ingesting the
+    same evidence changes nothing.
+
+    A closed port resolves a finding only inside a network whose gateway answered this scan: without it, a
+    closed port can't be told from a network that was down.
     """
     opened = []
     for port in scan.ports:
@@ -64,8 +72,13 @@ def ingest(conn: Connection, scan: Scan, vantage: str, *, closures: bool = True)
             opened.append(Finding(asset_id, port.protocol, port.port, vantage, why))
         elif alert:
             opened.append(Finding(asset_id, port.protocol, port.port, vantage))
-    if closures:
-        _close(conn, scan, vantage)
+    up = scan.up()
+    _close(conn, scan, vantage, [network for network in networks if str(network.gateway) in up])
+    if opened:
+        lines = [f"{f.asset_id} {f.port}/{f.protocol}" + (f": {f.why}" if f.why else "") for f in opened]
+        notify.enqueue(
+            conn, NotificationKind.FINDING, f"{len(opened)} unexpected service(s)", "\n".join(lines)
+        )
     return opened
 
 
@@ -346,8 +359,9 @@ def _open(
     return existing.id, True
 
 
-def _close(conn: Connection, scan: Scan, vantage: str) -> None:
-    """Resolve open findings whose port this scan saw closed on every address bound to the asset."""
+def _close(conn: Connection, scan: Scan, vantage: str, trusted: Sequence[Network]) -> None:
+    """Resolve open findings whose port this scan saw closed on every address bound to the asset, when every
+    one of those addresses is in a trusted network."""
     last_open = observations.alias("last_open")
     rows = conn.execute(
         select(
@@ -361,12 +375,14 @@ def _close(conn: Connection, scan: Scan, vantage: str) -> None:
             last_open.c.observed_at < scan.finished_at,
         )
     )
-    up = {host.address for host in scan.hosts if host.up}
+    up = scan.up()
     for finding in rows.all():
         bound = conn.scalars(select(bindings.c.address).where(bindings.c.asset_id == finding.asset_id))
         addresses = [str(address) for address in bound]
         if not addresses or not all(
-            address in up and scan.state(address, finding.protocol, finding.port) == ObservationState.CLOSED
+            address in up
+            and any(ipaddress.IPv4Address(address) in network.cidr for network in trusted)
+            and scan.state(address, finding.protocol, finding.port) == ObservationState.CLOSED
             for address in addresses
         ):
             continue

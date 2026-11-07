@@ -4,7 +4,7 @@ from sqlalchemy import exists, insert, select
 from pen16 import exposure
 from pen16.db import DecisionKind, assets, bindings, decisions, expected_services, finding_events, findings
 from pen16.exposure import Finding
-from tests.conftest import closed, lab
+from tests.conftest import closed, ingest, lab
 
 OWNER = "owner@example.com"
 
@@ -26,7 +26,7 @@ def web_app_open(conn):
             for port in (22, 445)
         ],
     )
-    exposure.ingest(conn, lab(), vantage="internal")
+    ingest(conn, lab())
     return conn.scalar(select(findings.c.id).where(findings.c.port == 8080))
 
 
@@ -46,10 +46,10 @@ def test_accepted_risk_leaves_needs_attention_and_stays_quiet(conn):
     )
 
     assert needs_attention(conn) == []
-    assert exposure.ingest(conn, lab(shift=3600), vantage="internal") == []
+    assert ingest(conn, lab(shift=3600)) == []
     # Closed, then open again with the same service: still decided, no alert.
-    exposure.ingest(conn, closed(), vantage="internal")
-    assert exposure.ingest(conn, lab(shift=2 * 86400), vantage="internal") == []
+    ingest(conn, closed())
+    assert ingest(conn, lab(shift=2 * 86400)) == []
     assert needs_attention(conn) == []
 
 
@@ -59,7 +59,7 @@ def test_a_new_version_brings_the_decision_back_with_the_reason(conn):
         conn, [web_app], DecisionKind.ACCEPTED_RISK, "lab tool, tailnet only", "owner@example.com"
     )
 
-    opened = exposure.ingest(conn, lab(shift=86400, version=b'version="3.1.0"'), vantage="internal")
+    opened = ingest(conn, lab(shift=86400, version=b'version="3.1.0"'))
 
     assert len(opened) == 1
     assert (opened[0].asset_id, opened[0].port) == ("fileserver", 8080)
@@ -75,12 +75,12 @@ def test_a_scan_without_the_version_isnt_a_change(conn):
         conn, [web_app], DecisionKind.FALSE_POSITIVE, "it's the printer's web ui", "owner@example.com"
     )
 
-    assert exposure.ingest(conn, lab(shift=86400, version=b""), vantage="internal") == []
+    assert ingest(conn, lab(shift=86400, version=b"")) == []
     assert needs_attention(conn) == []
 
 
 def test_an_unnamed_device_takes_no_decision(conn):
-    exposure.ingest(conn, lab(), vantage="internal")
+    ingest(conn, lab())
     web_app = conn.scalar(select(findings.c.id).where(findings.c.port == 8080))
 
     with pytest.raises(ValueError, match=r"new-192\.0\.2\.10"):
@@ -124,6 +124,6 @@ def test_a_port_resolved_by_hand_but_still_open_comes_back(conn):
     web_app = web_app_open(conn)
     exposure.resolve(conn, [web_app], "thought it was off", OWNER)
 
-    opened = exposure.ingest(conn, lab(shift=86400), vantage="internal")
+    opened = ingest(conn, lab(shift=86400))
 
     assert opened == [Finding("fileserver", "tcp", 8080, "internal")]
