@@ -98,7 +98,7 @@ def test_another_networks_silent_gateway_doesnt_hold_this_one_back(conn):
         [],
     ).networks
 
-    exposure.ingest(conn, closed(), networks, "internal")
+    exposure.ingest(conn, closed(), networks, "internal", {})
 
     assert open_findings(conn) == []
 
@@ -142,7 +142,7 @@ def test_stopping_expecting_a_service_reopens_it_and_keeps_the_old_intent(conn):
 def test_naming_a_device_keeps_its_findings(conn):
     ingest(conn, lab())
 
-    exposure.name_asset(conn, "new-192.0.2.10", "fileserver")
+    exposure.name_asset(conn, "new-192.0.2.10", "fileserver", "owner@example.com")
 
     assert sorted(port for asset, _, port in open_findings(conn) if asset == "fileserver") == [22, 445, 8080]
     assert ingest(conn, lab(shift=2 * 86400)) == []
@@ -154,7 +154,7 @@ def test_a_name_another_device_has_is_refused(conn):
     ingest(conn, lab())
 
     with pytest.raises(ValueError, match="another device"):
-        exposure.name_asset(conn, "new-192.0.2.10", "fileserver")
+        exposure.name_asset(conn, "new-192.0.2.10", "fileserver", "owner@example.com")
 
     assert (
         conn.scalar(select(bindings.c.asset_id).where(bindings.c.address == "192.0.2.10")) == "new-192.0.2.10"
@@ -166,6 +166,6 @@ def test_naming_a_device_after_a_compliance_host_joins_them(conn):
     conn.execute(insert(assets).values(id="fileserver", provisional=False))
     ingest(conn, lab())
 
-    exposure.name_asset(conn, "new-192.0.2.10", "fileserver")
+    exposure.name_asset(conn, "new-192.0.2.10", "fileserver", "owner@example.com")
 
     assert conn.scalar(select(bindings.c.asset_id).where(bindings.c.address == "192.0.2.10")) == "fileserver"

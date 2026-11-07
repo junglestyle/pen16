@@ -115,11 +115,25 @@ def create(engine: Engine, settings: Config, evidence_dir: Path) -> FastAPI:
 
     @app.post("/assets/name")
     def name_asset(
-        _login: Owner, provisional_id: Annotated[str, Form()], asset_id: Annotated[str, Form()]
+        login: Owner, provisional_id: Annotated[str, Form()], asset_id: Annotated[str, Form()]
     ) -> RedirectResponse:
         with _refusing(), engine.begin() as conn:
-            exposure.name_asset(conn, provisional_id, asset_id)
-        return _back()
+            exposure.name_asset(conn, provisional_id, asset_id, login)
+        return _back("#devices")
+
+    @app.post("/assets/separate")
+    def separate(_login: Owner, provisional_id: Annotated[str, Form()]) -> RedirectResponse:
+        with engine.begin() as conn:
+            exposure.separate(conn, provisional_id)
+        return _back("#devices")
+
+    @app.post("/assets/retire")
+    def retire(
+        login: Owner, asset_id: Annotated[str, Form()], reason: Annotated[str, Form()]
+    ) -> RedirectResponse:
+        with _refusing(), engine.begin() as conn:
+            exposure.retire(conn, asset_id, reason, login)
+        return _back("#devices")
 
     @app.post("/compliance/waive")
     def waive(

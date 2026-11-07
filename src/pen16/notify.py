@@ -49,6 +49,15 @@ def clear_incident(conn: Connection, key: str, title: str, detail: str) -> bool:
     return True
 
 
+def dismiss_incident(conn: Connection, key: str) -> None:
+    """Close the open incident for `key` without a recovery notice: its subject is gone, so nothing recovered."""
+    conn.execute(
+        update(incidents)
+        .where(incidents.c.key == key, incidents.c.cleared_at.is_(None))
+        .values(cleared_at=func.now())
+    )
+
+
 def replay_failed(conn: Connection) -> None:
     """Send every notification that failed for good again, with a fresh day of retries."""
     conn.execute(

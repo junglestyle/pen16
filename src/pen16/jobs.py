@@ -159,14 +159,29 @@ def complete(
     """
     job = _running(conn, job_id, runner)
     up = scan.up()
-    seen = [
-        {"address": address, "mac": n.mac, "confirmed_at": n.confirmed_at, "evidence_digest": scan.digest}
+    confirmed = {
+        address: n
         for address in sorted(up)
         if (n := neighbours.get(address)) is not None and n.confirmed_at >= job.started_at
-    ]
-    if seen:
-        conn.execute(postgresql_insert(mac_sightings).values(seen).on_conflict_do_nothing())
-    opened = exposure.ingest(conn, scan, scope.networks, vantage="internal")
+    }
+    if confirmed:
+        conn.execute(
+            postgresql_insert(mac_sightings)
+            .values(
+                [
+                    {
+                        "address": a,
+                        "mac": n.mac,
+                        "confirmed_at": n.confirmed_at,
+                        "evidence_digest": scan.digest,
+                    }
+                    for a, n in confirmed.items()
+                ]
+            )
+            .on_conflict_do_nothing()
+        )
+    macs = {address: n.mac for address, n in confirmed.items()}
+    opened = exposure.ingest(conn, scan, scope.networks, "internal", macs)
     for network in scope.networks:
         if str(network.gateway) in up:
             notify.clear_incident(

@@ -47,6 +47,13 @@ class FindingChange(StrEnum):
     REOPENED = "reopened"
 
 
+class BindingChange(StrEnum):
+    BOUND = "bound"
+    # The binding's first MAC, from the first scan that saw one there.
+    LEARNED = "learned"
+    ENDED = "ended"
+
+
 class DecisionKind(StrEnum):
     ACCEPTED_RISK = "accepted-risk"
     FALSE_POSITIVE = "false-positive"
@@ -132,20 +139,46 @@ def closed_set_drift(conn: Connection) -> list[str]:
     return drifted
 
 
+# A device. Provisional ones are named by the address pen16 first saw them at. A device that took over a bound
+# address, because a different MAC answered there, records which asset had it and whether either MAC was a
+# private one, which a device can change on its own: then the dashboard asks whether it's the same device.
 assets = Table(
     "assets",
     metadata,
     Column("id", Text, primary_key=True),
     Column("provisional", Boolean, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("took_over_from", Text),
+    Column("took_over_private", Boolean, nullable=False, server_default="false"),
+    Column("retired_at", DateTime(timezone=True)),
+    Column("retired_by", Text),
+    Column("retirement", Text),
 )
 
+# Which device is at an address now, and the MAC that answered for it, once a scan has seen one.
 bindings = Table(
     "bindings",
     metadata,
     Column("address", INET, primary_key=True),
     Column("asset_id", Text, ForeignKey("assets.id"), nullable=False),
+    Column("mac", MACADDR),
+    Column("bound_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     Index("bindings_asset", "asset_id"),
+)
+
+# Every change to which device is at an address. Asset IDs here outlive the provisional assets they name.
+binding_events = Table(
+    "binding_events",
+    metadata,
+    Column("id", BigInteger, Identity(always=True), primary_key=True),
+    Column("address", INET, nullable=False),
+    Column("asset_id", Text, nullable=False),
+    Column("mac", MACADDR),
+    Column("change", Text, nullable=False),
+    Column("at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("by", Text, nullable=False),
+    Column("reason", Text),
+    _one_of("change", BindingChange, "binding_change"),
 )
 
 # Intent: a service the owner expects. Stopping expecting it ends the row with a reason; ended rows stay as history,

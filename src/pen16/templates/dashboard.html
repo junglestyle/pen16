@@ -90,7 +90,8 @@ form.inline { display: inline; }
   {% for f in d.needs_attention %}
   <tr>
     <td><input type="checkbox" name="finding" value="{{ f.id }}" id="f{{ f.id }}" aria-label="select {{ f.asset_id }} {{ f.port }}/{{ f.protocol }}"></td>
-    <td><label for="f{{ f.id }}">{{ f.asset_id }}</label><br><span class="muted">{{ f.seen.address }}</span>{{ mac(f.seen.mac) }}</td>
+    <td><label for="f{{ f.id }}">{{ f.asset_id }}</label><br><span class="muted">{{ f.seen.address }}</span>{{ mac(f.seen.mac) }}
+      {% if f.away %}<br><span class="muted">no longer at this address</span>{% endif %}</td>
     <td>{{ f.port }}/{{ f.protocol }}</td>
     <td>{{ service(f.seen) }}
       {% if f.withdrawal %}<br><span class="bad">Decision withdrawn: {{ f.withdrawal }}</span>{% endif %}</td>
@@ -262,14 +263,28 @@ form.inline { display: inline; }
 <p class="muted">None declared. Mark findings expected above.</p>
 {% endif %}
 
-<h2>Unnamed devices ({{ d.unnamed|length }})</h2>
+<h2 id="devices">Unnamed devices ({{ d.unnamed|length }})</h2>
 {% if d.unnamed %}
 <div class="scroll"><table>
   <tr><th>Address</th><th>Name it</th></tr>
   {% for a in d.unnamed %}
   <tr>
-    <td>{{ a.address }}{{ mac(a.mac) }}</td>
+    <td>{{ a.address }}{{ mac(a.mac) }}
+      {% if a.took_over_from %}<br><span class="bad">Took this address over from {{ a.took_over_from }}: a different MAC answered.</span>{% endif %}</td>
     <td>
+      {% if a.took_over_from and a.took_over_private %}
+      <p class="muted">A private MAC can change on its own. Is this {{ a.took_over_from }}?</p>
+      <form class="inline" method="post" action="/assets/name">
+        <input type="hidden" name="provisional_id" value="{{ a.id }}">
+        <input type="hidden" name="asset_id" value="{{ a.took_over_from }}">
+        <button>Same device</button>
+      </form>
+      <form class="inline" method="post" action="/assets/separate">
+        <input type="hidden" name="provisional_id" value="{{ a.id }}">
+        <button>Different device</button>
+      </form>
+      <br>
+      {% endif %}
       <form class="inline" method="post" action="/assets/name">
         <input type="hidden" name="provisional_id" value="{{ a.id }}">
         <input type="text" name="asset_id" required pattern="[a-z0-9][a-z0-9\-]*" aria-label="name for {{ a.address }}" placeholder="e.g. nas">
@@ -281,6 +296,30 @@ form.inline { display: inline; }
 </table></div>
 {% else %}
 <p class="muted">Every device has a name.</p>
+{% endif %}
+
+<h2>Named devices ({{ d.devices|length }})</h2>
+{% if d.devices %}
+<div class="scroll"><table>
+  <tr><th>Device</th><th>Addresses</th><th>Retire</th></tr>
+  {% for v in d.devices %}
+  <tr>
+    <td>{{ v.id }}</td>
+    <td>{% for address, m in v.addresses %}{{ address }}{{ mac(m) }}<br>{% else %}<span class="muted">none now</span>{% endfor %}</td>
+    <td>
+      <form class="inline" method="post" action="/assets/retire">
+        <input type="hidden" name="asset_id" value="{{ v.id }}">
+        <input type="text" name="reason" required aria-label="reason to retire {{ v.id }}" placeholder="why it's gone">
+        <button>Retire</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table></div>
+<p class="muted">Retiring a device ends its addresses, expected services and decisions, resolves its findings, and
+  revokes its compliance tokens. The next device at its address is a new, unnamed one.</p>
+{% else %}
+<p class="muted">No device has a name yet.</p>
 {% endif %}
 
 <p class="muted">Signed in as {{ owner }} · {{ h.now.strftime('%Y-%m-%d %H:%M UTC') }}</p>

@@ -130,7 +130,9 @@ def record(
                 f"{len(regressed)} compliance regression{'s' if len(regressed) > 1 else ''} on {asset_id}",
                 "\n".join([summary, *lines]),
             )
-    notify.clear_incident(conn, _stale(asset_id), f"Compliance results resumed from {asset_id}", summary)
+    notify.clear_incident(
+        conn, stale_incident(asset_id), f"Compliance results resumed from {asset_id}", summary
+    )
     return Recorded(scan_id, duplicate=False)
 
 
@@ -178,17 +180,19 @@ def _end_waiver(conn: Connection, asset_id: str, rule_id: str, reason: str, by: 
 
 
 def check(conn: Connection) -> None:
-    """Open a stale incident for each host whose newest result is older than STALE."""
+    """Open a stale incident for each host whose newest result is older than STALE. A retired host has stopped
+    for good, so it isn't checked."""
     now = db.now(conn)
     for asset_id, last in conn.execute(
-        select(compliance_scans.c.asset_id, func.max(compliance_scans.c.received_at)).group_by(
-            compliance_scans.c.asset_id
-        )
+        select(compliance_scans.c.asset_id, func.max(compliance_scans.c.received_at))
+        .join(assets, assets.c.id == compliance_scans.c.asset_id)
+        .where(assets.c.retired_at.is_(None))
+        .group_by(compliance_scans.c.asset_id)
     ):
         if now - last > STALE:
             notify.raise_incident(
                 conn,
-                _stale(asset_id),
+                stale_incident(asset_id),
                 f"Compliance results stale from {asset_id}",
                 f"The last compliance result from {asset_id} arrived {last:%Y-%m-%d %H:%M} UTC.",
             )
@@ -222,9 +226,11 @@ class FailingRule:
 
 
 def latest(conn: Connection) -> list[Latest]:
-    """Each host's newest result per benchmark and profile."""
+    """Each host's newest result per benchmark and profile, retired hosts left out."""
     newest = (
         select(compliance_scans)
+        .join(assets, assets.c.id == compliance_scans.c.asset_id)
+        .where(assets.c.retired_at.is_(None))
         .ext(
             distinct_on(
                 compliance_scans.c.asset_id, compliance_scans.c.benchmark_id, compliance_scans.c.profile_id
@@ -488,7 +494,7 @@ def _regressions(conn: Connection, asset_id: str, previous_id: int, scan_id: int
     ]
 
 
-def _stale(asset_id: str) -> str:
+def stale_incident(asset_id: str) -> str:
     """The incident key for a host that has stopped reporting."""
     return f"compliance-stale:{asset_id}"
 

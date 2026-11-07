@@ -1,26 +1,32 @@
 import ipaddress
+import itertools
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
-from sqlalchemy import Connection, delete, exists, func, select, update
+from sqlalchemy import Connection, Row, Text, cast, delete, exists, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 
-from pen16 import notify
+from pen16 import compliance, neighbours, notify
 from pen16.db import (
+    BindingChange,
     DecisionKind,
     FindingChange,
     FindingStatus,
     NotificationKind,
     ObservationState,
+    TokenKind,
     assets,
+    binding_events,
     bindings,
     decisions,
     expected_services,
     finding_events,
     findings,
     observations,
+    tokens,
 )
 from pen16.nmap import PARSER_VERSION, Port, Scan
 from pen16.scope import Network
@@ -41,7 +47,30 @@ class Finding:
     why: str | None = None
 
 
-def ingest(conn: Connection, scan: Scan, networks: Sequence[Network], vantage: str) -> list[Finding]:
+@dataclass(frozen=True)
+class TookOver:
+    """A different MAC answered at an address bound to a device, so a new device has it now."""
+
+    address: str
+    before: str
+    mac_before: str
+    mac_now: str
+    device: str
+    private: bool
+
+    def alert(self) -> str:
+        line = (
+            f"{self.address} has a new device, {self.device}: {self.mac_now} answered instead of {self.before}'s "
+            f"{self.mac_before}, so {self.before}'s expected services and decisions no longer apply there."
+        )
+        if self.private:
+            line += " A private MAC can change on its own: say on the dashboard whether it's the same device."
+        return line
+
+
+def ingest(
+    conn: Connection, scan: Scan, networks: Sequence[Network], vantage: str, macs: Mapping[str, str]
+) -> list[Finding]:
     """Record a scan's observations, open findings for unexpected open ports, resolve closed ones, and queue one
     alert for what's news.
 
@@ -50,12 +79,26 @@ def ingest(conn: Connection, scan: Scan, networks: Sequence[Network], vantage: s
     it inside one transaction, so the observations, finding changes and alert land together. Re-ingesting the
     same evidence changes nothing.
 
+    `macs` is the MAC each up address answered with during this scan, where the scanner host saw one. A bound
+    address that answers with a different MAC than its binding's has a new device, which gets the address
+    before anything is recorded, so the old device's intent and decisions don't apply to it and its closed
+    ports resolve nothing of the old device's.
+
     A closed port resolves a finding only inside a network whose gateway answered this scan: without it, a
     closed port can't be told from a network that was down.
     """
+    listed = {port.address for port in scan.ports}
+    devices: dict[str, str] = {}
+    took_over = []
+    for address in sorted(listed | set(macs)):
+        device, taken = _device_at(conn, address, macs.get(address), create=address in listed)
+        if device is not None:
+            devices[address] = device
+        if taken is not None:
+            took_over.append(taken)
     opened = []
     for port in scan.ports:
-        asset_id = _asset_for(conn, port.address)
+        asset_id = devices[port.address]
         observation_id = _observe(conn, scan, port, asset_id, vantage)
         if observation_id is None or port.state != ObservationState.OPEN:
             continue
@@ -74,12 +117,20 @@ def ingest(conn: Connection, scan: Scan, networks: Sequence[Network], vantage: s
             opened.append(Finding(asset_id, port.protocol, port.port, vantage))
     up = scan.up()
     _close(conn, scan, vantage, [network for network in networks if str(network.gateway) in up])
-    if opened:
-        lines = [f"{f.asset_id} {f.port}/{f.protocol}" + (f": {f.why}" if f.why else "") for f in opened]
-        notify.enqueue(
-            conn, NotificationKind.FINDING, f"{len(opened)} unexpected service(s)", "\n".join(lines)
-        )
+    _alert(conn, opened, took_over)
     return opened
+
+
+def _alert(conn: Connection, opened: list[Finding], took_over: list[TookOver]) -> None:
+    lines = [f"{f.asset_id} {f.port}/{f.protocol}" + (f": {f.why}" if f.why else "") for f in opened]
+    lines.extend(t.alert() for t in took_over)
+    titles = []
+    if opened:
+        titles.append(f"{len(opened)} unexpected service(s)")
+    if took_over:
+        titles.append(f"{len(took_over)} address(es) with a new device")
+    if titles:
+        notify.enqueue(conn, NotificationKind.FINDING, ", ".join(titles), "\n".join(lines))
 
 
 def expect(conn: Connection, finding_ids: list[int], reason: str, by: str) -> None:
@@ -196,12 +247,14 @@ def unexpect(
     )
 
 
-def name_asset(conn: Connection, provisional_id: str, asset_id: str) -> None:
-    """Give a provisional asset an owner-chosen ID, carrying its history and findings along.
+def name_asset(conn: Connection, provisional_id: str, asset_id: str, by: str) -> None:
+    """Give a provisional device an owner-chosen ID, carrying its addresses, history and findings along.
 
-    Only provisional assets can be renamed: they carry no owner decisions that a reused address could
-    wrongly inherit. The name can't belong to another device. It can be a compliance host's, which has no
-    address of its own until then: naming the device after it joins the two.
+    Only provisional devices can be renamed: they carry no owner decisions that a reused address could wrongly
+    inherit. The name can't belong to another device at an address. It can be one with no address: a
+    compliance host, or the device an address was taken over from, when it's the same one after all. Then the
+    two become one, and where both have a finding for the same service, the one with the newer evidence
+    decides its state while the older one's decisions and history stay with it.
     """
     if not ASSET_ID.fullmatch(asset_id) or asset_id.startswith("new-"):
         raise ValueError(
@@ -212,20 +265,237 @@ def name_asset(conn: Connection, provisional_id: str, asset_id: str) -> None:
         raise ValueError(f"{provisional_id!r} isn't a provisional asset")
     if conn.scalar(select(exists().where(bindings.c.asset_id == asset_id))):
         raise ValueError(f"{asset_id!r} already names another device")
+    if conn.scalar(select(assets.c.retired_at).where(assets.c.id == asset_id)) is not None:
+        raise ValueError(f"{asset_id!r} is retired")
     conn.execute(insert(assets).values(id=asset_id, provisional=False).on_conflict_do_nothing())
-    for table in (bindings, observations, findings, expected_services):
-        conn.execute(update(table).where(table.c.asset_id == provisional_id).values(asset_id=asset_id))
+    for finding in conn.execute(select(findings).where(findings.c.asset_id == provisional_id)).all():
+        _merge_finding(conn, finding, asset_id, by)
+    _merge_expected(conn, provisional_id, asset_id, by)
+    # What the provisional device opened that this device expects isn't news once they're one.
+    expected = expected_services.alias("expected")
+    for finding_id, reason in conn.execute(
+        select(findings.c.id, expected.c.reason)
+        .join(
+            expected,
+            (expected.c.asset_id == findings.c.asset_id)
+            & (expected.c.protocol == findings.c.protocol)
+            & (expected.c.port == findings.c.port)
+            & (expected.c.vantage == findings.c.vantage)
+            & expected.c.ended_at.is_(None),
+        )
+        .where(findings.c.asset_id == asset_id, findings.c.status == FindingStatus.OPEN)
+    ).all():
+        _resolve(conn, [finding_id], f"expected: {reason}", by)
+    conn.execute(
+        update(observations).where(observations.c.asset_id == provisional_id).values(asset_id=asset_id)
+    )
+    for binding in conn.execute(select(bindings).where(bindings.c.asset_id == provisional_id)).all():
+        mac = str(binding.mac) if binding.mac else None
+        _binding_event(
+            conn, binding.address, provisional_id, mac, BindingChange.ENDED, by, f"named {asset_id}"
+        )
+        _binding_event(
+            conn, binding.address, asset_id, mac, BindingChange.BOUND, by, f"named from {provisional_id}"
+        )
+    conn.execute(update(bindings).where(bindings.c.asset_id == provisional_id).values(asset_id=asset_id))
     conn.execute(delete(assets).where(assets.c.id == provisional_id))
 
 
-def _asset_for(conn: Connection, address: str) -> str:
-    bound: str | None = conn.scalar(select(bindings.c.asset_id).where(bindings.c.address == address))
-    if bound is not None:
-        return bound
-    asset_id = f"new-{address}"
-    conn.execute(insert(assets).values(id=asset_id, provisional=True).on_conflict_do_nothing())
-    conn.execute(insert(bindings).values(address=address, asset_id=asset_id))
-    return asset_id
+def separate(conn: Connection, provisional_id: str) -> None:
+    """Say a device that took over an address isn't the one it took it from. It stays unnamed."""
+    conn.execute(
+        update(assets)
+        .where(assets.c.id == provisional_id, assets.c.provisional)
+        .values(took_over_from=None, took_over_private=False)
+    )
+
+
+def retire(conn: Connection, asset_id: str, reason: str, by: str) -> None:
+    """Retire a device that's gone for good. Its addresses, expected services and decisions end, its open
+    findings resolve, and its compliance tokens are revoked, all with the reason; its history stays. The next
+    device at one of its addresses is a new, unnamed one."""
+    if not reason.strip():
+        raise ValueError("retiring a device needs a reason")
+    why = f"retired: {reason.strip()}"
+    retired = conn.execute(select(assets.c.retired_at).where(assets.c.id == asset_id)).first()
+    if retired is None:
+        raise ValueError(f"there's no device {asset_id!r}")
+    if retired.retired_at is not None:
+        raise ValueError(f"{asset_id!r} is already retired")
+    for binding in conn.execute(select(bindings).where(bindings.c.asset_id == asset_id)).all():
+        mac = str(binding.mac) if binding.mac else None
+        _binding_event(conn, binding.address, asset_id, mac, BindingChange.ENDED, by, why)
+    conn.execute(delete(bindings).where(bindings.c.asset_id == asset_id))
+    conn.execute(
+        update(expected_services)
+        .where(expected_services.c.asset_id == asset_id, expected_services.c.ended_at.is_(None))
+        .values(ended_at=func.now(), ended_by=by, end_reason=why)
+    )
+    owned = select(findings.c.id).where(findings.c.asset_id == asset_id)
+    conn.execute(
+        update(decisions)
+        .where(decisions.c.finding_id.in_(owned), decisions.c.withdrawn_at.is_(None))
+        .values(withdrawn_at=func.now(), withdrawal=why)
+    )
+    _resolve(conn, list(conn.scalars(owned)), why, by)
+    conn.execute(
+        update(tokens)
+        .where(
+            tokens.c.kind == TokenKind.COMPLIANCE, tokens.c.name == asset_id, tokens.c.revoked_at.is_(None)
+        )
+        .values(revoked_at=func.now())
+    )
+    conn.execute(
+        update(assets)
+        .where(assets.c.id == asset_id)
+        .values(retired_at=func.now(), retired_by=by, retirement=why)
+    )
+    notify.dismiss_incident(conn, compliance.stale_incident(asset_id))
+
+
+def _device_at(
+    conn: Connection, address: str, mac: str | None, *, create: bool
+) -> tuple[str | None, TookOver | None]:
+    """The device at an address in this scan, and what changed hands if a different MAC answered there.
+
+    An unbound address gets a new provisional device if `create`. A binding learns its first MAC from the first
+    scan that sees one. A binding whose MAC differs from the one that answered now goes to a new provisional
+    device: the address changed hands, whatever the old device's name.
+    """
+    binding = conn.execute(
+        select(bindings.c.asset_id, cast(bindings.c.mac, Text).label("mac")).where(
+            bindings.c.address == address
+        )
+    ).first()
+    if binding is None:
+        if not create:
+            return None, None
+        device = _new_provisional(conn, address)
+        conn.execute(insert(bindings).values(address=address, asset_id=device, mac=mac))
+        _binding_event(conn, address, device, mac, BindingChange.BOUND, SCAN)
+        return device, None
+    if mac is None or binding.mac == mac:
+        return binding.asset_id, None
+    if binding.mac is None:
+        conn.execute(update(bindings).where(bindings.c.address == address).values(mac=mac))
+        _binding_event(conn, address, binding.asset_id, mac, BindingChange.LEARNED, SCAN)
+        return binding.asset_id, None
+    private = neighbours.is_private(binding.mac) or neighbours.is_private(mac)
+    device = _new_provisional(conn, address, took_over_from=binding.asset_id, private=private)
+    why = f"{mac} answered instead of {binding.mac}"
+    _binding_event(conn, address, binding.asset_id, binding.mac, BindingChange.ENDED, SCAN, why)
+    conn.execute(
+        update(bindings)
+        .where(bindings.c.address == address)
+        .values(asset_id=device, mac=mac, bound_at=func.now())
+    )
+    _binding_event(conn, address, device, mac, BindingChange.BOUND, SCAN, why)
+    return device, TookOver(address, binding.asset_id, binding.mac, mac, device, private)
+
+
+def _new_provisional(
+    conn: Connection, address: str, took_over_from: str | None = None, *, private: bool = False
+) -> str:
+    """A provisional device named for the address, numbered so no name an earlier device there had, even one
+    since named or merged away, is used again: binding_events keeps those names."""
+    prefix = f"new-{address}"
+    taken = set(conn.scalars(select(assets.c.id).where(assets.c.id.startswith(prefix)))) | set(
+        conn.scalars(select(binding_events.c.asset_id).where(binding_events.c.asset_id.startswith(prefix)))
+    )
+    device = next(
+        name
+        for n in itertools.count(1)
+        if (name := f"new-{address}" if n == 1 else f"new-{address}-{n}") not in taken
+    )
+    conn.execute(
+        insert(assets).values(
+            id=device, provisional=True, took_over_from=took_over_from, took_over_private=private
+        )
+    )
+    return device
+
+
+def _binding_event(
+    conn: Connection,
+    address: str,
+    asset_id: str,
+    mac: str | None,
+    change: BindingChange,
+    by: str,
+    reason: str | None = None,
+) -> None:
+    conn.execute(
+        insert(binding_events).values(
+            address=address, asset_id=asset_id, mac=mac, change=change, by=by, reason=reason
+        )
+    )
+
+
+def _merge_finding(conn: Connection, finding: Row[Any], asset_id: str, by: str) -> None:
+    """Move a provisional device's finding to `asset_id`, or fold it into the finding there for the same service.
+    The one with the newer evidence decides the state; the history of both stays."""
+    seen = observations.alias("seen")
+    existing = conn.execute(
+        select(findings.c.id, findings.c.status, seen.c.observed_at.label("last_seen"))
+        .join(seen, seen.c.id == findings.c.last_observation_id)
+        .where(
+            findings.c.kind == finding.kind,
+            findings.c.asset_id == asset_id,
+            findings.c.protocol == finding.protocol,
+            findings.c.port == finding.port,
+            findings.c.vantage == finding.vantage,
+        )
+    ).first()
+    if existing is None:
+        conn.execute(update(findings).where(findings.c.id == finding.id).values(asset_id=asset_id))
+        return
+    observed = conn.scalar(
+        select(observations.c.observed_at).where(observations.c.id == finding.last_observation_id)
+    )
+    if observed > existing.last_seen:
+        conn.execute(
+            update(findings)
+            .where(findings.c.id == existing.id)
+            .values(
+                status=finding.status,
+                resolved_at=finding.resolved_at,
+                resolution=finding.resolution,
+                last_observation_id=finding.last_observation_id,
+            )
+        )
+        if finding.status != existing.status:
+            change = (
+                FindingChange.REOPENED if finding.status == FindingStatus.OPEN else FindingChange.RESOLVED
+            )
+            _event(conn, existing.id, change, by, f"newer evidence from {finding.asset_id}, the same device")
+    conn.execute(
+        update(finding_events).where(finding_events.c.finding_id == finding.id).values(finding_id=existing.id)
+    )
+    conn.execute(delete(findings).where(findings.c.id == finding.id))
+
+
+def _merge_expected(conn: Connection, provisional_id: str, asset_id: str, by: str) -> None:
+    """Move a provisional device's expected services to `asset_id`, ending the ones it already expects."""
+    target = expected_services.alias("target")
+    already = exists().where(
+        target.c.asset_id == asset_id,
+        target.c.protocol == expected_services.c.protocol,
+        target.c.port == expected_services.c.port,
+        target.c.vantage == expected_services.c.vantage,
+        target.c.ended_at.is_(None),
+    )
+    conn.execute(
+        update(expected_services)
+        .where(
+            expected_services.c.asset_id == provisional_id, expected_services.c.ended_at.is_(None), already
+        )
+        .values(ended_at=func.now(), ended_by=by, end_reason=f"{asset_id} already expects it")
+    )
+    conn.execute(
+        update(expected_services)
+        .where(expected_services.c.asset_id == provisional_id)
+        .values(asset_id=asset_id)
+    )
 
 
 def _observe(conn: Connection, scan: Scan, port: Port, asset_id: str, vantage: str) -> int | None:

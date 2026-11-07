@@ -35,18 +35,23 @@ exception: it comes before the pilot and runs alongside M1's remaining slices.
 - **MAC addresses for devices on the scanner's segment.** FR-2 and FR-4 in part. Each scan records the MAC
   that answered at every up address, from the scanner host's neighbour table, and the dashboard shows it with its
   maker, or that it's a private address. Shown by the MAC address tests and on the owner's network.
+- **Devices told apart by MAC, and retired.** FR-4 in part. A bound address that answers with a different MAC has
+  a new, unnamed device, and the old one's expected services and decisions don't follow it. When either MAC is a
+  private one, which a phone can change on its own, the dashboard asks whether it's the same device, and saying so
+  merges the two back. Retiring a device ends its address, intent and decisions with a reason and keeps its
+  history. Addresses no MAC answers for, such as a routed network's, are still told apart by address alone. Shown
+  by the device identity tests: name a device, retire it, hand its address to a new fixture host, and see the old
+  history intact, the new device unnamed, and nothing expected on it.
 
 ### 2. Assets, history and recent changes
 
 Delivers the rest of FR-4 and the asset and finding detail from [Dashboard](SPEC.md#dashboard). Each asset has a
 page with its bindings, declared and observed services, product labels, and history. A "Recent changes" view lists
-new, removed and changed services and versions. You can correct a binding or retire an asset; its history stays,
-and a reused address becomes a new provisional device that inherits no decisions. Until this slice ships, a named
-device's address passes to whatever device takes it next, with its expected services and decisions; the MACs scans
-record are the evidence it will use. Results gathered before then, pilot runs included, are read with that in mind.
+new, removed and changed services and versions. You can correct a binding by hand, moving an address to another
+device; its history stays.
 
-Done when: rename a device, retire it, hand its address to a new fixture host, and show the old history intact, the
-new device unnamed, and nothing expected on it.
+Done when: move an address from one named device to another from the dashboard, and show both devices' pages with
+the change in their history and the recent changes view listing it.
 
 ### 3. Coverage and rolling sweeps
 
