@@ -1,6 +1,6 @@
 [Unit]
 Description=pen16 neighbour table for the listener
-Documentation=https://github.com/junglestyle/pen16/blob/main/docs/ARCHITECTURE.md#deployment-and-state-ownership
+Documentation=https://github.com/lowmagic/pen16/blob/main/docs/ARCHITECTURE.md#deployment-and-state-ownership
 Before=docker.service
 
 [Service]

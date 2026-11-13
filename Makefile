@@ -1,6 +1,6 @@
 .PHONY: check standards lint test db lab image icons sync-standards
 SHELL := bash
-ORG = https://github.com/junglestyle/.github
+ORG = https://github.com/lowmagic/.github
 # Each test run creates and drops its own database through this localhost admin URL (make db's Postgres).
 TEST_ADMIN_URL = postgresql+psycopg://pen16:pen16@localhost:5432/postgres
 
