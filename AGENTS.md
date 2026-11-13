@@ -6,7 +6,7 @@ Read before changing behavior:
 
 - [Specification](docs/SPEC.md): what pen16 does
 - [Roadmap](docs/ROADMAP.md): the order it gets built in
-- [Coding standards](docs/standards.md): how the code should read, on top of the org's [principles](https://github.com/junglestyle/.github/blob/main/PRINCIPLES.md) and standards (`docs/org-standards*.md`)
+- [Coding standards](docs/standards.md): how the code should read, on top of the org's [principles](https://github.com/lowmagic/.github/blob/main/PRINCIPLES.md) and standards (`docs/org-standards*.md`)
 - [Architecture](docs/ARCHITECTURE.md): components, API permissions, and data rules
 - [Security and recovery](docs/SECURITY.md): scan safety, access, backups, and upgrades
 - [Stack and decisions](docs/stack.md): tools and the decisions behind them

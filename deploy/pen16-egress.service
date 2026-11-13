@@ -1,6 +1,6 @@
 [Unit]
 Description=pen16 runner egress policy
-Documentation=https://github.com/junglestyle/pen16/blob/main/docs/SECURITY.md#scan-safety
+Documentation=https://github.com/lowmagic/pen16/blob/main/docs/SECURITY.md#scan-safety
 After=docker.service
 Requires=docker.service
 
